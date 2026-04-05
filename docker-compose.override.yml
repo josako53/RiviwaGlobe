@@ -132,6 +132,17 @@ services:
       - ./translation_service:/app/translation_service
       - /opt/venv
 
+  # ── recommendation_service dev override ──────────────────────────────────
+  recommendation_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8055 --reload --reload-dir /app/recommendation_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: staging
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+    volumes:
+      - ./recommendation_service:/app/recommendation_service
+      - /opt/venv
+
   # ── MinIO dev overrides ────────────────────────────────────────────────────
   minio:
     environment:
