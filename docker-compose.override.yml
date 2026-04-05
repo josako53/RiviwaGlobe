@@ -1,0 +1,124 @@
+# docker-compose.override.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Development overrides — applied automatically by `docker compose up`.
+# Never commit secrets here. All sensitive values still come from .env.
+#
+# What this file does:
+#   · Runs Kafka as a SINGLE NODE in dev (kafka-1 only).
+#     kafka-2, kafka-3, kafka-4 are disabled via profiles so they never start.
+#     This eliminates KRaft quorum election failures on Docker Desktop/Windows.
+#     Single-node Kafka starts in ~60 seconds vs 10+ minutes for 3-node.
+#   · Sets replication factor and MIN_ISR to 1 so topics work on one broker.
+#   · Uses BIND MOUNTS to map local source folders directly into each container.
+#     CRITICAL: Each service mounts to its specific WORKDIR path — the path
+#     that matches what the Dockerfile sets with WORKDIR. This ensures that
+#     alembic.ini, main.py, and all app files are found where the container
+#     expects them. Mounting to /app (not /app/<service>) causes Alembic to
+#     fail with "No 'script_location' key found in configuration".
+#   · Protects /opt/venv from being overwritten by the bind mount.
+#   · Overrides CMD (not ENTRYPOINT) with --reload for hot-reload in dev.
+#     The ENTRYPOINT (entrypoint.sh) still runs on every start:
+#       wait for DB → alembic upgrade head → exec <command>
+#   · Sets DEBUG=true for all services.
+#
+# Startup flow (dev):
+#   docker compose up -d
+#     → DB/Redis/Kafka become healthy
+#     → entrypoint.sh: wait for DB → alembic upgrade head → exec uvicorn --reload
+#
+# Production does NOT load this file. Run production with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  kafka-1:
+    environment:
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:9093'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_NUM_PARTITIONS: 1
+
+  kafka-2:
+    profiles: ["disabled"]
+
+  kafka-3:
+    profiles: ["disabled"]
+
+  kafka-4:
+    profiles: ["disabled"]
+
+  kafka-ui:
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+
+  riviwa_auth_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/riviwa_auth_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+    volumes:
+      # Mount to /app/riviwa_auth_service — matches Dockerfile WORKDIR exactly.
+      # alembic.ini lives at /app/riviwa_auth_service/alembic.ini ✓
+      - ./riviwa_auth_service:/app/riviwa_auth_service
+      # Protect the venv installed by the builder stage from being overwritten.
+      - /opt/venv
+
+  stakeholder_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8070 --reload --reload-dir /app/stakeholder_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+    volumes:
+      - ./stakeholder_service:/app/stakeholder_service
+      - /opt/venv
+
+  feedback_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8090 --reload --reload-dir /app/feedback_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+    volumes:
+      - ./feedback_service:/app/feedback_service
+      - /opt/venv
+
+  payment_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8040 --reload --reload-dir /app/payment"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+    volumes:
+      - ./payment:/app/payment
+      - /opt/venv
+
+  # ── [NEW] notification_service dev override ───────────────────────────────
+  # Hot-reload enabled. Binds source folder so code changes apply instantly.
+  # notification_service has no entrypoint.sh / alembic (tables are created
+  # by SQLModel metadata.create_all on startup in dev — see main.py lifespan).
+  notification_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8060 --reload --reload-dir /app/notification_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+      # Use sandbox credentials in dev — no real SMS/push will fire
+      AT_USERNAME: sandbox
+      AT_API_KEY: ${AT_API_KEY:-}
+    volumes:
+      # Mount to /app/notification_service — matches Dockerfile WORKDIR exactly.
+      - ./notification_service:/app/notification_service
+      # Protect the venv installed by the builder stage.
+      - /opt/venv
+
+  # ── MinIO dev overrides ────────────────────────────────────────────────────
+  minio:
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin

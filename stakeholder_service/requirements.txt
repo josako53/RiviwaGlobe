@@ -1,0 +1,30 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Riviwa Stakeholder Service — Python Dependencies
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Web framework ──────────────────────────────────────────────────────────────
+fastapi[standard]==0.124.0
+uvicorn[standard]==0.38.0
+
+# ── Database ───────────────────────────────────────────────────────────────────
+sqlmodel==0.0.27
+asyncpg==0.31.0
+psycopg[binary]==3.3.2
+alembic==1.17.2
+
+# ── Validation & Settings ──────────────────────────────────────────────────────
+pydantic-settings==2.12.0
+email-validator==2.3.0
+
+# ── JWT (validating tokens issued by auth_service) ────────────────────────────
+python-jose[cryptography]==3.5.0
+
+# ── Kafka ──────────────────────────────────────────────────────────────────────
+aiokafka==0.12.0
+cramjam==2.11.0
+
+# ── HTTP client (for optional auth_service lookups) ───────────────────────────
+httpx==0.28.1
+
+# ── Structured logging ─────────────────────────────────────────────────────────
+structlog==24.4.0

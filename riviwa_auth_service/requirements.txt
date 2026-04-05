@@ -1,0 +1,118 @@
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Riviwa Auth Service — Python Dependencies
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Install:
+#     pip install -r requirements.txt
+#
+# Docker (already called in Dockerfile):
+#     RUN pip install --no-cache-dir -r requirements.txt
+#
+# Stack: FastAPI · SQLModel · PostgreSQL · Redis · Kafka (aiokafka) · Celery
+# Python: 3.12+
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+# ── Web framework ──────────────────────────────────────────────────────────────
+# fastapi[standard] includes: uvicorn, python-multipart, email-validator, httpx
+fastapi[standard]==0.124.0
+uvicorn[standard]==0.38.0
+
+
+# ── Database ───────────────────────────────────────────────────────────────────
+# sqlmodel wraps SQLAlchemy 2.x + Pydantic v2 into a single ORM layer
+sqlmodel==0.0.27
+
+# asyncpg — async PostgreSQL driver used by SQLAlchemy's async engine
+# (ASYNC_DATABASE_URL: postgresql+asyncpg://...)
+asyncpg==0.31.0
+
+# psycopg — PostgreSQL driver for Alembic sync migrations + seed writes
+# (SYNC_DATABASE_URL: postgresql+psycopg://...)
+# psycopg v3 (not v2) — the config uses the `psycopg` dialect, not `psycopg2`
+psycopg[binary]==3.3.2
+
+# Alembic — database schema migrations
+alembic==1.17.2
+
+
+# ── Auth / Security ────────────────────────────────────────────────────────────
+# passlib — password hashing abstraction layer
+# Scheme used: argon2 (via argon2-cffi below)
+passlib==1.7.4
+
+# argon2-cffi — Argon2id CFFI bindings (called by passlib's CryptContext)
+argon2-cffi==25.1.0
+
+# PyJWT — JWT creation and validation (access tokens, HS256)
+# [cryptography] extra required for RS256/ES256 and python-jose interop
+PyJWT[cryptography]==2.10.1
+
+# python-jose[cryptography] — JWT decode utilities used by auth dependencies
+# The [cryptography] extra pulls in the `cryptography` package for RSA/EC support
+python-jose[cryptography]==3.5.0
+
+
+# ── Validation & Settings ──────────────────────────────────────────────────────
+# pydantic-settings — reads config from environment variables + .env files
+pydantic-settings==2.12.0
+
+# email-validator — validates EmailStr fields in Pydantic schemas
+# Also pulled in by fastapi[standard] but pinned here for explicitness
+email-validator==2.3.0
+
+
+# ── Redis ──────────────────────────────────────────────────────────────────────
+# redis[asyncio] — async Redis client used for:
+#   · OTP sessions (reg_otp:<token>, reg_cont:<token>, login:<token>)
+#   · Refresh token store
+#   · JWT JTI deny-list
+#   · Geo-IP cache
+#   · Celery broker (DB 1) and result backend (DB 2)
+redis[asyncio]==5.2.1
+
+
+# ── Kafka ──────────────────────────────────────────────────────────────────────
+# aiokafka — async Kafka producer (KafkaEventProducer singleton)
+aiokafka==0.12.0
+
+# cramjam — Rust-based compression library (replaces lz4)
+# Supports zstd, lz4, snappy, gzip, brotli — all statically linked.
+# No C build-deps needed in Docker; ships pre-built wheels for linux/mac/win.
+# KafkaEventProducer uses compression_type="zstd" for better ratio than lz4
+# while maintaining comparable decompression speed.
+cramjam==2.11.0
+
+
+
+# ── Celery ─────────────────────────────────────────────────────────────────────
+# celery[redis] — distributed task queue for async fraud analysis jobs:
+#   · score_behavioral_ml
+#   · analyze_duplicate_graph
+#   · cleanup_expired_verifications (beat: daily 03:00 UTC)
+#   · recheck_warn_accounts        (beat: hourly)
+# [redis] extra includes: kombu[redis], redis (already pinned above)
+celery[redis]==5.4.0
+
+
+# ── HTTP client ────────────────────────────────────────────────────────────────
+# httpx — async HTTP client used by:
+#   · GeoService: ip-api.com IP lookup
+#   · IDVerificationProvider: Stripe Identity / Onfido / Stub HTTP calls
+httpx==0.28.1
+
+
+# ── Structured logging ─────────────────────────────────────────────────────────
+# structlog — structured, context-enriched logging throughout the service
+# Uses structlog.stdlib.ProcessorFormatter to bridge into stdlib logging
+# so that third-party libraries (SQLAlchemy, aiokafka) emit structured output too
+structlog==24.4.0
+
+
+# ── Notification providers ─────────────────────────────────────────────────────
+# twilio — SMS and WhatsApp OTP delivery via Twilio Verify or Programmable SMS.
+# Pin to exact version for reproducible builds and predictable SDK behaviour.
+# Used by TwilioVerifyProvider and TwilioSMSProvider in core/notifications.py.
+# Only imported at runtime when OTP_SMS_PROVIDER != "stub".
+twilio==9.3.7

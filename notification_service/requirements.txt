@@ -1,0 +1,40 @@
+fastapi[standard]==0.124.0
+uvicorn[standard]==0.38.0
+
+sqlmodel==0.0.27
+asyncpg==0.31.0
+psycopg[binary]==3.3.2
+alembic==1.17.2
+
+pydantic-settings==2.12.0
+email-validator==2.3.0
+
+aiokafka==0.12.0
+cramjam==2.11.0
+
+# Scheduling
+apscheduler==3.11.0
+
+# Template rendering
+jinja2==3.1.6
+
+# Push notifications
+firebase-admin==6.9.0
+
+# SMS — Africa's Talking
+africastalking==1.2.9
+
+# SMS — Twilio (fallback)
+twilio==9.6.3
+
+# Email — SendGrid
+sendgrid==6.11.0
+
+# HTTP client (for Meta WhatsApp API)
+httpx==0.28.1
+
+# Redis (rate limiting + dedup)
+redis[hiredis]==5.0.8
+
+# Observability
+structlog==24.4.0

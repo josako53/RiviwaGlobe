@@ -1,0 +1,49 @@
+# ── Secrets & environment ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Virtual environments ─────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Docker volumes / data ────────────────────────────────────────────────────
+postgres_data/
+redis_data/
+kafka_data/
+minio_data/
+
+# ── SSL certificates (managed by certbot on server) ─────────────────────────
+certbot/
+letsencrypt/
+
+# ── Claude Code ──────────────────────────────────────────────────────────────
+.claude/
+
+# ── Old/backup compose files ────────────────────────────────────────────────
+docker-compose-old-*.yml
+docker-compose.override-old*.yml
+docker-compose.override-working*.yml

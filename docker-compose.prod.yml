@@ -1,0 +1,233 @@
+# docker-compose.prod.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Production overrides.
+#
+# Apply with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# What this file does:
+#   · Enforces MIN_ISR=2 — writes require acknowledgment from 2 of 3 replicas.
+#   · Removes all debug tooling (kafka-ui, DEBUG flags).
+#   · Removes hot-reload (develop.watch) — code comes from built images only.
+#   · Sets resource limits appropriate for a VPS or cloud VM.
+#   · Configures the Kafka broker session timeout for a stable network
+#     (shorter than dev — production networks don't have sleep/pause events).
+#
+# Secrets in production MUST come from a secrets manager or CI/CD injected
+# environment variables — never from a committed .env file.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  kafka-1:
+    environment:
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_BROKER_SESSION_TIMEOUT_MS: 15000
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  kafka-2:
+    environment:
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_BROKER_SESSION_TIMEOUT_MS: 15000
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  kafka-3:
+    environment:
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_BROKER_SESSION_TIMEOUT_MS: 15000
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  kafka-4:
+    environment:
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_BROKER_SESSION_TIMEOUT_MS: 15000
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  riviwa_auth_service:
+    environment:
+      DEBUG: "false"
+      ENVIRONMENT: production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  stakeholder_service:
+    environment:
+      DEBUG: "false"
+      ENVIRONMENT: production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  feedback_service:
+    environment:
+      DEBUG: "false"
+      ENVIRONMENT: production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  payment_service:
+    environment:
+      DEBUG: "false"
+      ENVIRONMENT: production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # ── [NEW] notification_service production resources ───────────────────────
+  # Memory sized for APScheduler + 5 channel workers + Kafka consumer.
+  # notification_service is stateless (no in-memory caches beyond template
+  # LRU — 5 min TTL) so 256M is sufficient for normal load.
+  notification_service:
+    environment:
+      DEBUG: "false"
+      ENVIRONMENT: production
+      APNS_USE_SANDBOX: "false"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # ── Databases ─────────────────────────────────────────────────────────────
+  riviwa_auth_db:
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  feedback_db:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  stakeholder_db:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  payment_db:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # ── [NEW] notification_db production resources ────────────────────────────
+  # Smaller than auth_db — notification records are time-series data and
+  # old records are pruned daily (read: 90-day rolling window).
+  notification_db:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # kafka-ui is intentionally absent in production.
+  # It has no authentication and exposes full cluster access.
+  kafka-ui:
+    profiles: ["never"]
+
+  nginx:
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # ── MinIO production overrides ────────────────────────────────────────────
+  minio:
+    user: "0:0"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    ports:
+      - "9000:9000"    # S3 API only — console port 9001 NOT exposed in prod
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3

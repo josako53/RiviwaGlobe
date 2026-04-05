@@ -1,0 +1,23 @@
+# cors_params — include in every location block that needs CORS.
+# Uses $cors_origin from the map{} in the main server config.
+# If the Origin is not whitelisted, $cors_origin is empty and
+# the browser will block the response (no Access-Control headers).
+
+# Handle preflight (OPTIONS) directly — never hits the backend
+if ($request_method = 'OPTIONS') {
+    add_header 'Access-Control-Allow-Origin'      $cors_origin always;
+    add_header 'Access-Control-Allow-Methods'     'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+    add_header 'Access-Control-Allow-Headers'     'Authorization, Content-Type, X-Requested-With, Accept, Origin' always;
+    add_header 'Access-Control-Allow-Credentials' 'true' always;
+    add_header 'Access-Control-Max-Age'           86400 always;
+    add_header 'Content-Length'                    0;
+    add_header 'Content-Type'                     'text/plain';
+    return 204;
+}
+
+# Actual requests — add CORS headers to the proxied response
+add_header 'Access-Control-Allow-Origin'      $cors_origin always;
+add_header 'Access-Control-Allow-Methods'     'GET, POST, PUT, PATCH, DELETE, OPTIONS' always;
+add_header 'Access-Control-Allow-Headers'     'Authorization, Content-Type, X-Requested-With, Accept, Origin' always;
+add_header 'Access-Control-Allow-Credentials' 'true' always;
+add_header 'Access-Control-Expose-Headers'    'Content-Disposition, X-Total-Count' always;
