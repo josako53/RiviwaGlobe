@@ -15,9 +15,10 @@
 5. [Notification Service Endpoints](#5-notification-service-endpoints-port-8060)
 6. [Payment Service Endpoints](#6-payment-service-endpoints-port-8040)
 7. [Translation Service Endpoints](#7-translation-service-endpoints-port-8050)
-8. [Kafka Event-Driven Data Flow](#8-kafka-event-driven-data-flow)
-9. [Client Integration Guide (ReactJS & Flutter)](#9-client-integration-guide-reactjs--flutter)
-10. [Error Handling](#10-error-handling)
+8. [Recommendation Service Endpoints](#8-recommendation-service-endpoints-port-8055)
+9. [Kafka Event-Driven Data Flow](#9-kafka-event-driven-data-flow)
+10. [Client Integration Guide (ReactJS & Flutter)](#10-client-integration-guide-reactjs--flutter)
+11. [Error Handling](#11-error-handling)
 
 ---
 
@@ -564,7 +565,208 @@ The translation service automatically selects the best provider based on the tar
 
 ---
 
-## 8. Kafka Event-Driven Data Flow
+## 8. Recommendation Service Endpoints (Port 8055)
+
+The recommendation service provides relevance-based discovery using a **4-signal scoring engine**:
+- **Semantic similarity** (35%) — sentence-transformer embeddings + Qdrant ANN search
+- **Tag/category overlap** (25%) — Jaccard + IDF-weighted tag matching
+- **Geographic proximity** (25%) — Haversine distance with tiered scoring
+- **Activity recency** (15%) — exponential decay based on last activity
+
+All scoring weights are configurable via environment variables.
+
+### GET `/recommendations/{entity_id}` — Get recommendations
+
+Returns entities recommended based on the query entity's profile, location, category, and activity.
+
+```json
+// GET /api/v1/recommendations/{entity_id}?limit=10&include_explanation=true
+
+// Response
+{
+  "entity_id": "uuid-of-query-entity",
+  "recommendations": [
+    {
+      "entity_id": "uuid-of-recommended",
+      "entity_type": "project",
+      "name": "Msimbazi Basin Development",
+      "slug": "msimbazi-basin-dev",
+      "description": "Urban flood mitigation and community resettlement project",
+      "category": "infrastructure",
+      "sector": "water_sanitation",
+      "cover_image_url": "https://...",
+      "org_logo_url": "https://...",
+      "latitude": -6.82,
+      "longitude": 39.28,
+      "city": "Dar es Salaam",
+      "region": "Dar es Salaam",
+      "country_code": "tz",
+      "status": "active",
+      "score": 0.82,
+      "score_breakdown": {
+        "semantic": 0.91,
+        "tag_overlap": 0.70,
+        "geo_proximity": 0.75,
+        "recency": 0.85
+      },
+      "distance_km": 12.4,
+      "shared_tags": ["water_sanitation", "infrastructure"],
+      "interactions": {
+        "feedback_count": 47,
+        "grievance_count": 12,
+        "suggestion_count": 28,
+        "applause_count": 7,
+        "engagement_count": 15
+      },
+      "accepts_grievances": true,
+      "accepts_suggestions": true,
+      "accepts_applause": true
+    }
+  ],
+  "total": 45,
+  "page": 1,
+  "page_size": 10,
+  "generated_at": "2026-04-05T16:30:00Z",
+  "cache_hit": false
+}
+```
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `limit` | int | 20 | Results per page (max 100) |
+| `page` | int | 1 | Page number |
+| `min_score` | float | 0.1 | Minimum score threshold (0-1) |
+| `entity_type` | string | null | Filter: `project` or `organisation` |
+| `category_filter` | string | null | Filter by category |
+| `geo_only` | bool | false | Restrict to same region |
+| `include_explanation` | bool | false | Include `score_breakdown` |
+
+### GET `/similar/{entity_id}` — Find semantically similar entities
+
+Pure semantic similarity search — ignores geographic constraints. Useful for cross-region discovery of entities doing similar work.
+
+```json
+// GET /api/v1/similar/{entity_id}?limit=10
+
+// Response
+{
+  "entity_id": "uuid",
+  "similar": [
+    {
+      "entity_id": "uuid",
+      "entity_type": "project",
+      "name": "Coastal Erosion Resilience Program",
+      "category": "environment",
+      "sector": "climate_adaptation",
+      "score": 0.89,
+      "region": "Mtwara"
+    }
+  ],
+  "total": 23,
+  "page": 1,
+  "page_size": 10,
+  "generated_at": "2026-04-05T16:30:00Z"
+}
+```
+
+### GET `/discover/nearby` — Discover entities near a location
+
+Geo-based discovery sorted by distance. Each result includes interaction summaries showing how others have engaged with the entity (grievances, suggestions, applause).
+
+```json
+// GET /api/v1/discover/nearby?latitude=-6.8&longitude=39.3&radius_km=50&entity_type=project
+
+// Response
+{
+  "latitude": -6.8,
+  "longitude": 39.3,
+  "radius_km": 50.0,
+  "results": [
+    {
+      "entity_id": "uuid",
+      "entity_type": "project",
+      "name": "Dar es Salaam BRT Phase 3",
+      "category": "transport",
+      "distance_km": 3.2,
+      "score": 0.76,
+      "interactions": {
+        "feedback_count": 134,
+        "grievance_count": 45,
+        "suggestion_count": 67,
+        "applause_count": 22,
+        "engagement_count": 31
+      },
+      "accepts_grievances": true,
+      "accepts_suggestions": true,
+      "accepts_applause": true
+    }
+  ],
+  "total": 12,
+  "page": 1,
+  "page_size": 20,
+  "generated_at": "2026-04-05T16:30:00Z"
+}
+```
+
+**Query parameters:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `latitude` | float | required | -90 to 90 |
+| `longitude` | float | required | -180 to 180 |
+| `radius_km` | float | 50 | Search radius (1-5000 km) |
+| `entity_type` | string | null | Filter: `project` or `organisation` |
+| `category` | string | null | Filter by category |
+| `limit` | int | 20 | Results per page |
+| `page` | int | 1 | Page number |
+
+### Indexing Endpoints (Internal — requires `X-Service-Key` header)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/index/entity` | Index or update an entity |
+| PUT | `/index/entity/{entity_id}` | Update indexed entity |
+| DELETE | `/index/entity/{entity_id}` | Remove from index |
+| POST | `/index/activity` | Log activity event (updates popularity) |
+
+### Scoring Formula
+
+```
+final_score =
+  (0.35 x semantic_similarity)    ← cosine similarity of sentence-transformer embeddings
++ (0.25 x tag_overlap)            ← Jaccard + IDF-weighted tag matching
++ (0.25 x geo_proximity)          ← Haversine distance with tiered scoring
++ (0.15 x recency_score)          ← exp(-0.01 x days_since_last_activity)
+```
+
+**Geo proximity tiers:**
+
+| Distance | Score | Description |
+|----------|-------|-------------|
+| 0-10 km | 1.0 | Same city/town |
+| 10-50 km | 0.75 | Same district |
+| 50-200 km | 0.50 | Same region |
+| 200-800 km | 0.25 | Same country |
+| 800+ km | 0.10 | Cross-border |
+
+### Health Check
+
+```json
+// GET /health
+{
+  "status": "ok",
+  "database": true,
+  "qdrant": true,
+  "redis": true,
+  "embedding_model_loaded": true
+}
+```
+
+---
+
+## 9. Kafka Event-Driven Data Flow
 
 ### Topic Map
 
@@ -572,23 +774,47 @@ The translation service automatically selects the best provider based on the tar
                     ┌──────────────────────┐
                     │  riviwa.user.events   │
                     │  (auth publishes)     │
-                    └──────┬───┬───┬───────┘
-                           │   │   │
-              ┌────────────┘   │   └────────────┐
-              ▼                ▼                  ▼
-        feedback_svc    stakeholder_svc    translation_svc
-        (project cache, (user-contact      (create default
-         GDPR cleanup)   linking)           language pref)
+                    └──┬───┬───┬───┬──────┘
+                       │   │   │   │
+          ┌────────────┘   │   │   └──────────────┐
+          ▼                ▼   ▼                    ▼
+    feedback_svc    stakeholder  translation_svc   (future
+    (GDPR cleanup)  (user-contact (create default   consumers)
+                     linking)     language pref)
 
                     ┌──────────────────────┐
                     │  riviwa.org.events    │
                     │  (auth publishes)     │
-                    └──────┬───┬───────────┘
+                    └──┬───┬───┬──────────┘
+                       │   │   │
+          ┌────────────┘   │   └────────────┐
+          ▼                ▼                  ▼
+    feedback_svc    stakeholder_svc    recommendation_svc
+    (ProjectCache)  (ProjectCache)     (index projects in
+                                        Qdrant + PostGIS)
+
+                    ┌──────────────────────────┐
+                    │  riviwa.feedback.events    │
+                    │  (feedback publishes)      │
+                    └──────┬───┬───────────────┘
                            │   │
               ┌────────────┘   └────────────┐
               ▼                              ▼
-        feedback_svc                  stakeholder_svc
-        (ProjectCache sync)           (ProjectCache sync)
+        stakeholder_svc              recommendation_svc
+        (link feedback_ref)          (update interaction
+                                      counts: grievances,
+                                      suggestions, applause)
+
+                    ┌──────────────────────────────┐
+                    │  riviwa.stakeholder.events     │
+                    │  (stakeholder publishes)       │
+                    └──────┬───┬───────────────────┘
+                           │   │
+              ┌────────────┘   └────────────┐
+              ▼                              ▼
+        feedback_svc                 recommendation_svc
+        (auto-create concern)        (update engagement
+                                      counts)
 
                     ┌──────────────────────────┐
                     │ riviwa.translation.events │
@@ -619,18 +845,19 @@ auth_service → user.registered → translation_service (create pref sw/en)
                                 → translation_service → language.preference_set → auth_service (sync User.language)
 ```
 
-**Flow 2: Project Published → Feedback & Stakeholder Ready**
+**Flow 2: Project Published → Feedback, Stakeholder & Recommendation Index**
 ```
 auth_service → org_project.published → feedback_service (create ProjectCache)
                                      → stakeholder_service (create ProjectCache)
-auth_service → org_project_stage.activated → both services (create StageCache)
+                                     → recommendation_service (index in PostGIS + embed in Qdrant)
+auth_service → org_project_stage.activated → feedback + stakeholder (create StageCache)
 ```
 
-**Flow 3: Feedback Submitted → Notification to PAP**
+**Flow 3: Feedback Submitted → Notification + Recommendation Scoring**
 ```
 feedback_service → feedback.submitted (Kafka event)
-feedback_service → riviwa.notifications (notification request with language="sw")
-                → notification_service → SMS/push/email to PAP
+                 → notification_service (SMS/push/email to PAP)
+                 → recommendation_service (increment grievance/suggestion/applause count)
 ```
 
 **Flow 4: Stakeholder Concern → Auto-Created Feedback**
@@ -644,6 +871,20 @@ feedback_service → feedback.submitted → stakeholder_service (link feedback_r
 auth_service → user.deactivated → feedback_service (null submitted_by_user_id)
                                 → stakeholder_service (null contact.user_id)
                                 → translation_service (soft-delete preference)
+```
+
+**Flow 6: Recommendation Engine — Continuous Learning**
+```
+org_project.published    → recommendation_service → embed in Qdrant + index in PostGIS
+feedback.submitted       → recommendation_service → increment grievance/suggestion/applause count
+engagement.conducted     → recommendation_service → increment engagement count
+                         → recency score auto-updates (exponential decay on last_active_at)
+
+Client requests GET /recommendations/{entity_id}:
+  1. ANN search in Qdrant (semantic candidates)
+  2. Load candidates from PostGIS (geo-filtered)
+  3. Score: 35% semantic + 25% tags + 25% geo + 15% recency
+  4. Return with interaction summaries (how others engaged)
 ```
 
 ### Event Envelope Format (Standard)
@@ -667,9 +908,9 @@ auth_service → user.deactivated → feedback_service (null submitted_by_user_i
 
 ---
 
-## 9. Client Integration Guide (ReactJS & Flutter)
+## 10. Client Integration Guide (ReactJS & Flutter)
 
-### 9.1 API Client Setup
+### 10.1 API Client Setup
 
 **ReactJS (Axios)**
 ```javascript
@@ -746,7 +987,7 @@ dio.interceptors.add(InterceptorsWrapper(
 ));
 ```
 
-### 9.2 Authentication Implementation
+### 10.2 Authentication Implementation
 
 **ReactJS — Login Flow**
 ```javascript
@@ -783,7 +1024,7 @@ await storage.write(key: 'access_token', value: tokens.data['access_token']);
 await storage.write(key: 'refresh_token', value: tokens.data['refresh_token']);
 ```
 
-### 9.3 Translation Integration
+### 10.3 Translation Integration
 
 **Translate user-facing content on demand**
 
@@ -834,7 +1075,7 @@ if (data.detected_language !== 'en') {
 }
 ```
 
-### 9.4 Feedback Submission (PAP Self-Service)
+### 10.4 Feedback Submission (PAP Self-Service)
 
 ```javascript
 // ReactJS
@@ -860,7 +1101,7 @@ const trackFeedback = async (feedbackId) => {
 };
 ```
 
-### 9.5 Organisation Management
+### 10.5 Organisation Management
 
 ```javascript
 // Create org
@@ -887,7 +1128,7 @@ const { data: project } = await api.post(`/orgs/${org.id}/projects`, {
 await api.post(`/orgs/${org.id}/projects/${project.id}/activate`);
 ```
 
-### 9.6 Notification Handling
+### 10.6 Notification Handling
 
 ```javascript
 // Register device for push notifications
@@ -911,7 +1152,7 @@ const { data: unread } = await api.get('/notifications/unread-count');
 await api.patch(`/notifications/deliveries/${deliveryId}/read`);
 ```
 
-### 9.7 Payment Integration (Mobile Money)
+### 10.7 Payment Integration (Mobile Money)
 
 ```javascript
 // Step 1: Create payment intent
@@ -933,7 +1174,7 @@ const { data: status } = await api.post(`/payments/${payment.id}/verify`);
 // status.status = 'completed' | 'failed' | 'pending'
 ```
 
-### 9.8 Stakeholder Engagement
+### 10.8 Stakeholder Engagement
 
 ```javascript
 // Register stakeholder
@@ -963,9 +1204,123 @@ await api.post(`/activities/${activity.id}/attendances/bulk`, {
 });
 ```
 
+### 10.9 Recommendation Integration
+
+**Get recommendations for a project (ReactJS)**
+
+```javascript
+// Get recommendations based on a project the user is viewing
+const getRecommendations = async (projectId) => {
+  const { data } = await api.get(`/recommendations/${projectId}`, {
+    params: {
+      limit: 10,
+      include_explanation: true,
+      min_score: 0.3,
+    },
+  });
+  // data.recommendations[i] includes:
+  //   - score, score_breakdown (semantic, tag, geo, recency)
+  //   - interactions (grievance_count, suggestion_count, applause_count)
+  //   - distance_km, shared_tags
+  return data.recommendations;
+};
+
+// Show nearby projects on a map
+const discoverNearby = async (lat, lng, radiusKm = 25) => {
+  const { data } = await api.get('/discover/nearby', {
+    params: {
+      latitude: lat,
+      longitude: lng,
+      radius_km: radiusKm,
+      entity_type: 'project',
+    },
+  });
+  return data.results; // sorted by distance, each has interactions summary
+};
+
+// Find similar projects across regions
+const findSimilar = async (projectId) => {
+  const { data } = await api.get(`/similar/${projectId}`, {
+    params: { limit: 5 },
+  });
+  return data.similar;
+};
+```
+
+**Flutter — Recommendation integration**
+
+```dart
+// Get recommendations
+Future<List<dynamic>> getRecommendations(String projectId) async {
+  final res = await dio.get('/recommendations/$projectId', queryParameters: {
+    'limit': 10,
+    'include_explanation': true,
+    'min_score': 0.3,
+  });
+  return res.data['recommendations'];
+}
+
+// Discover nearby projects using device GPS
+Future<List<dynamic>> discoverNearby(double lat, double lng) async {
+  final res = await dio.get('/discover/nearby', queryParameters: {
+    'latitude': lat,
+    'longitude': lng,
+    'radius_km': 25,
+    'entity_type': 'project',
+  });
+  return res.data['results'];
+}
+```
+
+**Displaying interaction summaries (persuasive social proof)**
+
+```javascript
+// React component example
+const ProjectCard = ({ rec }) => (
+  <div className="project-card">
+    <h3>{rec.name}</h3>
+    <p>{rec.description}</p>
+    {rec.distance_km && <span>{rec.distance_km} km away</span>}
+
+    {/* Social proof — how others interacted */}
+    <div className="interactions">
+      {rec.interactions.grievance_count > 0 && (
+        <span>{rec.interactions.grievance_count} grievances raised</span>
+      )}
+      {rec.interactions.suggestion_count > 0 && (
+        <span>{rec.interactions.suggestion_count} suggestions shared</span>
+      )}
+      {rec.interactions.applause_count > 0 && (
+        <span>{rec.interactions.applause_count} people showed appreciation</span>
+      )}
+      {rec.interactions.engagement_count > 0 && (
+        <span>{rec.interactions.engagement_count} community engagements</span>
+      )}
+    </div>
+
+    {/* What you can do */}
+    <div className="actions">
+      {rec.accepts_grievances && <button>Report Issue</button>}
+      {rec.accepts_suggestions && <button>Share Suggestion</button>}
+      {rec.accepts_applause && <button>Show Appreciation</button>}
+    </div>
+
+    {/* Score breakdown (if include_explanation=true) */}
+    {rec.score_breakdown && (
+      <div className="match-quality">
+        Match: {Math.round(rec.score * 100)}%
+        {rec.shared_tags.length > 0 && (
+          <span>Shared interests: {rec.shared_tags.join(', ')}</span>
+        )}
+      </div>
+    )}
+  </div>
+);
+```
+
 ---
 
-## 10. Error Handling
+## 11. Error Handling
 
 ### Standard Error Response
 
@@ -996,6 +1351,10 @@ await api.post(`/activities/${activity.id}/attendances/bulk`, {
 | `LANGUAGE_NOT_SUPPORTED` | 422 | Unsupported language code |
 | `TRANSLATION_FAILED` | 502 | Translation provider error |
 | `PROVIDER_NOT_CONFIGURED` | 503 | No translation provider available |
+| `ENTITY_NOT_FOUND` | 404 | Entity not in recommendation index |
+| `INVALID_COORDINATES` | 422 | Latitude/longitude out of range |
+| `EMBEDDING_FAILED` | 502 | Failed to generate embedding vector |
+| `QDRANT_UNAVAILABLE` | 503 | Vector database temporarily unavailable |
 
 ### Client Error Handling Pattern
 
@@ -1030,11 +1389,12 @@ Each service exposes Swagger UI in development/staging:
 
 | Service | Swagger URL |
 |---------|-------------|
-| Auth | `https://api.riviwa.com:8000/docs` (direct) or via local `http://localhost:8000/docs` |
+| Auth | `http://localhost:8000/docs` |
 | Feedback | `http://localhost:8090/docs` |
 | Notification | `http://localhost:8060/docs` |
 | Payment | `http://localhost:8040/docs` |
 | Stakeholder | `http://localhost:8070/docs` |
 | Translation | `http://localhost:8050/docs` |
+| Recommendation | `http://localhost:8055/docs` |
 
 > **Note**: Swagger UI is disabled in production (`ENVIRONMENT=production`).
