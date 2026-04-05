@@ -228,10 +228,10 @@ class User(SQLModel, table=True):
     avatar_url:   Optional[str] = Field(default=None, max_length=512, nullable=True)
     country_code: Optional[str] = Field(default=None, max_length=2,   nullable=True)
     language: str = Field(
-        default="en",
+        default="sw",
         max_length=10,
         nullable=False,
-        description="BCP-47 language tag e.g. 'en', 'sw', 'fr'",
+        description="BCP-47 language tag e.g. 'sw', 'en', 'fr'. Sync copy of translation_service preference.",
     )
 
     # ── Account status ────────────────────────────────────────────────────────

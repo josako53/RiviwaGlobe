@@ -533,6 +533,74 @@ services:
       redis:
         condition: service_started
 
+  # ── TRANSLATION DB ─────────────────────────────────────────────────────────
+  translation_db:
+    image: postgres:15-alpine
+    container_name: translation_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${TRANSLATION_DB_USER:-trans_admin}
+      POSTGRES_PASSWORD: ${TRANSLATION_DB_PASSWORD:-trans_pass_321}
+      POSTGRES_DB:       ${TRANSLATION_DB_NAME:-translation_db}
+    ports: ["5438:5432"]
+    volumes: [translation_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TRANSLATION_DB_USER:-trans_admin} -d ${TRANSLATION_DB_NAME:-translation_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # ── TRANSLATION SERVICE ───────────────────────────────────────────────────
+  # Multilingual translation and language detection. NLLB-200 runs locally.
+  # Called on-demand via HTTP by other services — does NOT consume from Kafka.
+  translation_service:
+    build:
+      context: ./translation_service
+      dockerfile: Dockerfile
+    container_name: translation_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8050:8050"]
+    volumes:
+      - ./models/nllb:/models/nllb
+    environment:
+      TRANSLATION_DB_HOST:     translation_db
+      DB_PORT:                 5432
+      TRANSLATION_DB_USER:     ${TRANSLATION_DB_USER:-trans_admin}
+      TRANSLATION_DB_PASSWORD: ${TRANSLATION_DB_PASSWORD:-trans_pass_321}
+      TRANSLATION_DB_NAME:     ${TRANSLATION_DB_NAME:-translation_db}
+      REDIS_URL:            ${REDIS_URL:-redis://redis:6379/4}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      ENVIRONMENT: ${ENVIRONMENT}
+      DEBUG:       ${DEBUG}
+      TRANSLATION_PROVIDER:            ${TRANSLATION_PROVIDER:-nllb}
+      GOOGLE_PROJECT_ID:               ${GOOGLE_PROJECT_ID:-}
+      GOOGLE_APPLICATION_CREDENTIALS:  ${GOOGLE_APPLICATION_CREDENTIALS:-}
+      DEEPL_API_KEY:                   ${DEEPL_API_KEY:-}
+      DEEPL_FREE_TIER:                 ${DEEPL_FREE_TIER:-true}
+      MICROSOFT_TRANSLATOR_KEY:        ${MICROSOFT_TRANSLATOR_KEY:-}
+      MICROSOFT_TRANSLATOR_REGION:     ${MICROSOFT_TRANSLATOR_REGION:-eastus}
+      LIBRE_TRANSLATE_URL:             ${LIBRE_TRANSLATE_URL:-http://libretranslate:5000}
+      LIBRE_TRANSLATE_API_KEY:         ${LIBRE_TRANSLATE_API_KEY:-}
+      NLLB_ENABLED:    ${NLLB_ENABLED:-true}
+      NLLB_MODEL_NAME: ${NLLB_MODEL_NAME:-facebook/nllb-200-distilled-1.3B}
+      NLLB_MODEL_DIR:  /models/nllb
+      NLLB_DEVICE:     ${NLLB_DEVICE:-cpu}
+      NLLB_WORKERS:    ${NLLB_WORKERS:-2}
+      NLLB_MAX_LENGTH: ${NLLB_MAX_LENGTH:-512}
+      DEFAULT_LANGUAGE:  ${DEFAULT_LANGUAGE:-sw}
+      FALLBACK_LANGUAGE: ${FALLBACK_LANGUAGE:-en}
+    depends_on:
+      translation_db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ── KAFKA UI ──────────────────────────────────────────────────────────────
   kafka-ui:
     image: kafbat/kafka-ui:v1.4.2
@@ -657,4 +725,5 @@ volumes:
   redis_data:
   minio_data:
   certbot_www:
+  translation_db_data:
   certbot_certs:

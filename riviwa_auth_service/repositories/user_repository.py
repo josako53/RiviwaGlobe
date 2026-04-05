@@ -224,6 +224,18 @@ class UserRepository:
         )
         await self.db.flush()
 
+    async def update_language(self, user_id: uuid.UUID, language: str) -> None:
+        """
+        Sync copy — update User.language when translation_service fires
+        a language.preference_set or language.preference_auto_updated event.
+        """
+        await self.db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(language=language)
+        )
+        await self.db.flush()
+
     async def set_password(
         self,
         user_id:         uuid.UUID,

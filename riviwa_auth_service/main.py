@@ -44,6 +44,7 @@ from core.config import settings
 from core.exceptions import AppError
 from db.init_db import init_db
 from db.session import init_redis, get_redis_client, close_redis
+from events.consumer import start_consumer, stop_consumer
 from workers.kafka_producer import get_kafka_producer, close_kafka_producer
 
 log = structlog.get_logger(__name__)
@@ -100,10 +101,18 @@ async def application_lifespan(app: FastAPI) -> AsyncIterator[None]:
         service=settings.RIVIWA_AUTH_SERVICE_NAME,
     )
 
+    # ── 4. Kafka consumer: sync User.language from translation_service ────────
+    try:
+        await start_consumer()
+        log.info("riviwa_auth.startup.consumer_ready")
+    except Exception as exc:
+        log.error("riviwa_auth.startup.consumer_failed", error=str(exc))
+
     # ── Hand control to FastAPI ───────────────────────────────────────────────
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
+    await stop_consumer()
     log.info("riviwa_auth.shutdown.redis")
     await close_redis()
     log.info("riviwa_auth.shutdown.kafka")

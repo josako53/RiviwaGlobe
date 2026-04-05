@@ -31,10 +31,13 @@ from __future__ import annotations
 # ─────────────────────────────────────────────────────────────────────────────
 
 class KafkaTopics:
-    USER_EVENTS  = "riviwa.user.events"
-    ORG_EVENTS   = "riviwa.organisation.events"
-    AUTH_EVENTS  = "riviwa.auth.events"
-    FRAUD_EVENTS = "riviwa.fraud.events"
+    USER_EVENTS         = "riviwa.user.events"
+    ORG_EVENTS          = "riviwa.organisation.events"
+    AUTH_EVENTS         = "riviwa.auth.events"
+    FRAUD_EVENTS        = "riviwa.fraud.events"
+    NOTIFICATIONS       = "riviwa.notifications"
+    # Inbound — language preference changes from translation_service
+    TRANSLATION_EVENTS  = "riviwa.translation.events"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

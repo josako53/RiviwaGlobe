@@ -117,6 +117,21 @@ services:
       # Protect the venv installed by the builder stage.
       - /opt/venv
 
+  # ── translation_service dev override ─────────────────────────────────────
+  # Hot-reload enabled. Bind mounts source so code changes apply instantly.
+  # NLLB model is still loaded from ./models/nllb via the base compose volume.
+  # In dev, set NLLB_ENABLED=false in .env to skip the ~5 GB download.
+  translation_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8050 --reload --reload-dir /app/translation_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: staging
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+      NLLB_ENABLED: "false"
+    volumes:
+      - ./translation_service:/app/translation_service
+      - /opt/venv
+
   # ── MinIO dev overrides ────────────────────────────────────────────────────
   minio:
     environment:

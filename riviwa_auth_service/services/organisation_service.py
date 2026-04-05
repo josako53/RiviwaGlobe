@@ -471,10 +471,21 @@ class OrganisationService:
             invited_role=invited_role.value,
         )
 
-        # TODO: dispatch email task with raw_token in the link
-        # await send_invite_email.delay(
-        #     email=invited_email, raw_token=raw_token, org_id=str(org_id)
-        # )
+        # Notify the invitee by email
+        try:
+            org     = await self.org_repo.get_by_id(org_id)
+            inviter = await self.user_repo.get_by_id(invited_by_id)
+            if invited_email:
+                await self.publisher.notifications.org_invite_received(
+                    invite_id       = str(invite.id),
+                    recipient_email = invited_email,
+                    org_name        = org.display_name if org else "an organisation",
+                    role            = invited_role.value,
+                    inviter_name    = (inviter.display_name or inviter.username)
+                                      if inviter else "A team member",
+                )
+        except Exception as _exc:
+            log.warning("org.invite_notification_failed", error=str(_exc))
 
         return invite
 

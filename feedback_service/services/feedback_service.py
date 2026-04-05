@@ -12,7 +12,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
+
+log = structlog.get_logger(__name__)
 
 from core.exceptions import (
     AppealError,
@@ -123,6 +126,23 @@ class FeedbackService:
             stakeholder_engagement_id=f.stakeholder_engagement_id,
             distribution_id=f.distribution_id,
         )
+
+        # Notify PAP that submission was received
+        if not f.is_anonymous:
+            try:
+                project = await self.repo.get_project(f.project_id)
+                await self.producer.notifications.grm_feedback_submitted(
+                    feedback_id   = str(f.id),
+                    pap_user_id   = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
+                    pap_phone     = f.submitter_phone,
+                    feedback_ref  = f.unique_ref,
+                    project_name  = project.name if project else "the project",
+                    feedback_type = f.feedback_type.value,
+                    language      = "sw",
+                )
+            except Exception as _exc:
+                log.warning("feedback.submit_notification_failed", error=str(_exc))
+
         return f
 
     async def submit_from_pap(
@@ -167,6 +187,23 @@ class FeedbackService:
         )
         f = await self.repo.create(f)
         await self.db.commit()
+
+        # Notify PAP (self-service portal submission)
+        if not f.is_anonymous:
+            try:
+                project = await self.repo.get_project(f.project_id)
+                await self.producer.notifications.grm_feedback_submitted(
+                    feedback_id   = str(f.id),
+                    pap_user_id   = str(user_id),
+                    pap_phone     = f.submitter_phone,
+                    feedback_ref  = f.unique_ref,
+                    project_name  = project.name if project else "the project",
+                    feedback_type = f.feedback_type.value,
+                    language      = "sw",
+                )
+            except Exception as _exc:
+                log.warning("feedback.pap_submit_notification_failed", error=str(_exc))
+
         return f
 
     # ── Fetch ─────────────────────────────────────────────────────────────────
@@ -211,6 +248,24 @@ class FeedbackService:
         await self.repo.create_action(action)
         await self.db.commit()
         await self.producer.feedback_acknowledged(f.id, f.project_id, f.priority.value)
+
+        # Notify PAP that their submission has been acknowledged
+        if not f.is_anonymous:
+            try:
+                project  = await self.repo.get_project(f.project_id)
+                trd      = f.target_resolution_date.strftime("%d %b %Y") if f.target_resolution_date else None
+                await self.producer.notifications.grm_feedback_acknowledged(
+                    feedback_id             = str(f.id),
+                    pap_user_id             = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
+                    pap_phone               = f.submitter_phone,
+                    feedback_ref            = f.unique_ref,
+                    project_name            = project.name if project else "the project",
+                    target_resolution_date  = trd,
+                    language                = "sw",
+                )
+            except Exception as _exc:
+                log.warning("feedback.acknowledge_notification_failed", error=str(_exc))
+
         return f
 
     async def assign(
@@ -299,6 +354,23 @@ class FeedbackService:
         ))
         await self.db.commit()
         await self.producer.feedback_resolved(f.id, f.project_id)
+
+        # Notify PAP that their submission has been resolved
+        if not f.is_anonymous:
+            try:
+                project = await self.repo.get_project(f.project_id)
+                await self.producer.notifications.grm_feedback_resolved(
+                    feedback_id        = str(f.id),
+                    pap_user_id        = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
+                    pap_phone          = f.submitter_phone,
+                    feedback_ref       = f.unique_ref,
+                    project_name       = project.name if project else "the project",
+                    resolution_summary = summary,
+                    language           = "sw",
+                )
+            except Exception as _exc:
+                log.warning("feedback.resolve_notification_failed", error=str(_exc))
+
         return f
 
     async def appeal(

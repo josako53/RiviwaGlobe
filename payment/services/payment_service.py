@@ -200,6 +200,19 @@ class PaymentService:
                 except Exception as e:
                     log.error("payment.publish_failed", error=str(e))
 
+            # Notify the payer — payment confirmed
+            try:
+                await self.producer.notifications.payment_confirmed(
+                    payment_id        = str(txn.payment_id),
+                    recipient_user_id = str(payment.payer_user_id) if payment.payer_user_id else None,
+                    recipient_phone   = payment.payer_phone,
+                    amount            = float(payment.amount),
+                    currency          = payment.currency or "TZS",
+                    description       = payment.description or "Riviwa payment",
+                )
+            except Exception as _exc:
+                log.warning("payment.confirmed_notification_failed", error=str(_exc))
+
         elif status == "failed":
             txn.status       = TransactionStatus.FAILED
             txn.completed_at = datetime.now(timezone.utc)
@@ -208,6 +221,19 @@ class PaymentService:
             payment        = await self._get_payment_or_404(txn.payment_id)
             payment.status = PaymentStatus.FAILED
             await self.repo.save_payment(payment)
+
+            # Notify the payer — payment failed
+            try:
+                await self.producer.notifications.payment_failed(
+                    payment_id        = str(txn.payment_id),
+                    recipient_user_id = str(payment.payer_user_id) if payment.payer_user_id else None,
+                    recipient_phone   = payment.payer_phone,
+                    amount            = float(payment.amount),
+                    currency          = payment.currency or "TZS",
+                    reason            = txn.failure_reason or "Payment could not be processed.",
+                )
+            except Exception as _exc:
+                log.warning("payment.failed_notification_failed", error=str(_exc))
 
         await self.repo.save_transaction(txn)
         await self.db.commit()

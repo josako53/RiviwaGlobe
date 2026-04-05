@@ -622,6 +622,16 @@ class RegistrationService:
         log.info("registration.step3.complete", user_id=str(user_id), action=action)
         await self.publisher.user_registered(user)
 
+        # Welcome notification �� fires once on account creation
+        try:
+            await self.publisher.notifications.auth_welcome(
+                recipient_user_id = str(user.id),
+                display_name      = user.display_name or user.username or "there",
+                language          = "en",
+            )
+        except Exception as _exc:
+            log.warning("registration.welcome_notification_failed", error=str(_exc))
+
         return CompleteResponse(
             action              = action,
             message             = (

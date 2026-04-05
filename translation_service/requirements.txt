@@ -1,0 +1,59 @@
+fastapi[standard]==0.124.0
+uvicorn[standard]==0.38.0
+
+sqlmodel==0.0.27
+asyncpg==0.31.0
+psycopg[binary]==3.3.2
+alembic==1.17.2
+
+pydantic-settings==2.12.0
+
+# HTTP client — all external provider calls
+httpx==0.28.1
+
+# ── Open-source language detection ───────────────────────────────────────────
+# langdetect: Google's language-detection ported to Python. 55+ languages.
+langdetect==1.0.9
+
+# langid: Fast statistical LID — excellent on short texts (SMS, chat).
+langid==1.1.6
+
+# ── NLLB-200 local inference ──────────────────────────────────────────────────
+# Meta's No Language Left Behind model — 200 languages, runs fully offline.
+# transformers: HuggingFace model loader and inference pipeline.
+transformers==4.52.4
+
+# PyTorch — NLLB inference backend. CPU-only build (smaller image).
+# For GPU support replace with: torch==2.7.0+cu124 (match your CUDA version).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.7.0+cpu
+
+# SentencePiece — NLLB tokenizer dependency.
+sentencepiece==0.2.0
+
+# Protobuf — required by SentencePiece / tokenizers.
+protobuf==5.29.5
+
+# Accelerate — optional but recommended for faster model loading.
+accelerate==1.7.0
+
+# HuggingFace Hub — model download utility used by download_model.py.
+huggingface-hub==0.32.3
+
+# ── Translation provider SDKs ─────────────────────────────────────────────────
+# DeepL — highest quality for European languages
+deepl==1.21.0
+
+# Google Cloud Translation — best for African & Asian languages (Swahili, etc.)
+google-cloud-translate==3.19.0
+
+# Microsoft Azure Cognitive Services Translator uses httpx directly — no SDK needed
+
+# ── Redis — translation cache ─────────────────────────────────────────────────
+redis==5.2.1
+
+# ── Observability ─────────────────────────────────────────────────────────────
+structlog==24.4.0
+
+# Kafka producer + consumer
+aiokafka==0.11.0

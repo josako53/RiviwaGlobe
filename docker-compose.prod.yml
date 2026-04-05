@@ -231,3 +231,31 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
+
+  # ── translation_service production resources ──────────────────────────────
+  # NLLB-200-distilled-1.3B needs ~2.5 GB RAM on CPU. Size accordingly.
+  # Switch to 600M model (NLLB_MODEL_NAME=facebook/nllb-200-distilled-600M)
+  # to reduce memory to ~1.2 GB if the server is constrained.
+  translation_service:
+    environment:
+      DEBUG: "false"
+      ENVIRONMENT: production
+      NLLB_DEVICE: cpu
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 2G
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  translation_db:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
