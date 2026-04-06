@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, status
 from core.dependencies import DbDep, KafkaDep, PAPDep, StaffDep
 from models.feedback import FeedbackStatus, GRMLevel, EscalationRequestStatus
 from schemas.feedback import PAPSubmitFeedback
+from schemas.lifecycle import PAPEscalationRequest, PAPAppeal, PAPComment, ApproveEscalation, RejectEscalation
 from services.feedback_service import FeedbackService
 from api.v1.serialisers import feedback_out, escalation_request_out
 
@@ -173,9 +174,9 @@ async def pap_submit_feedback(body: PAPSubmitFeedback, db: DbDep, kafka: KafkaDe
     }
 
 @router.post("/my/feedback/{feedback_id}/escalation-request", status_code=status.HTTP_201_CREATED, summary="Request PIU to escalate your grievance to a higher GRM level")
-async def request_escalation(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+async def request_escalation(feedback_id: uuid.UUID, body: PAPEscalationRequest, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
     stakeholder_id = getattr(token, "stakeholder_id", None)
-    er = await _svc(db, kafka).request_escalation(feedback_id, body, user_id=token.sub, stakeholder_id=stakeholder_id)
+    er = await _svc(db, kafka).request_escalation(feedback_id, body.model_dump(exclude_none=True), user_id=token.sub, stakeholder_id=stakeholder_id)
     return {
         "id": str(er.id), "status": er.status.value,
         "message": ("Your escalation request has been submitted. "
@@ -184,9 +185,9 @@ async def request_escalation(feedback_id: uuid.UUID, body: Dict[str, Any], db: D
     }
 
 @router.post("/my/feedback/{feedback_id}/appeal", status_code=status.HTTP_201_CREATED, summary="File a formal appeal against an unsatisfactory resolution")
-async def pap_appeal(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+async def pap_appeal(feedback_id: uuid.UUID, body: PAPAppeal, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
     stakeholder_id = getattr(token, "stakeholder_id", None)
-    f, appeal = await _svc(db, kafka).pap_appeal(feedback_id, body, user_id=token.sub, stakeholder_id=stakeholder_id)
+    f, appeal = await _svc(db, kafka).pap_appeal(feedback_id, body.model_dump(exclude_none=True), user_id=token.sub, stakeholder_id=stakeholder_id)
     return {
         "appeal_id": str(appeal.id), "status": f.status.value,
         "now_at_level": f.current_level.value,
@@ -197,9 +198,9 @@ async def pap_appeal(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, ka
     }
 
 @router.post("/my/feedback/{feedback_id}/add-comment", status_code=status.HTTP_201_CREATED, summary="Add a follow-up comment to your submission")
-async def pap_add_comment(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+async def pap_add_comment(feedback_id: uuid.UUID, body: PAPComment, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
     stakeholder_id = getattr(token, "stakeholder_id", None)
-    action = await _svc(db, kafka).pap_add_comment(feedback_id, body, user_id=token.sub, stakeholder_id=stakeholder_id)
+    action = await _svc(db, kafka).pap_add_comment(feedback_id, body.model_dump(exclude_none=True), user_id=token.sub, stakeholder_id=stakeholder_id)
     return {"message": "Your comment has been added and is visible to PIU staff.", "action_id": str(action.id)}
 
 @router.get("/escalation-requests", status_code=status.HTTP_200_OK, summary="[Staff] List PAP escalation requests")
@@ -213,11 +214,11 @@ async def list_escalation_requests(
     return {"items": [escalation_request_out(er) for er in items], "count": len(items)}
 
 @router.post("/escalation-requests/{request_id}/approve", status_code=status.HTTP_200_OK, summary="[Staff] Approve a PAP escalation request")
-async def approve_escalation_request(request_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    er = await _svc(db, kafka).approve_escalation_request(request_id, body, by=token.sub)
+async def approve_escalation_request(request_id: uuid.UUID, body: ApproveEscalation, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    er = await _svc(db, kafka).approve_escalation_request(request_id, body.model_dump(exclude_none=True), by=token.sub)
     return {"status": er.status.value, "message": "Escalation request approved.", "feedback_id": str(er.feedback_id)}
 
 @router.post("/escalation-requests/{request_id}/reject", status_code=status.HTTP_200_OK, summary="[Staff] Reject a PAP escalation request with explanation")
-async def reject_escalation_request(request_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    er = await _svc(db, kafka).reject_escalation_request(request_id, body, by=token.sub)
+async def reject_escalation_request(request_id: uuid.UUID, body: RejectEscalation, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    er = await _svc(db, kafka).reject_escalation_request(request_id, body.model_dump(exclude_none=True), by=token.sub)
     return {"status": er.status.value, "message": "Escalation request rejected. The PAP has been notified."}

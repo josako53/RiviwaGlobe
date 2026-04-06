@@ -7,6 +7,10 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, File, Query, UploadFile, status
 from core.dependencies import DbDep, KafkaDep, StaffDep, OptTokenDep
 from schemas.feedback import BulkUploadResult, StaffSubmitFeedback
+from schemas.lifecycle import (
+    AcknowledgeFeedback, AssignFeedback, EscalateFeedback,
+    ResolveFeedback, AppealFeedback, CloseFeedback, DismissFeedback, LogAction,
+)
 from services.feedback_service import FeedbackService
 from api.v1.serialisers import feedback_out, action_out, esc_out, resolution_out, appeal_out
 
@@ -121,29 +125,29 @@ async def get_feedback(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep, _: St
     }
 
 @router.patch("/{feedback_id}/acknowledge", summary="Acknowledge receipt")
-async def acknowledge_feedback(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).acknowledge(feedback_id, body, by=token.sub))
+async def acknowledge_feedback(feedback_id: uuid.UUID, body: AcknowledgeFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return feedback_out(await _svc(db, kafka).acknowledge(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
 
 @router.patch("/{feedback_id}/assign", summary="Assign to staff member or committee")
-async def assign_feedback(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).assign(feedback_id, body, by=token.sub))
+async def assign_feedback(feedback_id: uuid.UUID, body: AssignFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return feedback_out(await _svc(db, kafka).assign(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
 
 @router.post("/{feedback_id}/escalate", status_code=status.HTTP_200_OK, summary="Escalate to next GRM level")
-async def escalate_feedback(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).escalate(feedback_id, body, by=token.sub))
+async def escalate_feedback(feedback_id: uuid.UUID, body: EscalateFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return feedback_out(await _svc(db, kafka).escalate(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
 
 @router.post("/{feedback_id}/resolve", status_code=status.HTTP_200_OK, summary="Record resolution")
-async def resolve_feedback(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).resolve(feedback_id, body, by=token.sub))
+async def resolve_feedback(feedback_id: uuid.UUID, body: ResolveFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return feedback_out(await _svc(db, kafka).resolve(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
 
 @router.post("/{feedback_id}/appeal", status_code=status.HTTP_200_OK, summary="File appeal against resolution")
-async def file_appeal(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).appeal(feedback_id, body, by=token.sub))
+async def file_appeal(feedback_id: uuid.UUID, body: AppealFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return feedback_out(await _svc(db, kafka).appeal(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
 
 @router.patch("/{feedback_id}/close", summary="Close feedback [final state]")
-async def close_feedback(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).close(feedback_id, body, by=token.sub))
+async def close_feedback(feedback_id: uuid.UUID, body: CloseFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return feedback_out(await _svc(db, kafka).close(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
 
 @router.patch("/{feedback_id}/dismiss", summary="Dismiss feedback")
-async def dismiss_feedback(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).dismiss(feedback_id, body, by=token.sub))
+async def dismiss_feedback(feedback_id: uuid.UUID, body: DismissFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return feedback_out(await _svc(db, kafka).dismiss(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
