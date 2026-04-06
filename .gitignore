@@ -30,6 +30,9 @@ env/
 Thumbs.db
 desktop.ini
 
+# ── ML model weights (large binaries) ────────────────────────────────────────
+/models/
+
 # ── Docker volumes / data ────────────────────────────────────────────────────
 postgres_data/
 redis_data/

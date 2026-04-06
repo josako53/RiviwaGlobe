@@ -385,10 +385,14 @@ class ChannelService:
             system += f"\n\nAvailable categories:\n{cat_list}"
         messages = [{"role": t["role"], "content": t["content"]} for t in session.get_turns()]
         try:
-            async with httpx.AsyncClient(timeout=20) as client:
+            async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
                     "https://api.anthropic.com/v1/messages",
-                    headers={"Content-Type": "application/json"},
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-api-key": settings.ANTHROPIC_API_KEY,
+                        "anthropic-version": "2023-06-01",
+                    },
                     json={"model": "claude-sonnet-4-6", "max_tokens": 600,
                           "system": system, "messages": messages},
                 )

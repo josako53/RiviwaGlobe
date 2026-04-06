@@ -626,7 +626,7 @@ class OrganisationService:
         Only ACTIVE (+ optionally verified) orgs are exposed.
         No auth required — open discovery endpoint.
         """
-        return await self.repo.list_public(
+        return await self.org_repo.list_public(
             search=search,
             org_type=org_type,
             verified_only=verified_only,

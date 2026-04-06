@@ -102,6 +102,8 @@ class ProjectCache(SQLModel, table=True):
 
     def active_stage(self) -> Optional["ProjectStageCache"]:
         """Returns the currently active stage if stages are loaded."""
+        if not self.stages:
+            return None
         for s in self.stages:
             if s.status == StageStatus.ACTIVE:
                 return s

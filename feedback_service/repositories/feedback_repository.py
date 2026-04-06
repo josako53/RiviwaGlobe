@@ -151,6 +151,9 @@ class FeedbackRepository:
             select(func.count(Feedback.id)).where(Feedback.project_id == project_id)
         ) or 0
 
+    async def count_total(self) -> int:
+        return await self.db.scalar(select(func.count(Feedback.id))) or 0
+
     async def save(self, f: Feedback) -> None:
         self.db.add(f)
 

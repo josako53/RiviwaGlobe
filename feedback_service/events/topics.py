@@ -35,7 +35,7 @@ from __future__ import annotations
 
 
 class KafkaTopics:
-    ORG_EVENTS         = "riviwa.org.events"
+    ORG_EVENTS         = "riviwa.organisation.events"
     USER_EVENTS        = "riviwa.user.events"
     STAKEHOLDER_EVENTS = "riviwa.stakeholder.events"
     FEEDBACK_EVENTS    = "riviwa.feedback.events"

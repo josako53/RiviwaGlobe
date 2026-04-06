@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Query, status
 from core.dependencies import DbDep, KafkaDep, PAPDep, StaffDep
 from models.feedback import FeedbackStatus, GRMLevel, EscalationRequestStatus
+from schemas.feedback import PAPSubmitFeedback
 from services.feedback_service import FeedbackService
 from api.v1.serialisers import feedback_out, escalation_request_out
 
@@ -146,15 +147,28 @@ async def my_feedback_detail(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep,
     f = await _svc(db, kafka).get_for_pap_or_404(feedback_id, token.sub, stakeholder_id)
     return _tracking_view(f, now)
 
-@router.post("/my/feedback", status_code=status.HTTP_201_CREATED, summary="Submit a new grievance, suggestion, or applause")
-async def pap_submit_feedback(body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
-    f = await _svc(db, kafka).submit_from_pap(body, user_id=token.sub)
-    prefix = {"grievance": "GRV", "suggestion": "SGG", "applause": "APP"}.get(f.feedback_type.value, "GRV")
+@router.post(
+    "/my/feedback",
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit a new grievance, suggestion, or applause",
+    description=(
+        "PAP self-service submission. Channel is auto-set to web_portal. "
+        "project_id is optional — if omitted, ML/AI will auto-detect the relevant project. "
+        "Priority is always medium (staff can re-triage later). "
+        "Returns a tracking_number for the PAP to follow up."
+    ),
+)
+async def pap_submit_feedback(body: PAPSubmitFeedback, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+    data = body.model_dump(exclude_none=True)
+    f = await _svc(db, kafka).submit_from_pap(data, user_id=token.sub, channel_override="web_portal")
     return {
-        "id": str(f.id), "unique_ref": f.unique_ref, "status": f.status.value,
+        "feedback_id": str(f.id),
+        "tracking_number": f.unique_ref,
+        "status": f.status.value,
         "status_label": _status_label(f.status),
+        "feedback_type": f.feedback_type.value,
         "message": (f"Your {f.feedback_type.value} has been submitted successfully. "
-                    f"Reference number: {f.unique_ref}. "
+                    f"Tracking number: {f.unique_ref}. "
                     "You will be notified when PIU acknowledges receipt."),
     }
 

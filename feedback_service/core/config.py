@@ -50,6 +50,10 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ── LLM / AI conversation engine ─────────────────────────────────────────
+    ANTHROPIC_API_KEY:  str  = Field(default="",
+                                      description="Anthropic API key for Claude LLM (AI conversation engine).")
+
     # ── Voice / Audio pipeline ────────────────────────────────────────────────
     # STT (Speech-to-Text)
     STT_PROVIDER_ORDER:     str  = Field(default="whisper,google_stt",

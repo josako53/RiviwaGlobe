@@ -28,7 +28,9 @@ def feedback_out(f: Feedback) -> dict:
     anon = f.is_anonymous
     return {
         "id":             str(f.id),
+        "feedback_id":    str(f.id),
         "unique_ref":     f.unique_ref,
+        "tracking_number": f.unique_ref,
         "project_id":     str(f.project_id),
         "stage_id":       str(f.stage_id) if f.stage_id else None,
         "service_location_id": str(f.service_location_id) if f.service_location_id else None,
@@ -59,8 +61,11 @@ def feedback_out(f: Feedback) -> dict:
         "description":    f.description,
         "media_urls":     f.media_urls,
         "issue_location_description": f.issue_location_description,
+        "issue_region":   getattr(f, "issue_region", None),
+        "issue_district": getattr(f, "issue_district", None),
         "issue_lga":      f.issue_lga,
         "issue_ward":     f.issue_ward,
+        "issue_mtaa":     getattr(f, "issue_mtaa", None),
         "issue_gps_lat":  f.issue_gps_lat,
         "issue_gps_lng":  f.issue_gps_lng,
         "date_of_incident":       f.date_of_incident.isoformat()       if f.date_of_incident       else None,

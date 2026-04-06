@@ -4,7 +4,7 @@ from __future__ import annotations
 
 class KafkaTopics:
     PAYMENT_EVENTS = "riviwa.payment.events"
-    ORG_EVENTS     = "riviwa.org.events"      # consumed for project context
+    ORG_EVENTS     = "riviwa.organisation.events"  # consumed for project context
 
 
 class PaymentEvents:

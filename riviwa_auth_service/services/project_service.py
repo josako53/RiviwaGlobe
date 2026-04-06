@@ -101,7 +101,7 @@ class ProjectService:
 
     async def _get_org_or_404(self, org_id: uuid.UUID) -> Organisation:
         org = await self.org_repo.get_by_id(org_id)
-        if not org or org.status not in (OrgStatus.ACTIVE, OrgStatus.VERIFIED):
+        if not org or org.status not in (OrgStatus.ACTIVE,):
             raise OrgNotFoundError()
         return org
 

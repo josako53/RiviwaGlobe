@@ -1,9 +1,12 @@
 """api/v1/feedback.py — HTTP orchestration only"""
 from __future__ import annotations
+import csv
+import io
 import uuid
-from typing import Any, Dict, Optional
-from fastapi import APIRouter, Query, status
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, File, Query, UploadFile, status
 from core.dependencies import DbDep, KafkaDep, StaffDep, OptTokenDep
+from schemas.feedback import BulkUploadResult, StaffSubmitFeedback
 from services.feedback_service import FeedbackService
 from api.v1.serialisers import feedback_out, action_out, esc_out, resolution_out, appeal_out
 
@@ -11,8 +14,74 @@ router = APIRouter(prefix="/feedback", tags=["Feedback"])
 def _svc(db, kafka): return FeedbackService(db=db, producer=kafka)
 
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Submit feedback (grievance / suggestion / applause)")
-async def submit_feedback(body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: OptTokenDep) -> dict:
-    return feedback_out(await _svc(db, kafka).submit(body, token_sub=token.sub if token else None))
+async def submit_feedback(body: StaffSubmitFeedback, db: DbDep, kafka: KafkaDep, token: OptTokenDep) -> dict:
+    """
+    Submit a single feedback record. Staff can backdate by setting `submitted_at`
+    for historical records (paper forms, past complaints).
+    """
+    return feedback_out(await _svc(db, kafka).submit(body.model_dump(exclude_none=True), token_sub=token.sub if token else None))
+
+
+@router.post(
+    "/bulk-upload",
+    status_code=status.HTTP_200_OK,
+    response_model=BulkUploadResult,
+    summary="Bulk import feedback from CSV file",
+    description=(
+        "Upload a CSV file to import multiple feedback records at once. "
+        "Each row becomes a separate feedback submission. Failed rows are skipped "
+        "and reported in the response — successful rows are not affected.\n\n"
+        "**CSV columns** (header row required):\n"
+        "- `project_id` (required) — UUID of the project\n"
+        "- `feedback_type` (required) — grievance | suggestion | applause\n"
+        "- `category` (required) — compensation, construction_impact, safety, design, quality, other, etc.\n"
+        "- `subject` (required) — short summary\n"
+        "- `description` (required) — detailed description\n"
+        "- `channel` — paper_form (default), in_person, email, public_meeting, notice_box, sms, other\n"
+        "- `priority` — critical, high, medium (default), low\n"
+        "- `submitter_name` — name of the person (blank for anonymous)\n"
+        "- `submitter_phone` — phone number (E.164)\n"
+        "- `is_anonymous` — true/false (default: false)\n"
+        "- `issue_lga` — LGA where the issue occurred\n"
+        "- `issue_ward` — ward where the issue occurred\n"
+        "- `issue_gps_lat` / `issue_gps_lng` — GPS coordinates\n"
+        "- `date_of_incident` — YYYY-MM-DD when the issue happened\n"
+        "- `submitted_at` — YYYY-MM-DD for backdating (defaults to today)\n\n"
+        "**Supported formats**: CSV (UTF-8, comma-separated). Max 1000 rows per upload."
+    ),
+    tags=["Feedback", "Bulk Import"],
+)
+async def bulk_upload_feedback(
+    file: UploadFile = File(..., description="CSV file (UTF-8, max 1000 rows)"),
+    db: DbDep = None,
+    kafka: KafkaDep = None,
+    token: StaffDep = None,
+) -> BulkUploadResult:
+    content = await file.read()
+
+    # Try UTF-8, fall back to latin-1
+    try:
+        text = content.decode("utf-8-sig")  # handles BOM
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    rows = list(reader)
+
+    if len(rows) > 1000:
+        return BulkUploadResult(
+            total_rows=len(rows), created=0, skipped=len(rows),
+            errors=[{"row": 0, "error": f"Too many rows ({len(rows)}). Maximum is 1000 per upload."}],
+        )
+
+    if not rows:
+        return BulkUploadResult(
+            total_rows=0, created=0, skipped=0,
+            errors=[{"row": 0, "error": "CSV file is empty or has no data rows."}],
+        )
+
+    result = await _svc(db, kafka).bulk_submit(rows, token_sub=token.sub)
+    return BulkUploadResult(**result)
 
 @router.get("", summary="List feedback records [staff]")
 async def list_feedback(

@@ -69,55 +69,81 @@ class FeedbackService:
 
     # ── Submit ────────────────────────────────────────────────────────────────
 
+    def _to_uuid(self, val) -> Optional[uuid.UUID]:
+        """Safely convert a value to UUID — handles str, UUID, or None."""
+        if val is None:
+            return None
+        if isinstance(val, uuid.UUID):
+            return val
+        return uuid.UUID(str(val))
+
     async def submit(self, data: dict, token_sub: Optional[uuid.UUID] = None) -> Feedback:
-        project_id = uuid.UUID(data["project_id"])
-        project = await self.repo.get_project(project_id)
-        if not project:
-            raise ProjectNotFoundError()
+        project_id = self._to_uuid(data.get("project_id"))
+        project = None
+        active_stage = None
 
-        feedback_type = FeedbackType(data["feedback_type"])
-        if not project.accepts_feedback_type(feedback_type.value):
-            raise ProjectNotAcceptingFeedbackError(
-                message=f"This project is not currently accepting {feedback_type.value} submissions."
-            )
+        if project_id:
+            project = await self.repo.get_project(project_id)
+            if not project:
+                raise ProjectNotFoundError()
+            feedback_type = FeedbackType(data["feedback_type"])
+            if not project.accepts_feedback_type(feedback_type.value):
+                raise ProjectNotAcceptingFeedbackError(
+                    message=f"This project is not currently accepting {feedback_type.value} submissions."
+                )
+            active_stage = project.active_stage()
+        else:
+            feedback_type = FeedbackType(data["feedback_type"])
 
-        count = await self.repo.count_for_project(project_id)
+        if project_id:
+            count = await self.repo.count_for_project(project_id)
+        else:
+            count = await self.repo.count_total()
         unique_ref = f"{_PREFIX[feedback_type]}-{datetime.now().year}-{count + 1:04d}"
-        active_stage = project.active_stage()
         is_anon = bool(data.get("is_anonymous", False))
 
         f = Feedback(
             unique_ref                   = unique_ref,
             project_id                   = project_id,
             stage_id                     = active_stage.id if active_stage else None,
-            service_location_id          = uuid.UUID(data["service_location_id"]) if data.get("service_location_id") else None,
+            service_location_id          = self._to_uuid(data.get("service_location_id")),
             feedback_type                = feedback_type,
-            category                     = FeedbackCategory(data["category"]),
+            category                     = FeedbackCategory(data.get("category", "other")),
             status                       = FeedbackStatus.SUBMITTED,
             priority                     = FeedbackPriority(data.get("priority", "medium")),
             current_level                = GRMLevel.WARD,
             channel                      = FeedbackChannel(data["channel"]),
             is_anonymous                 = is_anon,
-            submitted_by_user_id         = None if is_anon else (token_sub or (uuid.UUID(data["submitted_by_user_id"]) if data.get("submitted_by_user_id") else None)),
-            submitted_by_stakeholder_id  = None if is_anon else (uuid.UUID(data["submitted_by_stakeholder_id"]) if data.get("submitted_by_stakeholder_id") else None),
-            submitted_by_contact_id      = None if is_anon else (uuid.UUID(data["submitted_by_contact_id"]) if data.get("submitted_by_contact_id") else None),
+            submitted_by_user_id         = None if is_anon else (token_sub or self._to_uuid(data.get("submitted_by_user_id"))),
+            submitted_by_stakeholder_id  = None if is_anon else self._to_uuid(data.get("submitted_by_stakeholder_id")),
+            submitted_by_contact_id      = None if is_anon else self._to_uuid(data.get("submitted_by_contact_id")),
             submitter_name               = None if is_anon else data.get("submitter_name"),
             submitter_phone              = None if is_anon else data.get("submitter_phone"),
+            submitter_location_region    = None if is_anon else data.get("submitter_location_region"),
+            submitter_location_district  = None if is_anon else data.get("submitter_location_district"),
             submitter_location_lga       = None if is_anon else data.get("submitter_location_lga"),
             submitter_location_ward      = None if is_anon else data.get("submitter_location_ward"),
+            submitter_location_street    = None if is_anon else data.get("submitter_location_street"),
             entered_by_user_id           = None if is_anon else (token_sub if data.get("officer_recorded") else None),
-            stakeholder_engagement_id    = uuid.UUID(data["stakeholder_engagement_id"]) if data.get("stakeholder_engagement_id") else None,
-            distribution_id              = uuid.UUID(data["distribution_id"]) if data.get("distribution_id") else None,
+            stakeholder_engagement_id    = self._to_uuid(data.get("stakeholder_engagement_id")),
+            distribution_id              = self._to_uuid(data.get("distribution_id")),
             subject                      = data["subject"],
             description                  = data["description"],
             media_urls                   = data.get("media_urls"),
+            internal_notes               = data.get("internal_notes"),
             issue_location_description   = data.get("issue_location_description"),
+            issue_region                 = data.get("issue_region"),
+            issue_district               = data.get("issue_district"),
             issue_lga                    = data.get("issue_lga"),
             issue_ward                   = data.get("issue_ward"),
-            issue_gps_lat                = data.get("issue_gps_lat"),
-            issue_gps_lng                = data.get("issue_gps_lng"),
+            issue_mtaa                   = data.get("issue_mtaa"),
+            issue_gps_lat                = float(data["issue_gps_lat"]) if data.get("issue_gps_lat") else None,
+            issue_gps_lng                = float(data["issue_gps_lng"]) if data.get("issue_gps_lng") else None,
             date_of_incident             = datetime.fromisoformat(data["date_of_incident"]) if data.get("date_of_incident") else None,
         )
+        # Backdate support: staff can set submitted_at for historical records
+        if data.get("submitted_at"):
+            f.submitted_at = datetime.fromisoformat(data["submitted_at"]).replace(tzinfo=timezone.utc) if not datetime.fromisoformat(data["submitted_at"]).tzinfo else datetime.fromisoformat(data["submitted_at"])
         f = await self.repo.create(f)
         await self.db.commit()
 
@@ -145,23 +171,88 @@ class FeedbackService:
 
         return f
 
+    # ── Bulk Submit (CSV/Excel) ──────────────────────────────────────────────
+
+    async def bulk_submit(
+        self, rows: list[dict], token_sub: Optional[uuid.UUID] = None,
+    ) -> dict:
+        """
+        Import multiple feedback records from parsed CSV/Excel rows.
+        Each row is validated and submitted independently — failures on one
+        row do not block others. Returns summary with per-row errors.
+        """
+        created = 0
+        skipped = 0
+        errors = []
+
+        for i, row in enumerate(rows, start=1):
+            try:
+                # Normalise keys to lowercase/underscore
+                data = {k.strip().lower().replace(" ", "_"): v.strip() if isinstance(v, str) else v for k, v in row.items() if v}
+                # Map common CSV column aliases
+                _aliases = {
+                    "type": "feedback_type", "feedback type": "feedback_type",
+                    "phone": "submitter_phone", "name": "submitter_name",
+                    "lga": "issue_lga", "ward": "issue_ward",
+                    "date": "date_of_incident", "incident_date": "date_of_incident",
+                    "submission_date": "submitted_at", "received_date": "submitted_at",
+                    "received_at": "submitted_at",
+                    "gps_lat": "issue_gps_lat", "gps_lng": "issue_gps_lng",
+                    "lat": "issue_gps_lat", "lng": "issue_gps_lng",
+                    "latitude": "issue_gps_lat", "longitude": "issue_gps_lng",
+                    "anonymous": "is_anonymous",
+                }
+                for alias, canonical in _aliases.items():
+                    if alias in data and canonical not in data:
+                        data[canonical] = data.pop(alias)
+
+                # Validate required fields
+                for req in ("project_id", "feedback_type", "category", "subject", "description"):
+                    if not data.get(req):
+                        raise ValueError(f"Missing required field: {req}")
+
+                # Defaults for bulk
+                data.setdefault("channel", "paper_form")
+                data.setdefault("priority", "medium")
+                data.setdefault("officer_recorded", True)
+                if isinstance(data.get("is_anonymous"), str):
+                    data["is_anonymous"] = data["is_anonymous"].lower() in ("true", "yes", "1")
+
+                await self.submit(data, token_sub=token_sub)
+                created += 1
+            except Exception as exc:
+                skipped += 1
+                errors.append({"row": i, "error": str(exc), "data": {k: str(v)[:100] for k, v in row.items()}})
+                log.warning("feedback.bulk.row_failed", row=i, error=str(exc))
+
+        await self.db.commit()
+        return {"total_rows": len(rows), "created": created, "skipped": skipped, "errors": errors}
+
     async def submit_from_pap(
-        self, data: dict, user_id: uuid.UUID
+        self, data: dict, user_id: uuid.UUID, channel_override: str = "web_portal",
     ) -> Feedback:
-        project_id = uuid.UUID(data["project_id"])
-        project = await self.repo.get_project(project_id)
-        if not project:
-            raise ValidationError("Project not found or not active.")
+        project_id = self._to_uuid(data.get("project_id"))
+        project = None
 
-        fb_type = FeedbackType(data["feedback_type"])
-        if fb_type == FeedbackType.GRIEVANCE and not project.accepts_grievances:
-            raise ValidationError("This project is not currently accepting grievances.")
-        if fb_type == FeedbackType.SUGGESTION and not project.accepts_suggestions:
-            raise ValidationError("This project is not currently accepting suggestions.")
-        if fb_type == FeedbackType.APPLAUSE and not project.accepts_applause:
-            raise ValidationError("This project is not currently accepting applause.")
+        if project_id:
+            project = await self.repo.get_project(project_id)
+            if not project:
+                raise ValidationError("Project not found or not active.")
 
-        count     = await self.repo.count_for_project(project_id)
+            fb_type = FeedbackType(data["feedback_type"])
+            if fb_type == FeedbackType.GRIEVANCE and not project.accepts_grievances:
+                raise ValidationError("This project is not currently accepting grievances.")
+            if fb_type == FeedbackType.SUGGESTION and not project.accepts_suggestions:
+                raise ValidationError("This project is not currently accepting suggestions.")
+            if fb_type == FeedbackType.APPLAUSE and not project.accepts_applause:
+                raise ValidationError("This project is not currently accepting applause.")
+        else:
+            fb_type = FeedbackType(data["feedback_type"])
+
+        if project_id:
+            count = await self.repo.count_for_project(project_id)
+        else:
+            count = await self.repo.count_total()
         prefix    = _PREFIX[fb_type]
         unique_ref = f"{prefix}-{datetime.now().year}-{count + 1:04d}"
         is_anon   = bool(data.get("is_anonymous", False))
@@ -174,16 +265,21 @@ class FeedbackService:
             status              = FeedbackStatus.SUBMITTED,
             priority            = FeedbackPriority.MEDIUM,
             current_level       = GRMLevel.WARD,
-            channel             = FeedbackChannel(data.get("channel", "web_portal")),
+            channel             = FeedbackChannel(channel_override),
             submission_method   = SubmissionMethod.SELF_SERVICE,
             is_anonymous        = is_anon,
             submitted_by_user_id = None if is_anon else user_id,
             subject             = data.get("subject") or data.get("description", "")[:100],
             description         = data["description"],
+            issue_location_description = data.get("issue_location_description"),
             issue_lga           = data.get("issue_lga"),
             issue_ward          = data.get("issue_ward"),
+            issue_gps_lat       = float(data["issue_gps_lat"]) if data.get("issue_gps_lat") else None,
+            issue_gps_lng       = float(data["issue_gps_lng"]) if data.get("issue_gps_lng") else None,
+            date_of_incident    = datetime.fromisoformat(data["date_of_incident"]) if data.get("date_of_incident") else None,
             submitter_name      = None if is_anon else data.get("submitter_name"),
             submitter_phone     = None if is_anon else data.get("submitter_phone"),
+            media_urls          = data.get("media_urls"),
         )
         f = await self.repo.create(f)
         await self.db.commit()
