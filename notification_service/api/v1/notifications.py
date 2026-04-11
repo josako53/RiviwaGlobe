@@ -149,3 +149,66 @@ async def mark_all_read(user_id: UserIdDep, db: DbDep) -> dict:
     count = await repo.mark_all_read(user_id)
     await db.commit()
     return {"message": f"{count} notification(s) marked as read.", "count": count}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cancel scheduled notification
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.delete(
+    "/{notification_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Cancel a scheduled notification",
+    description=(
+        "Cancel a PENDING_SCHEDULED notification before it fires. "
+        "Only the recipient user can cancel their own scheduled notification. "
+        "Returns 404 if not found, 409 if already dispatched."
+    ),
+)
+async def cancel_notification(
+    notification_id: uuid.UUID,
+    user_id:         UserIdDep,
+    db:              DbDep,
+) -> dict:
+    from sqlalchemy import select, update
+    from models.notification import Notification, NotificationStatus
+
+    # Fetch and verify ownership
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.recipient_user_id == user_id,
+        )
+    )
+    notif = result.scalar_one_or_none()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found.")
+    if notif.status != NotificationStatus.PENDING_SCHEDULED:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot cancel — notification is already '{notif.status.value}'.",
+        )
+
+    await db.execute(
+        update(Notification)
+        .where(Notification.id == notification_id)
+        .values(status=NotificationStatus.CANCELLED)
+    )
+    await db.commit()
+
+    # Publish cancellation event (best-effort)
+    from events.producer import get_producer
+    from events.producer import NotificationPublisher
+    producer = get_producer()
+    if producer:
+        pub = NotificationPublisher(producer)
+        await pub.notification_cancelled(
+            notification_id=notif.id,
+            notification_type=notif.notification_type,
+            recipient_user_id=notif.recipient_user_id,
+            source_entity_id=notif.source_entity_id,
+            source_service=notif.source_service,
+            reason="Cancelled by recipient user",
+        )
+
+    return {"message": "Scheduled notification cancelled.", "notification_id": str(notification_id)}
