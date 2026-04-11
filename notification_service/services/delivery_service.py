@@ -128,10 +128,12 @@ class DeliveryService:
         priority_str  = request.get("priority", NotificationPriority.MEDIUM)
         requested_chs = request.get("preferred_channels") or []
         scheduled_at_raw = request.get("scheduled_at")
-        scheduled_at  = (
-            datetime.fromisoformat(scheduled_at_raw)
-            if scheduled_at_raw else None
-        )
+        if scheduled_at_raw is None:
+            scheduled_at = None
+        elif isinstance(scheduled_at_raw, datetime):
+            scheduled_at = scheduled_at_raw
+        else:
+            scheduled_at = datetime.fromisoformat(str(scheduled_at_raw))
 
         notification = Notification(
             recipient_user_id  = uuid.UUID(str(request["recipient_user_id"])) if request.get("recipient_user_id") else None,

@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     # ── WhatsApp — Meta Cloud API ─────────────────────────────────────────────
     META_WHATSAPP_TOKEN:       str = Field(default="")
     META_WHATSAPP_PHONE_ID:    str = Field(default="")
+    WHATSAPP_VERIFY_TOKEN:     str = Field(default="riviwa_webhook_verify_change_me")
 
     # ── Email — SendGrid ──────────────────────────────────────────────────────
     SENDGRID_API_KEY:  str = Field(default="")

@@ -245,6 +245,6 @@ async def meta_whatsapp_verify(request: Request) -> int:
     token      = params.get("hub.verify_token")
     challenge  = params.get("hub.challenge")
 
-    if mode == "subscribe" and token == settings.META_WHATSAPP_TOKEN:
+    if mode == "subscribe" and token == settings.WHATSAPP_VERIFY_TOKEN:
         return int(challenge)
     raise HTTPException(status_code=403, detail="Verification failed.")
