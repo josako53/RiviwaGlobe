@@ -79,6 +79,11 @@ def _tracking_view(f, now):
         "current_level": f.current_level.value if f.current_level else None,
         "priority": f.priority.value if f.priority else None,
         "status": f.status.value, "status_label": _status_label(f.status),
+        "issue_location_description": f.issue_location_description,
+        "issue_lga": f.issue_lga,
+        "issue_ward": f.issue_ward,
+        "issue_gps_lat": f.issue_gps_lat,
+        "issue_gps_lng": f.issue_gps_lng,
         "submitted_at": f.submitted_at.isoformat(),
         "acknowledged_at": f.acknowledged_at.isoformat() if f.acknowledged_at else None,
         "target_resolution_date": f.target_resolution_date.isoformat() if f.target_resolution_date else None,
@@ -153,24 +158,48 @@ async def my_feedback_detail(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep,
     status_code=status.HTTP_201_CREATED,
     summary="Submit a new grievance, suggestion, or applause",
     description=(
-        "PAP self-service submission. Channel is auto-set to web_portal. "
-        "project_id is optional — if omitted, ML/AI will auto-detect the relevant project. "
-        "Priority is always medium (staff can re-triage later). "
-        "Returns a tracking_number for the PAP to follow up."
+        "PAP self-service submission. Channel is auto-set to web_portal.\n\n"
+        "**project_id** is optional — the AI auto-detects it from `issue_lga` + `description`. "
+        "**category** is optional — the AI classifies it from the description.\n\n"
+        "If the project cannot be identified automatically, HTTP 422 is returned with "
+        "`detail.candidate_projects` — a ranked list of matching projects for the frontend "
+        "to present as a picker. Re-submit with the chosen `project_id` to complete the submission."
     ),
+    responses={
+        422: {
+            "description": "Project could not be auto-identified. `detail.candidate_projects` contains a ranked list to show the user.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": "VALIDATION_ERROR",
+                        "message": "We could not automatically identify the project for your location. Please select the correct project from the list below.",
+                        "detail": {
+                            "error_code": "PROJECT_UNIDENTIFIED",
+                            "candidate_projects": [
+                                {"project_id": "...", "name": "Dodoma Road Project", "region": "Dodoma", "lga": "Bahi", "score": 0.72}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    },
 )
 async def pap_submit_feedback(body: PAPSubmitFeedback, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
     data = body.model_dump(exclude_none=True)
     f = await _svc(db, kafka).submit_from_pap(data, user_id=token.sub, channel_override="web_portal")
     return {
-        "feedback_id": str(f.id),
+        "feedback_id":    str(f.id),
         "tracking_number": f.unique_ref,
-        "status": f.status.value,
-        "status_label": _status_label(f.status),
-        "feedback_type": f.feedback_type.value,
-        "message": (f"Your {f.feedback_type.value} has been submitted successfully. "
-                    f"Tracking number: {f.unique_ref}. "
-                    "You will be notified when PIU acknowledges receipt."),
+        "status":         f.status.value,
+        "status_label":   _status_label(f.status),
+        "feedback_type":  f.feedback_type.value,
+        "ai_classified":  not bool(body.project_id),   # true when AI detected the project
+        "message": (
+            f"Your {f.feedback_type.value} has been submitted successfully. "
+            f"Tracking number: {f.unique_ref}. "
+            "You will be notified when the PIU acknowledges receipt."
+        ),
     }
 
 @router.post("/my/feedback/{feedback_id}/escalation-request", status_code=status.HTTP_201_CREATED, summary="Request PIU to escalate your grievance to a higher GRM level")

@@ -38,7 +38,7 @@ class ChannelRepository:
         if project_id: q = q.where(ChannelSession.project_id == project_id)
         if status:     q = q.where(ChannelSession.status     == status)
         if channel:    q = q.where(ChannelSession.channel    == channel)
-        q = q.offset(skip).limit(limit).order_by(ChannelSession.created_at.desc())
+        q = q.offset(skip).limit(limit).order_by(ChannelSession.started_at.desc())
         result = await self.db.execute(q)
         return list(result.scalars().all())
 

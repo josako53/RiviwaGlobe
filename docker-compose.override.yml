@@ -59,7 +59,7 @@ services:
     command: "uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/riviwa_auth_service"
     environment:
       DEBUG: "true"
-      ENVIRONMENT: development
+      ENVIRONMENT: staging
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
     volumes:
       # Mount to /app/riviwa_auth_service — matches Dockerfile WORKDIR exactly.
@@ -141,6 +141,17 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
     volumes:
       - ./recommendation_service:/app/recommendation_service
+      - /opt/venv
+
+  # ── ai_service dev override ───────────────────────────────────────────────
+  ai_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8085 --reload --reload-dir /app/ai_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+    volumes:
+      - ./ai_service:/app/ai_service
       - /opt/venv
 
   # ── MinIO dev overrides ────────────────────────────────────────────────────

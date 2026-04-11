@@ -40,7 +40,7 @@ def _decode(raw: str) -> TokenClaims:
             jti           = uuid.UUID(p.get("jti", str(uuid.uuid4()))),
             exp           = int(p["exp"]),
             org_id        = uuid.UUID(p["org_id"]) if p.get("org_id") else None,
-            org_role      = p.get("org_role"),
+            org_role      = (p.get("org_role") or "").lower() or None,
             platform_role = p.get("platform_role"),
         )
     except (KeyError, ValueError):
@@ -74,16 +74,54 @@ async def get_optional_token(
         return None
 
 
+_PLATFORM_PRIORITY = {"super_admin": 3, "admin": 2, "moderator": 1}
+_ORG_PRIORITY      = {"owner": 3, "admin": 2, "manager": 1, "member": 0}
+
+
+def _is_platform_admin(token: TokenClaims) -> bool:
+    return _PLATFORM_PRIORITY.get(token.platform_role or "", 0) >= 2
+
+
 async def require_staff(token: Annotated[TokenClaims, Depends(get_current_token)]) -> TokenClaims:
+    """GRM read access: any org member OR platform admin."""
+    if _is_platform_admin(token):
+        return token
+    if not token.org_id:
+        raise ForbiddenError(message="Switch to an active organisation to access GRM.")
+    if token.org_role not in ("owner", "admin", "manager", "member"):
+        raise ForbiddenError(message="You must be a member of an organisation to access GRM.")
+    return token
+
+
+async def require_grm_officer(token: Annotated[TokenClaims, Depends(get_current_token)]) -> TokenClaims:
+    """GRM write access: manager/admin/owner OR platform admin.
+    Used for: submit, acknowledge, assign, escalate, resolve, close."""
+    if _is_platform_admin(token):
+        return token
+    if not token.org_id:
+        raise ForbiddenError(message="Switch to an active organisation to perform this action.")
+    if _ORG_PRIORITY.get(token.org_role or "", -1) < 1:
+        raise ForbiddenError(message="Requires org role 'manager' or higher.")
+    return token
+
+
+async def require_grm_coordinator(token: Annotated[TokenClaims, Depends(get_current_token)]) -> TokenClaims:
+    """Senior GRM access: admin/owner OR platform admin.
+    Used for: dismiss (irreversible closure)."""
+    if _is_platform_admin(token):
+        return token
+    if not token.org_id:
+        raise ForbiddenError(message="Switch to an active organisation to perform this action.")
+    if _ORG_PRIORITY.get(token.org_role or "", -1) < 2:
+        raise ForbiddenError(message="Requires org role 'admin' or higher.")
     return token
 
 
 def require_platform_role(role: str) -> Callable:
-    _priority = {"super_admin": 3, "admin": 2, "moderator": 1}
-    required  = _priority.get(role, 0)
+    required = _PLATFORM_PRIORITY.get(role, 0)
 
     async def _guard(token: Annotated[TokenClaims, Depends(get_current_token)]) -> TokenClaims:
-        actual = _priority.get(token.platform_role or "", 0)
+        actual = _PLATFORM_PRIORITY.get(token.platform_role or "", 0)
         if actual < required:
             raise ForbiddenError(message=f"Requires platform role '{role}' or higher.")
         return token
@@ -97,10 +135,12 @@ async def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-DbDep       = Annotated[AsyncSession,    Depends(get_db)]
-KafkaDep    = Annotated[FeedbackProducer, Depends(get_kafka)]
-StaffDep    = Annotated[TokenClaims,     Depends(require_staff)]
-OptTokenDep = Annotated[Optional[TokenClaims], Depends(get_optional_token)]
+DbDep              = Annotated[AsyncSession,     Depends(get_db)]
+KafkaDep           = Annotated[FeedbackProducer, Depends(get_kafka)]
+StaffDep           = Annotated[TokenClaims,      Depends(require_staff)]
+GRMOfficerDep      = Annotated[TokenClaims,      Depends(require_grm_officer)]
+GRMCoordinatorDep  = Annotated[TokenClaims,      Depends(require_grm_coordinator)]
+OptTokenDep        = Annotated[Optional[TokenClaims], Depends(get_optional_token)]
 
 # PAP portal — any authenticated user (PAP or staff)
 # PAPDep uses the same JWT as StaffDep but does not require a staff role.

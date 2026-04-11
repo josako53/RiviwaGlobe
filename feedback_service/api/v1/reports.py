@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query
 from core.dependencies import DbDep, StaffDep
 from core.exporters import export_response
 from schemas.applause_performance import ApplausePerformanceResponse
+from schemas.grievance_performance import GrievancePerformanceResponse
 from schemas.suggestion_performance import SuggestionPerformanceResponse
 from services.report_service import ReportService
 
@@ -69,6 +70,73 @@ async def grievance_performance(
         time_unit=time_unit, custom_seconds=custom_seconds,
     )
     return export_response(result, format=format, filename="grievances-report", title="Riviwa — Grievance Performance Report")
+
+@router.get(
+    "/grievance-performance",
+    response_model=GrievancePerformanceResponse,
+    summary="Comprehensive grievance performance report",
+    description=(
+        "Full grievance analytics in a single request.\n\n"
+        "**Covers:**\n"
+        "- **Volume** by status (total, submitted, acknowledged, in_review, escalated, resolved, appealed, dismissed, closed, open)\n"
+        "- **Rates** — resolution rate, dismissal rate, appeal rate, open rate\n"
+        "- **Response times** — avg acknowledgement, resolution, close hours\n"
+        "- **SLA compliance** — per priority tier (critical/high/medium/low)\n"
+        "- **Escalation breakdown** — distribution across GRM levels\n"
+        "- **Resolution tracking** — avg time from submission → resolved, min/max, per stakeholder, per category\n"
+        "- **Location breakdown** — by region, district, LGA, ward, mtaa\n"
+        "- **Category breakdown** — volumes + resolution rate per category\n"
+        "- **Daily trend** — submission count per calendar day\n"
+        "- **Stage breakdown** — grievances per project stage\n"
+        "- **Sub-project breakdown** — grievances per sub-project\n"
+        "- **Stakeholder breakdown** — who submits the most grievances\n"
+        "- **Channel breakdown** — intake channel distribution\n\n"
+        "Filter by any combination of stage, sub-project, stakeholder, "
+        "category, location, channel, or status."
+    ),
+)
+async def grievance_performance_report(
+    db: DbDep,
+    _: StaffDep,
+    project_id:     Optional[uuid.UUID] = Query(default=None, description="Filter to a specific project."),
+    stage_id:       Optional[uuid.UUID] = Query(default=None, description="Filter to a specific project stage."),
+    subproject_id:  Optional[uuid.UUID] = Query(default=None, description="Filter to a specific sub-project."),
+    stakeholder_id: Optional[uuid.UUID] = Query(default=None, description="Filter to a specific stakeholder."),
+    category:       Optional[str]       = Query(default=None, description="Filter by category slug e.g. 'compensation'."),
+    from_date:      Optional[str]       = Query(default=None, description="Start date ISO 8601 e.g. '2025-01-01'."),
+    to_date:        Optional[str]       = Query(default=None, description="End date ISO 8601 e.g. '2025-12-31'."),
+    region:         Optional[str]       = Query(default=None, description="Filter by issue region (partial match)."),
+    district:       Optional[str]       = Query(default=None, description="Filter by issue district (partial match)."),
+    lga:            Optional[str]       = Query(default=None, description="Filter by issue LGA (partial match)."),
+    ward:           Optional[str]       = Query(default=None, description="Filter by issue ward (partial match)."),
+    mtaa:           Optional[str]       = Query(default=None, description="Filter by issue mtaa (partial match)."),
+    channel:        Optional[str]       = Query(default=None, description="Filter by intake channel."),
+    submission_method: Optional[str]    = Query(default=None),
+    status:         Optional[str]       = Query(default=None, description="submitted | acknowledged | in_review | escalated | resolved | appealed | dismissed | closed"),
+    time_unit:      str                 = Query(default="hours", description="Primary time unit: seconds | minutes | hours | days | custom"),
+    custom_seconds: int                 = Query(default=3600, description="Divisor when time_unit=custom e.g. 1800 = 30-min periods"),
+) -> GrievancePerformanceResponse:
+    result = await _svc(db).grievance_performance(
+        project_id=project_id,
+        from_date=from_date,
+        to_date=to_date,
+        stage_id=stage_id,
+        subproject_id=subproject_id,
+        stakeholder_id=stakeholder_id,
+        category=category,
+        region=region,
+        district=district,
+        lga=lga,
+        ward=ward,
+        mtaa=mtaa,
+        channel=channel,
+        submission_method=submission_method,
+        status=status,
+        time_unit=time_unit,
+        custom_seconds=custom_seconds,
+    )
+    return GrievancePerformanceResponse.from_dict(result)
+
 
 @router.get("/suggestions", summary="Suggestion performance page · exportable")
 async def suggestion_performance(

@@ -379,6 +379,29 @@ class OrganisationRepository:
         )
         return result.scalar_one_or_none()
 
+    async def list_pending_invites_for_user(
+        self,
+        user_id: uuid.UUID,
+        email:   Optional[str] = None,
+    ) -> list[OrganisationInvite]:
+        """Return all PENDING invites addressed to this user (by id or email)."""
+        conditions = [
+            OrganisationInvite.status == OrgInviteStatus.PENDING,
+            or_(
+                OrganisationInvite.invited_user_id == user_id,
+                *(
+                    [OrganisationInvite.invited_email == email]
+                    if email else []
+                ),
+            ),
+        ]
+        result = await self.db.execute(
+            select(OrganisationInvite)
+            .where(and_(*conditions))
+            .order_by(OrganisationInvite.created_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def list_pending_invites_for_org(
         self,
         org_id: uuid.UUID,
@@ -443,6 +466,57 @@ class OrganisationRepository:
         invite.responded_at = datetime.now(timezone.utc)
         await self.db.flush()
         return invite
+
+    # ── Owner org listing ────────────────────────────────────────────────────
+
+    async def list_for_owner(
+        self,
+        user_id:     uuid.UUID,
+        *,
+        search:      Optional[str]     = None,
+        org_type:    Optional[OrgType] = None,
+        is_verified: Optional[bool]    = None,   # True=verified, False=unverified, None=all
+        sort:        str               = "name",
+        page:        int               = 1,
+        limit:       int               = 20,
+    ) -> tuple[list[Organisation], int]:
+        """
+        Return (items, total_count) for all orgs owned by a specific user.
+        No status pre-filter — PENDING_VERIFICATION orgs are included.
+        is_verified=None means no filter (all), True means verified only,
+        False means unverified only.
+        """
+        base = select(Organisation).where(Organisation.created_by_id == user_id)
+
+        if is_verified is not None:
+            base = base.where(Organisation.is_verified == is_verified)
+
+        if org_type:
+            base = base.where(Organisation.org_type == org_type)
+
+        if search:
+            term = f"%{search.strip().lower()}%"
+            base = base.where(
+                or_(
+                    func.lower(Organisation.display_name).like(term),
+                    func.lower(Organisation.legal_name).like(term),
+                    func.lower(Organisation.slug).like(term),
+                )
+            )
+
+        count_q = select(func.count()).select_from(base.subquery())
+        total   = (await self.db.execute(count_q)).scalar_one()
+
+        if sort == "created":
+            base = base.order_by(Organisation.created_at.desc())
+        else:
+            base = base.order_by(func.lower(Organisation.display_name).asc())
+
+        offset = (page - 1) * limit
+        base   = base.offset(offset).limit(limit)
+
+        rows = (await self.db.execute(base)).scalars().all()
+        return list(rows), total
 
     # ── Public org discovery ──────────────────────────────────────────────────
 

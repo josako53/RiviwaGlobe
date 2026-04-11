@@ -11,7 +11,7 @@ Routes
 ──────
   Organisation CRUD
     POST   /api/v1/orgs                              Create organisation
-    GET    /api/v1/orgs                               List / discover organisations (public)
+    GET    /api/v1/orgs                               List organisations owned by the authenticated user
     GET    /api/v1/orgs/{org_id}                     Get organisation
     PATCH  /api/v1/orgs/{org_id}                     Update organisation
     DELETE /api/v1/orgs/{org_id}                     Deactivate organisation (owner)
@@ -100,35 +100,38 @@ router = APIRouter(prefix="/orgs", tags=["Organisations"])
     "",
     response_model=OrgListResponse,
     status_code=status.HTTP_200_OK,
-    summary="Discover organisations — public listing with search & filter",
+    summary="List organisations owned by the authenticated user",
+    responses={
+        401: {"description": "Not authenticated"},
+    },
 )
 async def list_orgs(
-    svc:           OrgServiceDep,
-    search:        Optional[str]     = Query(default=None,  description="Search by name or slug"),
-    org_type:      Optional[OrgType] = Query(default=None,  description="Filter by org type"),
-    verified_only: bool              = Query(default=True,  description="Only show verified orgs"),
-    sort:          str               = Query(default="name", description="Sort by: name | created"),
-    page:          int               = Query(default=1,     ge=1),
-    limit:         int               = Query(default=20,    ge=1, le=100),
+    svc:         OrgServiceDep,
+    user:        Annotated[User, Depends(require_active_user)],
+    search:      Optional[str]     = Query(default=None, description="Search by name or slug"),
+    org_type:    Optional[OrgType] = Query(default=None, description="Filter by org type"),
+    is_verified: Optional[bool]    = Query(default=None, description="true=verified only, false=unverified only, omit=all"),
+    sort:        str               = Query(default="name", description="Sort by: name | created"),
+    page:        int               = Query(default=1, ge=1),
+    limit:       int               = Query(default=20, ge=1, le=100),
 ) -> OrgListResponse:
     """
-    Public org discovery endpoint.
+    Returns organisations created by the authenticated user.
+    Includes orgs in any status (PENDING_VERIFICATION, ACTIVE, etc.).
 
-    No authentication required — anyone can browse verified, active organisations.
-    Set `verified_only=false` to also include orgs awaiting verification (platform
-    admin use).
-
-    Supports full-text search across `display_name`, `legal_name`, and `slug`.
+    Use `is_verified=true` to see only verified orgs, `is_verified=false` for
+    unverified/pending, or omit entirely to see all.
     """
-    items, total = await svc.list_public(
+    items, total = await svc.list_for_owner(
+        user.id,
         search=search,
         org_type=org_type,
-        verified_only=verified_only,
+        is_verified=is_verified,
         sort=sort,
         page=page,
         limit=limit,
     )
-    pages = max(1, -(-total // limit))  # ceiling division
+    pages = max(1, -(-total // limit))
     return OrgListResponse(
         items=[OrgResponse.model_validate(o) for o in items],
         total=total,
@@ -186,6 +189,25 @@ async def create_org(
 # ─────────────────────────────────────────────────────────────────────────────
 # Get organisation
 # ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/invites",
+    response_model=List[InviteResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List pending invites for the current user",
+    responses={401: {"description": "Not authenticated"}},
+)
+async def list_my_invites(
+    svc:  OrgServiceDep,
+    user: Annotated[User, Depends(require_active_user)],
+) -> List[InviteResponse]:
+    """
+    Return all pending organisation invites addressed to the authenticated user
+    (matched by user_id or email).
+    """
+    invites = await svc.list_invites_for_user(user_id=user.id, email=user.email)
+    return [InviteResponse.model_validate(i) for i in invites]
+
 
 @router.get(
     "/{org_id}",

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # ── Kafka ─────────────────────────────────────────────────────────────────
     KAFKA_BOOTSTRAP_SERVERS: str = Field(default="kafka-1:9092")
 
+    # ── JWT verification (shared with auth service) ───────────────────────────
+    AUTH_SECRET_KEY: str = Field(default="change-me-in-env")
+    AUTH_ALGORITHM:  str = Field(default="HS256")
+
     # ── Internal service key (same secret as other services) ──────────────────
     INTERNAL_SERVICE_KEY: str = Field(default="change-me-in-env")
 

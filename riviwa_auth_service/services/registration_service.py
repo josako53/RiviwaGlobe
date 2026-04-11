@@ -359,14 +359,17 @@ class RegistrationService:
             else AccountStatus.PENDING_PHONE
         )
         user = await self.user_repo.create(
-            username         = data.username,
-            email            = email_norm or None,          # NULL for phone-only users
-            email_normalized = email_normalized or None,    # NULL for phone-only users
-            phone_number     = data.phone_number or None,
-            display_name     = data.display_name,
-            full_name        = data.full_name,
-            country_code     = data.country_code or None,
-            status           = initial_status,
+            username          = data.username,
+            email             = email_norm or None,          # NULL for phone-only users
+            email_normalized  = email_normalized or None,    # NULL for phone-only users
+            phone_number      = data.phone_number or None,
+            display_name      = data.display_name,
+            full_name         = data.full_name,
+            country_code      = data.country_code or None,
+            status            = initial_status,
+            # Phone-only users have no email — mark as verified so email
+            # verification is never required for them.
+            is_email_verified = id_type != "email",
         )
 
         # ── DeviceFingerprint ─────────────────────────────────────────────────

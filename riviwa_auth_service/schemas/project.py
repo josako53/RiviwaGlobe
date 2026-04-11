@@ -250,6 +250,11 @@ class StageResponse(BaseModel):
     in_charges:          List[StageInChargeResponse] = []
     sub_projects:        List[SubProjectResponse] = []
     created_at:          datetime
+
+    @field_validator("in_charges", "sub_projects", mode="before")
+    @classmethod
+    def _none_to_list(cls, v):
+        return v if v is not None else []
     updated_at:          datetime
 
 
@@ -418,6 +423,11 @@ class ProjectDetailResponse(ProjectSummaryResponse):
     deleted_at:           Optional[datetime] = None
     in_charges:           List[ProjectInChargeResponse] = []
     stages:               List[StageResponse] = []
+
+    @field_validator("in_charges", "stages", mode="before")
+    @classmethod
+    def _none_to_list(cls, v):
+        return v if v is not None else []
 
 
 # ─────────────────────────────────────────────────────────────────────────────

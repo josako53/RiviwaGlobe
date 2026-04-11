@@ -5,10 +5,11 @@
 """api/v1/stakeholders.py — HTTP orchestration only"""
 from __future__ import annotations
 import uuid
-from typing import Any, Dict, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, Query, status
 from core.dependencies import DbDep, KafkaDep, StaffDep, require_platform_role
 from models.stakeholder import ImportanceRating
+from schemas.stakeholder import RegisterStakeholder, UpdateStakeholder, RegisterStakeholderProject
 from services.stakeholder_service import StakeholderService
 
 router = APIRouter(prefix="/stakeholders", tags=["Stakeholders"])
@@ -22,8 +23,8 @@ def _eng_out(e): return {"id":str(e.id),"contact_id":str(e.contact_id),"activity
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Register a stakeholder")
-async def register_stakeholder(body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return _s_out(await _svc(db, kafka).register(body, registered_by=token.sub))
+async def register_stakeholder(body: RegisterStakeholder, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return _s_out(await _svc(db, kafka).register(body.model_dump(exclude_none=True), registered_by=token.sub))
 
 
 @router.get("", summary="List stakeholders with optional filters")
@@ -104,8 +105,8 @@ async def get_stakeholder(stakeholder_id: uuid.UUID, db: DbDep, kafka: KafkaDep,
 
 
 @router.patch("/{stakeholder_id}", summary="Update stakeholder profile")
-async def update_stakeholder(stakeholder_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
-    return _s_out(await _svc(db, kafka).update(stakeholder_id, body))
+async def update_stakeholder(stakeholder_id: uuid.UUID, body: UpdateStakeholder, db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
+    return _s_out(await _svc(db, kafka).update(stakeholder_id, body.model_dump(exclude_none=True)))
 
 
 @router.delete("/{stakeholder_id}", status_code=status.HTTP_200_OK, summary="Soft-delete a stakeholder [admin]", dependencies=[Depends(require_platform_role("admin"))])
@@ -115,8 +116,8 @@ async def delete_stakeholder(stakeholder_id: uuid.UUID, db: DbDep, kafka: KafkaD
 
 
 @router.post("/{stakeholder_id}/projects", status_code=status.HTTP_201_CREATED, summary="Register stakeholder under a project")
-async def register_for_project(stakeholder_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return _sp_out(await _svc(db, kafka).register_for_project(stakeholder_id, body, registered_by=token.sub))
+async def register_for_project(stakeholder_id: uuid.UUID, body: RegisterStakeholderProject, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return _sp_out(await _svc(db, kafka).register_for_project(stakeholder_id, body.model_dump(exclude_none=True), registered_by=token.sub))
 
 
 @router.get("/{stakeholder_id}/projects", summary="List project registrations for a stakeholder")

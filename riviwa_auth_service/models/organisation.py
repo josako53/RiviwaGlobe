@@ -125,19 +125,19 @@ if TYPE_CHECKING:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class OrgType(str, Enum):
-    BUSINESS       = "business"
-    CORPORATE      = "corporate"
-    GOVERNMENT     = "government"
-    NGO            = "ngo"
-    INDIVIDUAL_PRO = "individual_pro"
+    BUSINESS       = "BUSINESS"
+    CORPORATE      = "CORPORATE"
+    GOVERNMENT     = "GOVERNMENT"
+    NGO            = "NGO"
+    INDIVIDUAL_PRO = "INDIVIDUAL_PRO"
 
 
 class OrgStatus(str, Enum):
-    PENDING_VERIFICATION = "pending_verification"  # awaiting platform admin approval
-    ACTIVE               = "active"                # verified, fully operational
-    SUSPENDED            = "suspended"             # temporary hold by platform
-    BANNED               = "banned"                # permanent removal
-    DEACTIVATED          = "deactivated"           # owner-initiated closure
+    PENDING_VERIFICATION = "PENDING_VERIFICATION"  # awaiting platform admin approval
+    ACTIVE               = "ACTIVE"                # verified, fully operational
+    SUSPENDED            = "SUSPENDED"             # temporary hold by platform
+    BANNED               = "BANNED"                # permanent removal
+    DEACTIVATED          = "DEACTIVATED"           # owner-initiated closure
 
 
 class OrgMemberRole(str, Enum):
@@ -152,26 +152,26 @@ class OrgMemberRole(str, Enum):
     (e.g. "business_manager" has different permissions than "government_manager")
     even though both map to OrgMemberRole.MANAGER here.
     """
-    OWNER   = "owner"    # full control; cannot be removed by others
-    ADMIN   = "admin"    # members + settings + billing
-    MANAGER = "manager"  # orders + customers + listings
-    MEMBER  = "member"   # read / limited task access
+    OWNER   = "OWNER"    # full control; cannot be removed by others
+    ADMIN   = "ADMIN"    # members + settings + billing
+    MANAGER = "MANAGER"  # orders + customers + listings
+    MEMBER  = "MEMBER"   # read / limited task access
 
 
 class OrgMemberStatus(str, Enum):
-    ACTIVE    = "active"     # fully operational member
-    INVITED   = "invited"    # invite sent, not yet accepted
-    SUSPENDED = "suspended"  # temporarily blocked by owner/admin
-    REMOVED   = "removed"    # removed by owner/admin
-    LEFT      = "left"       # voluntarily left
+    ACTIVE    = "ACTIVE"     # fully operational member
+    INVITED   = "INVITED"    # invite sent, not yet accepted
+    SUSPENDED = "SUSPENDED"  # temporarily blocked by owner/admin
+    REMOVED   = "REMOVED"    # removed by owner/admin
+    LEFT      = "LEFT"       # voluntarily left
 
 
 class OrgInviteStatus(str, Enum):
-    PENDING   = "pending"
-    ACCEPTED  = "accepted"
-    DECLINED  = "declined"
-    EXPIRED   = "expired"
-    CANCELLED = "cancelled"
+    PENDING   = "PENDING"
+    ACCEPTED  = "ACCEPTED"
+    DECLINED  = "DECLINED"
+    EXPIRED   = "EXPIRED"
+    CANCELLED = "CANCELLED"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

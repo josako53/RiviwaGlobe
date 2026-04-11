@@ -529,6 +529,268 @@ class ReportService:
             })
         return sorted(rows, key=lambda x: -x["actioned_count"])
 
+    async def grievance_performance(
+        self,
+        project_id=None,
+        from_date=None,
+        to_date=None,
+        stage_id=None,
+        subproject_id=None,
+        stakeholder_id=None,
+        category=None,
+        region=None,
+        district=None,
+        lga=None,
+        ward=None,
+        mtaa=None,
+        channel=None,
+        submission_method=None,
+        status=None,
+        time_unit: str = "hours",
+        custom_seconds: int = 3600,
+    ) -> dict:
+        """
+        Comprehensive grievance performance report.
+
+        Mirrors suggestion_performance() but for grievances. Covers:
+          · Volume counts by status
+          · Resolution, dismissal, appeal, open rates
+          · SLA compliance per priority
+          · Escalation breakdown by GRM level
+          · Resolution time stats: per stakeholder, per category
+          · Dimensional breakdowns: location, category, day, stage, subproject, stakeholder, channel
+        """
+        from_dt, to_dt, now = self._dr(from_date, to_date)
+
+        items = await self.repo.list_grievances(
+            project_id, from_dt, to_dt,
+            region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+        )
+
+        # In-memory filters
+        if stage_id:
+            items = [f for f in items if str(f.stage_id) == str(stage_id)]
+        if subproject_id:
+            items = [f for f in items if hasattr(f, "subproject_id") and str(getattr(f, "subproject_id", "")) == str(subproject_id)]
+        if stakeholder_id:
+            items = [f for f in items if str(f.submitted_by_stakeholder_id or "") == str(stakeholder_id)]
+        if category:
+            items = [f for f in items if (f.category.value if f.category else "") == category]
+        if channel:
+            items = [f for f in items if f.channel.value == channel]
+        if submission_method:
+            items = [f for f in items if (f.submission_method.value if f.submission_method else "") == submission_method]
+        if status:
+            items = [f for f in items if f.status.value == status]
+
+        total    = len(items)
+        resolved = [f for f in items if f.status == FeedbackStatus.RESOLVED]
+        appealed = [f for f in items if f.status == FeedbackStatus.APPEALED]
+        dismissed = [f for f in items if f.status == FeedbackStatus.DISMISSED]
+        terminal = [f for f in items if f.status in _TERM_ST]
+        open_s   = [f for f in items if f.status in _OPEN_ST]
+
+        # Resolution time stats for resolved grievances
+        res_hours = [h for f in resolved if (h := self._resolution_time_hours(f)) is not None]
+        avg_res_h = round(sum(res_hours) / len(res_hours), 1) if res_hours else None
+        min_res_h = round(min(res_hours), 1) if res_hours else None
+        max_res_h = round(max(res_hours), 1) if res_hours else None
+
+        # SLA by priority
+        sla_by_priority = []
+        for pv in FeedbackPriority:
+            pi = [f for f in items if f.priority == pv]
+            if not pi:
+                continue
+            acked   = [f for f in pi if f.acknowledged_at]
+            ack_met = sum(1 for f in acked if
+                          (f.acknowledged_at - f.submitted_at).total_seconds() / 3600 <= _ACK_SLA_H[pv])
+            res_p   = [f for f in pi if f.resolved_at]
+            res_sla = _RES_SLA_H[pv]
+            res_met = sum(1 for f in res_p if res_sla and
+                          (f.resolved_at - f.submitted_at).total_seconds() / 3600 <= res_sla)
+            sla_by_priority.append({
+                "priority":           pv.value,
+                "count":              len(pi),
+                "ack_sla_hours":      _ACK_SLA_H[pv],
+                "resolve_sla_hours":  res_sla,
+                "ack_compliance_pct": round(ack_met / len(acked) * 100, 1) if acked else None,
+                "res_compliance_pct": round(res_met / len(res_p) * 100, 1) if res_p else None,
+                "avg_ack_hours":      self._avg_h(pi, "submitted_at", "acknowledged_at"),
+                "avg_resolve_hours":  self._avg_h(pi, "submitted_at", "resolved_at"),
+            })
+
+        # Escalation breakdown
+        escalation_breakdown = []
+        for level in GRMLevel:
+            at = [f for f in items if f.current_level == level]
+            pt = [f for f in items if f.status == FeedbackStatus.ESCALATED and f.current_level == level]
+            if at or pt:
+                escalation_breakdown.append({
+                    "level":               level.value,
+                    "currently_at_level":  len(at),
+                    "passed_through":      len(pt),
+                })
+
+        return {
+            "project_id":  str(project_id) if project_id else None,
+            "date_range":  {"from": from_dt.isoformat(), "to": to_dt.isoformat()},
+            "filters_applied": {
+                "stage_id":        str(stage_id) if stage_id else None,
+                "subproject_id":   str(subproject_id) if subproject_id else None,
+                "stakeholder_id":  str(stakeholder_id) if stakeholder_id else None,
+                "category":        category,
+                "region":          region,
+                "district":        district,
+                "lga":             lga,
+                "ward":            ward,
+                "mtaa":            mtaa,
+                "channel":         channel,
+                "status":          status,
+            },
+
+            # ── Volume counts ────────────────────────────────────────────────
+            "counts": {
+                "total":        total,
+                "submitted":    sum(1 for f in items if f.status == FeedbackStatus.SUBMITTED),
+                "acknowledged": sum(1 for f in items if f.status == FeedbackStatus.ACKNOWLEDGED),
+                "in_review":    sum(1 for f in items if f.status == FeedbackStatus.IN_REVIEW),
+                "escalated":    sum(1 for f in items if f.status == FeedbackStatus.ESCALATED),
+                "resolved":     len(resolved),
+                "appealed":     len(appealed),
+                "dismissed":    len(dismissed),
+                "closed":       sum(1 for f in items if f.status == FeedbackStatus.CLOSED),
+                "open":         len(open_s),
+            },
+
+            # ── Rates ────────────────────────────────────────────────────────
+            "rates": {
+                "resolution_rate_pct": round(len(resolved) / len(terminal) * 100, 1) if terminal else 0.0,
+                "dismissal_rate_pct":  round(len(dismissed) / len(terminal) * 100, 1) if terminal else 0.0,
+                "appeal_rate_pct":     round(len(appealed) / len(resolved) * 100, 1) if resolved else 0.0,
+                "open_rate_pct":       round(len(open_s) / total * 100, 1) if total else 0.0,
+            },
+
+            # ── Response times ───────────────────────────────────────────────
+            "response_times": {
+                "avg_acknowledgement_hours": self._avg_h(items, "submitted_at", "acknowledged_at"),
+                "avg_resolution_hours":      self._avg_h(items, "submitted_at", "resolved_at"),
+                "avg_close_hours":           self._avg_h(items, "submitted_at", "closed_at"),
+            },
+            "time_unit":      time_unit,
+            "custom_seconds": custom_seconds if time_unit == "custom" else None,
+            "timing": {
+                "acknowledgement": self._timing_stats_multi(items, "submitted_at", "acknowledged_at", time_unit, custom_seconds),
+                "resolution":      self._timing_stats_multi(items, "submitted_at", "resolved_at",     time_unit, custom_seconds),
+                "close":           self._timing_stats_multi(items, "submitted_at", "closed_at",        time_unit, custom_seconds),
+            },
+
+            # ── Resolution analytics (resolved grievances) ───────────────────
+            "resolution": {
+                "total_resolved":         len(resolved),
+                "with_timing_data":       len(res_hours),
+                "avg_resolution_hours":   avg_res_h,
+                "avg_resolution_days":    round(avg_res_h / 24, 1) if avg_res_h else None,
+                "min_resolution_hours":   min_res_h,
+                "max_resolution_hours":   max_res_h,
+                "by_stakeholder":         self._stakeholder_resolution_stats(resolved),
+                "by_category":            self._category_resolution_stats(resolved),
+            },
+
+            # ── SLA ──────────────────────────────────────────────────────────
+            "sla_by_priority":    sla_by_priority,
+
+            # ── Escalation ───────────────────────────────────────────────────
+            "escalation_breakdown": escalation_breakdown,
+
+            # ── Dimensional breakdowns ───────────────────────────────────────
+            "by_location": {
+                "by_region":   self._by_region(items),
+                "by_district": self._by_district(items),
+                "by_lga":      self._by_lga(items),
+                "by_ward":     self._by_ward(items),
+                "by_mtaa":     self._by_mtaa(items),
+            },
+            "by_category":    self._by_category_grievance(items),
+            "by_day":         self._by_day(items),
+            "by_stage":       self._by_stage(items),
+            "by_subproject":  self._by_subproject(items),
+            "by_stakeholder": self._by_stakeholder(items),
+            "by_channel":     self._by_channel(items),
+            "by_priority":    self._by_priority(items),
+            "by_level":       self._by_level(items),
+            "by_status":      self._by_status(items),
+        }
+
+    def _resolution_time_hours(self, f) -> float | None:
+        if f.submitted_at and f.resolved_at:
+            return round((f.resolved_at - f.submitted_at).total_seconds() / 3600, 2)
+        return None
+
+    def _stakeholder_resolution_stats(self, resolved_items) -> list:
+        stk: dict = {}
+        for f in resolved_items:
+            sid = str(f.submitted_by_stakeholder_id) if f.submitted_by_stakeholder_id else "anonymous"
+            if sid not in stk:
+                stk[sid] = {"stakeholder_id": sid, "resolved_count": 0, "res_hours": []}
+            stk[sid]["resolved_count"] += 1
+            h = self._resolution_time_hours(f)
+            if h is not None:
+                stk[sid]["res_hours"].append(h)
+        rows = []
+        for sid, d in stk.items():
+            hrs = d["res_hours"]
+            rows.append({
+                "stakeholder_id":          sid,
+                "resolved_count":          d["resolved_count"],
+                "avg_resolution_hours":    round(sum(hrs) / len(hrs), 1) if hrs else None,
+                "min_resolution_hours":    round(min(hrs), 1) if hrs else None,
+                "max_resolution_hours":    round(max(hrs), 1) if hrs else None,
+                "resolution_times_measured": len(hrs),
+            })
+        return sorted(rows, key=lambda x: -x["resolved_count"])
+
+    def _category_resolution_stats(self, resolved_items) -> list:
+        cats: dict = {}
+        for f in resolved_items:
+            key = f.category.value if f.category else "uncategorised"
+            if key not in cats:
+                cats[key] = {"category": key, "resolved_count": 0, "res_hours": []}
+            cats[key]["resolved_count"] += 1
+            h = self._resolution_time_hours(f)
+            if h is not None:
+                cats[key]["res_hours"].append(h)
+        rows = []
+        for cat, d in cats.items():
+            hrs = d["res_hours"]
+            rows.append({
+                "category":                cat,
+                "resolved_count":          d["resolved_count"],
+                "avg_resolution_hours":    round(sum(hrs) / len(hrs), 1) if hrs else None,
+                "min_resolution_hours":    round(min(hrs), 1) if hrs else None,
+                "max_resolution_hours":    round(max(hrs), 1) if hrs else None,
+                "resolution_times_measured": len(hrs),
+            })
+        return sorted(rows, key=lambda x: -x["resolved_count"])
+
+    def _by_category_grievance(self, items) -> list:
+        c = {}
+        for f in items:
+            key = f.category.value if f.category else "uncategorised"
+            if key not in c:
+                c[key] = {"category": key, "total": 0, "resolved": 0, "dismissed": 0, "open": 0}
+            c[key]["total"] += 1
+            if f.status == FeedbackStatus.RESOLVED:
+                c[key]["resolved"] += 1
+            elif f.status == FeedbackStatus.DISMISSED:
+                c[key]["dismissed"] += 1
+            elif f.status in _OPEN_ST:
+                c[key]["open"] += 1
+        for row in c.values():
+            terminal = row["resolved"] + row["dismissed"]
+            row["resolution_rate"] = round(row["resolved"] / terminal * 100, 1) if terminal else 0.0
+        return sorted(c.values(), key=lambda x: -x["total"])
+
     async def suggestion_performance(
         self,
         project_id=None,

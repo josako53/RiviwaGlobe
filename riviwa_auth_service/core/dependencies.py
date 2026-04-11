@@ -176,7 +176,7 @@ async def get_current_token(
         iat=int(claims["iat"]),
         exp=int(claims["exp"]),
         org_id=uuid.UUID(claims["org_id"]) if claims.get("org_id") else None,
-        org_role=claims.get("org_role"),
+        org_role=(claims.get("org_role") or "").lower() or None,
         platform_role=claims.get("platform_role"),
     )
 
@@ -295,14 +295,18 @@ async def require_verified_user(
     user: User = Depends(require_active_user),
 ) -> User:
     """
-    Assert the user is ACTIVE and has a verified email address.
+    Assert the user is ACTIVE and has a verified email (or has no email at all).
+
+    Phone-only users have no email address, so email verification is not
+    required for them — they are treated as verified by virtue of their
+    phone OTP login.
 
     Required for actions such as:
         · Creating an organisation
         · Sending org invites
         · Accessing billing features
     """
-    if not user.is_email_verified:
+    if user.email is not None and not user.is_email_verified:
         raise EmailNotVerifiedError()
     return user
 

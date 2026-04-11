@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         default="http://riviwa_auth_service:8000",
         description="Base URL of auth_service for internal service calls.",
     )
+    AI_SERVICE_URL: str = Field(
+        default="http://ai_service:8085",
+        description="Base URL of ai_service — used to auto-classify PAP feedback.",
+    )
     # Shared secret sent as X-Service-Key header on internal calls
     INTERNAL_SERVICE_KEY: str = Field(
         default="change-me-in-production",

@@ -579,6 +579,14 @@ class OrganisationService:
             cancelled_by_id=cancelled_by_id,
         )
 
+    async def list_invites_for_user(
+        self,
+        user_id: uuid.UUID,
+        email:   Optional[str] = None,
+    ) -> list:
+        """Return all pending invites addressed to this user (by id or email)."""
+        return await self.org_repo.list_pending_invites_for_user(user_id=user_id, email=email)
+
     # ── Dashboard switching ───────────────────────────────────────────────────
 
     async def switch_dashboard(
@@ -608,6 +616,34 @@ class OrganisationService:
         await self.publisher.auth_dashboard_switched(user_id, org_id)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    # ── Owner org listing ────────────────────────────────────────────────────
+
+    async def list_for_owner(
+        self,
+        user_id:     uuid.UUID,
+        *,
+        search:      Optional[str]     = None,
+        org_type:    Optional[OrgType] = None,
+        is_verified: Optional[bool]    = None,
+        sort:        str               = "name",
+        page:        int               = 1,
+        limit:       int               = 20,
+    ) -> tuple[list[Organisation], int]:
+        """
+        Return all organisations created by the given user.
+        Includes PENDING_VERIFICATION orgs — no status pre-filter.
+        is_verified: True=verified only, False=unverified only, None=all.
+        """
+        return await self.org_repo.list_for_owner(
+            user_id,
+            search=search,
+            org_type=org_type,
+            is_verified=is_verified,
+            sort=sort,
+            page=page,
+            limit=limit,
+        )
 
     # ── Public org discovery ─────────────────────────────────────────────────
 

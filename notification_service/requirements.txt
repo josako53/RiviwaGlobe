@@ -36,5 +36,8 @@ httpx==0.28.1
 # Redis (rate limiting + dedup)
 redis[hiredis]==5.0.8
 
+# JWT verification (for public notification inbox endpoints)
+python-jose[cryptography]==3.3.0
+
 # Observability
 structlog==24.4.0

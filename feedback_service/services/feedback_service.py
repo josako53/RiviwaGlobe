@@ -17,6 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 log = structlog.get_logger(__name__)
 
+
+def _to_uuid(v) -> uuid.UUID:
+    """Accept both uuid.UUID objects (from Pydantic) and plain strings."""
+    return v if isinstance(v, uuid.UUID) else uuid.UUID(str(v))
+
+
 from core.exceptions import (
     AppealError,
     EscalationError,
@@ -47,6 +53,7 @@ from models.feedback import (
     SubmissionMethod,
 )
 from repositories.feedback_repository import FeedbackRepository
+from repositories.category_repository import CategoryRepository
 
 _PREFIX = {
     FeedbackType.GRIEVANCE:  "GRV",
@@ -54,18 +61,107 @@ _PREFIX = {
     FeedbackType.APPLAUSE:   "APP",
 }
 
+
+def _category_slug(val: str | None) -> str:
+    """Normalise a category string to a slug (enum value → slug are identical in our system)."""
+    if not val:
+        return "other"
+    return val.lower().replace("_", "-")
+
+
+def _safe_category(val: str | None) -> FeedbackCategory:
+    try:
+        return FeedbackCategory(val or "other")
+    except ValueError:
+        return FeedbackCategory.OTHER
+
 _LEVEL_ORDER = [
     GRMLevel.WARD, GRMLevel.LGA_PIU, GRMLevel.PCU,
     GRMLevel.TARURA_WBCU, GRMLevel.TANROADS, GRMLevel.WORLD_BANK,
 ]
 
 
+async def _classify_via_ai_service(data: dict) -> dict | None:
+    """
+    Call ai_service POST /api/v1/ai/internal/classify to auto-detect
+    project_id and category for a PAP submission.
+
+    Returns the classification dict, or None if ai_service is unreachable.
+    Never raises — caller must handle None gracefully.
+    """
+    import httpx
+    from core.config import settings
+
+    payload = {
+        "feedback_type":              data.get("feedback_type", "grievance"),
+        "description":                data.get("description", ""),
+        "issue_location_description": data.get("issue_location_description"),
+        "issue_lga":                  data.get("issue_lga"),
+        "issue_ward":                 data.get("issue_ward"),
+        "issue_region":               data.get("issue_region"),
+        "project_id":                 str(data["project_id"]) if data.get("project_id") else None,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{settings.AI_SERVICE_URL}/api/v1/ai/internal/classify",
+                json=payload,
+                headers={
+                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                    "X-Service-Name": "feedback_service",
+                },
+            )
+            if r.status_code == 200:
+                return r.json()
+            log.warning("feedback.ai_classify_failed", status=r.status_code, body=r.text[:200])
+            return None
+    except Exception as exc:
+        log.warning("feedback.ai_classify_unreachable", error=str(exc))
+        return None
+
+
+async def _fetch_candidate_projects(data: dict) -> list:
+    """
+    When AI cannot identify a single project, fetch the top candidate projects
+    from ai_service so the frontend can present a picker.
+    Falls back to empty list if ai_service is unreachable.
+    """
+    import httpx
+    from core.config import settings
+
+    payload = {
+        "feedback_type":              data.get("feedback_type", "grievance"),
+        "description":                data.get("description", ""),
+        "issue_location_description": data.get("issue_location_description"),
+        "issue_lga":                  data.get("issue_lga"),
+        "issue_ward":                 data.get("issue_ward"),
+        "issue_region":               data.get("issue_region"),
+        "top_k":                      5,   # ask for top 5 candidates
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(
+                f"{settings.AI_SERVICE_URL}/api/v1/ai/internal/candidate-projects",
+                json=payload,
+                headers={
+                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                    "X-Service-Name": "feedback_service",
+                },
+            )
+            if r.status_code == 200:
+                return r.json().get("projects", [])
+    except Exception as exc:
+        log.warning("feedback.candidate_projects_failed", error=str(exc))
+    return []
+
+
 class FeedbackService:
 
     def __init__(self, db: AsyncSession, producer: FeedbackProducer) -> None:
-        self.repo     = FeedbackRepository(db)
-        self.producer = producer
-        self.db       = db
+        self.repo      = FeedbackRepository(db)
+        self.cat_repo  = CategoryRepository(db)
+        self.producer  = producer
+        self.db        = db
 
     # ── Submit ────────────────────────────────────────────────────────────────
 
@@ -95,10 +191,8 @@ class FeedbackService:
         else:
             feedback_type = FeedbackType(data["feedback_type"])
 
-        if project_id:
-            count = await self.repo.count_for_project(project_id)
-        else:
-            count = await self.repo.count_total()
+        # Use global type counter so unique_refs are globally unique across all projects
+        count = await self.repo.count_by_type(feedback_type)
         unique_ref = f"{_PREFIX[feedback_type]}-{datetime.now().year}-{count + 1:04d}"
         is_anon = bool(data.get("is_anonymous", False))
 
@@ -106,9 +200,10 @@ class FeedbackService:
             unique_ref                   = unique_ref,
             project_id                   = project_id,
             stage_id                     = active_stage.id if active_stage else None,
+            subproject_id                = self._to_uuid(data.get("subproject_id")),
             service_location_id          = self._to_uuid(data.get("service_location_id")),
             feedback_type                = feedback_type,
-            category                     = FeedbackCategory(data.get("category", "other")),
+            category                     = _safe_category(data.get("category")),
             status                       = FeedbackStatus.SUBMITTED,
             priority                     = FeedbackPriority(data.get("priority", "medium")),
             current_level                = GRMLevel.WARD,
@@ -145,6 +240,16 @@ class FeedbackService:
         if data.get("submitted_at"):
             f.submitted_at = datetime.fromisoformat(data["submitted_at"]).replace(tzinfo=timezone.utc) if not datetime.fromisoformat(data["submitted_at"]).tzinfo else datetime.fromisoformat(data["submitted_at"])
         f = await self.repo.create(f)
+
+        # Auto-link to dynamic FeedbackCategoryDef by slug
+        slug = _category_slug(data.get("category"))
+        cat_def = (
+            await self.cat_repo.get_by_slug(slug, project_id) or
+            await self.cat_repo.get_by_slug(slug, None)
+        )
+        if cat_def:
+            f.category_def_id = cat_def.id
+
         await self.db.commit()
 
         await self.producer.feedback_submitted(
@@ -232,27 +337,38 @@ class FeedbackService:
         self, data: dict, user_id: uuid.UUID, channel_override: str = "web_portal",
     ) -> Feedback:
         project_id = self._to_uuid(data.get("project_id"))
-        project = None
 
-        if project_id:
-            project = await self.repo.get_project(project_id)
-            if not project:
-                raise ValidationError("Project not found or not active.")
+        # ── AI auto-classification: fill missing project_id and/or category ──
+        # Only call AI when project_id is missing (need project identification)
+        # or category is missing AND project_id was not explicitly provided by PAP.
+        # Skip AI entirely when PAP already picked a project — avoids 15s timeout.
+        if not project_id or (not data.get("category") and not data.get("project_id")):
+            ai_result = await _classify_via_ai_service(data)
+            if ai_result:
+                if not project_id and ai_result.get("project_id"):
+                    project_id = self._to_uuid(ai_result["project_id"])
+                    data["project_id"] = ai_result["project_id"]
+                if not data.get("category") and ai_result.get("category_slug"):
+                    data["category"] = ai_result["category_slug"].replace("-", "_")
+                if not data.get("category_def_id") and ai_result.get("category_def_id"):
+                    data["category_def_id"] = ai_result["category_def_id"]
 
-            fb_type = FeedbackType(data["feedback_type"])
-            if fb_type == FeedbackType.GRIEVANCE and not project.accepts_grievances:
-                raise ValidationError("This project is not currently accepting grievances.")
-            if fb_type == FeedbackType.SUGGESTION and not project.accepts_suggestions:
-                raise ValidationError("This project is not currently accepting suggestions.")
-            if fb_type == FeedbackType.APPLAUSE and not project.accepts_applause:
-                raise ValidationError("This project is not currently accepting applause.")
-        else:
-            fb_type = FeedbackType(data["feedback_type"])
+        # If AI couldn't identify the project, continue with project_id=None
+        # (the feedback will be submitted without a project and can be enriched later)
 
-        if project_id:
-            count = await self.repo.count_for_project(project_id)
-        else:
-            count = await self.repo.count_total()
+        project = await self.repo.get_project(project_id)
+        if not project:
+            raise ValidationError("Project not found or not active.")
+
+        fb_type = FeedbackType(data["feedback_type"])
+        if fb_type == FeedbackType.GRIEVANCE and not project.accepts_grievances:
+            raise ValidationError("This project is not currently accepting grievances.")
+        if fb_type == FeedbackType.SUGGESTION and not project.accepts_suggestions:
+            raise ValidationError("This project is not currently accepting suggestions.")
+        if fb_type == FeedbackType.APPLAUSE and not project.accepts_applause:
+            raise ValidationError("This project is not currently accepting applause.")
+
+        count = await self.repo.count_by_type(fb_type)
         prefix    = _PREFIX[fb_type]
         unique_ref = f"{prefix}-{datetime.now().year}-{count + 1:04d}"
         is_anon   = bool(data.get("is_anonymous", False))
@@ -261,7 +377,7 @@ class FeedbackService:
             unique_ref          = unique_ref,
             project_id          = project_id,
             feedback_type       = fb_type,
-            category            = FeedbackCategory(data.get("category", "other")),
+            category            = _safe_category(data.get("category")),
             status              = FeedbackStatus.SUBMITTED,
             priority            = FeedbackPriority.MEDIUM,
             current_level       = GRMLevel.WARD,
@@ -282,6 +398,22 @@ class FeedbackService:
             media_urls          = data.get("media_urls"),
         )
         f = await self.repo.create(f)
+
+        # Auto-link category_def_id: prefer AI pre-resolved ID, else slug lookup
+        if data.get("category_def_id"):
+            try:
+                f.category_def_id = uuid.UUID(str(data["category_def_id"]))
+            except (ValueError, AttributeError):
+                pass
+        if not f.category_def_id:
+            slug = _category_slug(data.get("category"))
+            cat_def = (
+                await self.cat_repo.get_by_slug(slug, project_id) or
+                await self.cat_repo.get_by_slug(slug, None)
+            )
+            if cat_def:
+                f.category_def_id = cat_def.id
+
         await self.db.commit()
 
         # Notify PAP (self-service portal submission)
@@ -304,33 +436,37 @@ class FeedbackService:
 
     # ── Fetch ─────────────────────────────────────────────────────────────────
 
-    async def get_or_404(self, feedback_id: uuid.UUID, load_relations=False) -> Feedback:
-        f = await self.repo.get_by_id(feedback_id, load_relations=load_relations)
+    async def get_or_404(
+        self, feedback_id: uuid.UUID, load_relations=False, org_id: Optional[uuid.UUID] = None
+    ) -> Feedback:
+        f = await self.repo.get_by_id(feedback_id, load_relations=load_relations, org_id=org_id)
         if not f:
             raise FeedbackNotFoundError()
         return f
 
-    async def get_with_history_or_404(self, feedback_id: uuid.UUID) -> Feedback:
-        f = await self.repo.get_with_history(feedback_id)
+    async def get_with_history_or_404(
+        self, feedback_id: uuid.UUID, org_id: Optional[uuid.UUID] = None
+    ) -> Feedback:
+        f = await self.repo.get_with_history(feedback_id, org_id=org_id)
         if not f:
             raise FeedbackNotFoundError()
         return f
 
-    async def list(self, **filters) -> list[Feedback]:
-        return await self.repo.list(**filters)
+    async def list(self, org_id: Optional[uuid.UUID] = None, **filters) -> list[Feedback]:
+        return await self.repo.list(org_id=org_id, **filters)
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def acknowledge(
-        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID
+        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
     ) -> Feedback:
-        f = await self.get_or_404(feedback_id)
+        f = await self.get_or_404(feedback_id, org_id=org_id)
         self._assert_open(f)
         f.status          = FeedbackStatus.ACKNOWLEDGED
         f.priority        = FeedbackPriority(data.get("priority", f.priority.value))
         f.acknowledged_at = datetime.now(timezone.utc)
         if data.get("assigned_to_user_id"):
-            f.assigned_to_user_id = uuid.UUID(data["assigned_to_user_id"])
+            f.assigned_to_user_id = _to_uuid(data["assigned_to_user_id"])
         if data.get("target_resolution_date"):
             f.target_resolution_date = datetime.fromisoformat(data["target_resolution_date"])
         action = FeedbackAction(
@@ -365,14 +501,14 @@ class FeedbackService:
         return f
 
     async def assign(
-        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID
+        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
     ) -> Feedback:
-        f = await self.get_or_404(feedback_id)
+        f = await self.get_or_404(feedback_id, org_id=org_id)
         self._assert_open(f)
         if data.get("assigned_to_user_id"):
-            f.assigned_to_user_id = uuid.UUID(data["assigned_to_user_id"])
+            f.assigned_to_user_id = _to_uuid(data["assigned_to_user_id"])
         if data.get("assigned_committee_id"):
-            f.assigned_committee_id = uuid.UUID(data["assigned_committee_id"])
+            f.assigned_committee_id = _to_uuid(data["assigned_committee_id"])
         if f.status == FeedbackStatus.SUBMITTED:
             f.status = FeedbackStatus.IN_REVIEW
         action = FeedbackAction(
@@ -386,9 +522,9 @@ class FeedbackService:
         return f
 
     async def escalate(
-        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID
+        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
     ) -> Feedback:
-        f = await self.get_or_404(feedback_id)
+        f = await self.get_or_404(feedback_id, org_id=org_id)
         self._assert_open(f)
         if not f.can_escalate():
             raise EscalationError(message=f"Cannot escalate feedback with status '{f.status.value}'.")
@@ -402,7 +538,7 @@ class FeedbackService:
         esc = FeedbackEscalation(
             feedback_id=f.id, from_level=from_level, to_level=next_level,
             reason=reason,
-            escalated_to_committee_id=uuid.UUID(data["committee_id"]) if data.get("committee_id") else None,
+            escalated_to_committee_id=_to_uuid(data["committee_id"]) if data.get("committee_id") else None,
             escalated_by_user_id=by,
         )
         f.current_level = next_level
@@ -421,9 +557,9 @@ class FeedbackService:
         return f
 
     async def resolve(
-        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID
+        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
     ) -> Feedback:
-        f = await self.get_or_404(feedback_id)
+        f = await self.get_or_404(feedback_id, org_id=org_id)
         self._assert_open(f)
         if not f.can_resolve():
             raise ResolutionError(message=f"Cannot resolve feedback with status '{f.status.value}'.")
@@ -470,9 +606,9 @@ class FeedbackService:
         return f
 
     async def appeal(
-        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID
+        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
     ) -> Feedback:
-        f = await self.get_or_404(feedback_id, load_relations=True)
+        f = await self.get_or_404(feedback_id, load_relations=True, org_id=org_id)
         if not f.can_appeal():
             raise AppealError()
         grounds = data.get("appeal_grounds", "").strip()
@@ -508,9 +644,9 @@ class FeedbackService:
         return f
 
     async def close(
-        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID
+        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
     ) -> Feedback:
-        f = await self.get_or_404(feedback_id)
+        f = await self.get_or_404(feedback_id, org_id=org_id)
         if f.status == FeedbackStatus.CLOSED:
             raise FeedbackClosedError()
         f.status    = FeedbackStatus.CLOSED
@@ -525,9 +661,9 @@ class FeedbackService:
         return f
 
     async def dismiss(
-        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID
+        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
     ) -> Feedback:
-        f = await self.get_or_404(feedback_id)
+        f = await self.get_or_404(feedback_id, org_id=org_id)
         self._assert_open(f)
         reason = data.get("reason", "").strip()
         if not reason:

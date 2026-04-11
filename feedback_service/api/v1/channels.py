@@ -1,9 +1,10 @@
 """api/v1/channels.py — Two-way AI conversation channels + staff management."""
 from __future__ import annotations
 import uuid
-from typing import Any, Dict, Optional
+from typing import Optional
 from fastapi import APIRouter, Query, Request, status
 from core.dependencies import DbDep, StaffDep, OptTokenDep
+from schemas.category import AbandonSession, CreateChannelSession
 from schemas.feedback import AIChannelSessionCreate, AIChannelMessage, AISessionResponse
 from services.channel_service import ChannelService
 from api.v1.serialisers import session_out
@@ -109,8 +110,8 @@ async def ai_get_session(session_id: uuid.UUID, db: DbDep) -> dict:
 
 @router.post("/channel-sessions", status_code=status.HTTP_201_CREATED,
              summary="Start a staff-managed channel session", tags=["Staff Channel Management"])
-async def create_session(body: Dict[str, Any], db: DbDep, token: StaffDep) -> dict:
-    return session_out(await _svc(db).create_session(body, created_by=token.sub))
+async def create_session(body: CreateChannelSession, db: DbDep, token: StaffDep) -> dict:
+    return session_out(await _svc(db).create_session(body.model_dump(exclude_none=True), created_by=token.sub))
 
 @router.get("/channel-sessions", summary="List channel sessions", tags=["Staff Channel Management"])
 async def list_sessions(
@@ -136,8 +137,8 @@ async def force_submit(session_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
     return await _svc(db).force_submit(session_id)
 
 @router.post("/channel-sessions/{session_id}/abandon", summary="Mark session as abandoned", tags=["Staff Channel Management"])
-async def abandon_session(session_id: uuid.UUID, body: Dict[str, Any], db: DbDep, _: StaffDep) -> dict:
-    s = await _svc(db).abandon(session_id, body)
+async def abandon_session(session_id: uuid.UUID, body: AbandonSession, db: DbDep, _: StaffDep) -> dict:
+    s = await _svc(db).abandon(session_id, body.model_dump(exclude_none=True))
     return {"status": s.status.value}
 
 

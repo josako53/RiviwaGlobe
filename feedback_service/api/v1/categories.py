@@ -1,9 +1,13 @@
 """api/v1/categories.py — HTTP orchestration only"""
 from __future__ import annotations
 import uuid
-from typing import Any, Dict, Literal, Optional
+from typing import Optional
 from fastapi import APIRouter, Query, status
 from core.dependencies import DbDep, StaffDep
+from schemas.category import (
+    ApproveCategory, ClassifyFeedback, CreateCategory, DeactivateCategory,
+    MergeCategory, RecategoriseFeedback, RejectCategory, UpdateCategory,
+)
 from services.category_service import CategoryService
 from api.v1.serialisers import category_out
 
@@ -15,8 +19,8 @@ def _cat(c):
     return category_out(c)
 
 @router.post("/categories", status_code=status.HTTP_201_CREATED, summary="Create a feedback category")
-async def create_category(body: Dict[str, Any], db: DbDep, token: StaffDep) -> dict:
-    return _cat(await _svc(db).create(body, created_by=token.sub))
+async def create_category(body: CreateCategory, db: DbDep, token: StaffDep) -> dict:
+    return _cat(await _svc(db).create(body.model_dump(exclude_none=True), created_by=token.sub))
 
 @router.get("/categories", summary="List feedback categories")
 async def list_categories(
@@ -52,8 +56,8 @@ async def get_category(category_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
     return _cat(await _svc(db).get_or_404(category_id))
 
 @router.patch("/categories/{category_id}", summary="Update category")
-async def update_category(category_id: uuid.UUID, body: Dict[str, Any], db: DbDep, _: StaffDep) -> dict:
-    return _cat(await _svc(db).update(category_id, body))
+async def update_category(category_id: uuid.UUID, body: UpdateCategory, db: DbDep, _: StaffDep) -> dict:
+    return _cat(await _svc(db).update(category_id, body.model_dump(exclude_none=True)))
 
 @router.get("/categories/{category_id}/rate", summary="Feedback rate for a category — real-time and by period")
 async def category_rate(
@@ -87,29 +91,29 @@ async def category_rate(
     return result
 
 @router.post("/categories/{category_id}/approve", summary="Approve an ML-suggested category")
-async def approve_category(category_id: uuid.UUID, body: Dict[str, Any], db: DbDep, token: StaffDep) -> dict:
-    return _cat(await _svc(db).approve(category_id, body, by=token.sub))
+async def approve_category(category_id: uuid.UUID, body: ApproveCategory, db: DbDep, token: StaffDep) -> dict:
+    return _cat(await _svc(db).approve(category_id, body.model_dump(exclude_none=True), by=token.sub))
 
 @router.post("/categories/{category_id}/reject", summary="Reject an ML-suggested category")
-async def reject_category(category_id: uuid.UUID, body: Dict[str, Any], db: DbDep, token: StaffDep) -> dict:
-    return _cat(await _svc(db).reject(category_id, body, by=token.sub))
+async def reject_category(category_id: uuid.UUID, body: RejectCategory, db: DbDep, token: StaffDep) -> dict:
+    return _cat(await _svc(db).reject(category_id, body.model_dump(exclude_none=True), by=token.sub))
 
 @router.post("/categories/{category_id}/deactivate", summary="Deactivate a category")
-async def deactivate_category(category_id: uuid.UUID, body: Dict[str, Any], db: DbDep, _: StaffDep) -> dict:
-    return _cat(await _svc(db).deactivate(category_id, body))
+async def deactivate_category(category_id: uuid.UUID, body: DeactivateCategory, db: DbDep, _: StaffDep) -> dict:
+    return _cat(await _svc(db).deactivate(category_id, body.model_dump(exclude_none=True)))
 
 @router.post("/categories/{category_id}/merge", summary="Merge into another category")
-async def merge_category(category_id: uuid.UUID, body: Dict[str, Any], db: DbDep, _: StaffDep) -> dict:
-    return _cat(await _svc(db).merge(category_id, body))
+async def merge_category(category_id: uuid.UUID, body: MergeCategory, db: DbDep, _: StaffDep) -> dict:
+    return _cat(await _svc(db).merge(category_id, body.model_dump()))
 
 @router.post("/feedback/{feedback_id}/classify", status_code=status.HTTP_200_OK, summary="Run ML classification to assign or suggest a category")
-async def classify_feedback(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, _: StaffDep) -> dict:
-    result = await _svc(db).classify(feedback_id, body)
+async def classify_feedback(feedback_id: uuid.UUID, body: ClassifyFeedback, db: DbDep, _: StaffDep) -> dict:
+    result = await _svc(db).classify(feedback_id, body.model_dump())
     result["category"] = _cat(result["category"])
     return result
 
 @router.patch("/feedback/{feedback_id}/recategorise", status_code=status.HTTP_200_OK, summary="Manually reassign category to a feedback submission")
-async def recategorise_feedback(feedback_id: uuid.UUID, body: Dict[str, Any], db: DbDep, _: StaffDep) -> dict:
-    result = await _svc(db).recategorise(feedback_id, body)
+async def recategorise_feedback(feedback_id: uuid.UUID, body: RecategoriseFeedback, db: DbDep, _: StaffDep) -> dict:
+    result = await _svc(db).recategorise(feedback_id, body.model_dump())
     result["category"] = _cat(result["category"])
     return result

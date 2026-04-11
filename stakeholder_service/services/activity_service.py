@@ -67,6 +67,7 @@ class ActivityService:
             vulnerable_count     = data.get("vulnerable_count"),
         )
         await self.db.commit()
+        await self.db.refresh(a)
         return a
 
     # ── Fetch ─────────────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ class ActivityService:
 
         await self.repo.save(a)
         await self.db.commit()
+        await self.db.refresh(a)
         return a
 
     async def _increment_consultation_counts(self, a: EngagementActivity) -> None:

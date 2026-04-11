@@ -4,8 +4,8 @@ import csv
 import io
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, File, Query, UploadFile, status
-from core.dependencies import DbDep, KafkaDep, StaffDep, OptTokenDep
+from fastapi import APIRouter, File, Query, Request, UploadFile, status
+from core.dependencies import DbDep, KafkaDep, StaffDep, GRMOfficerDep, GRMCoordinatorDep, OptTokenDep
 from schemas.feedback import BulkUploadResult, StaffSubmitFeedback
 from schemas.lifecycle import (
     AcknowledgeFeedback, AssignFeedback, EscalateFeedback,
@@ -18,12 +18,13 @@ router = APIRouter(prefix="/feedback", tags=["Feedback"])
 def _svc(db, kafka): return FeedbackService(db=db, producer=kafka)
 
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Submit feedback (grievance / suggestion / applause)")
-async def submit_feedback(body: StaffSubmitFeedback, db: DbDep, kafka: KafkaDep, token: OptTokenDep) -> dict:
+async def submit_feedback(body: StaffSubmitFeedback, db: DbDep, kafka: KafkaDep, token: GRMOfficerDep) -> dict:
     """
     Submit a single feedback record. Staff can backdate by setting `submitted_at`
     for historical records (paper forms, past complaints).
+    Requires org role manager/admin/owner or platform admin.
     """
-    return feedback_out(await _svc(db, kafka).submit(body.model_dump(exclude_none=True), token_sub=token.sub if token else None))
+    return feedback_out(await _svc(db, kafka).submit(body.model_dump(exclude_none=True), token_sub=token.sub))
 
 
 @router.post(
@@ -87,9 +88,9 @@ async def bulk_upload_feedback(
     result = await _svc(db, kafka).bulk_submit(rows, token_sub=token.sub)
     return BulkUploadResult(**result)
 
-@router.get("", summary="List feedback records [staff]")
+@router.get("", summary="List feedback records [staff — org-scoped]")
 async def list_feedback(
-    db: DbDep, kafka: KafkaDep, _: StaffDep,
+    db: DbDep, kafka: KafkaDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     feedback_type: Optional[str] = Query(default=None),
     status_: Optional[str] = Query(default=None, alias="status"),
@@ -104,7 +105,11 @@ async def list_feedback(
     assigned_committee_id: Optional[uuid.UUID] = Query(default=None),
     skip: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
+    # Platform admins see all orgs; org staff see only their org's feedback
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
     items = await _svc(db, kafka).list(
+        org_id=org_id,
         project_id=project_id, feedback_type=feedback_type, status=status_,
         priority=priority, current_level=current_level, category=category, lga=lga,
         is_anonymous=is_anonymous, submission_method=submission_method, channel=channel,
@@ -114,8 +119,10 @@ async def list_feedback(
     return {"items": [feedback_out(f) for f in items], "count": len(items)}
 
 @router.get("/{feedback_id}", summary="Feedback detail with full history")
-async def get_feedback(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
-    f = await _svc(db, kafka).get_with_history_or_404(feedback_id)
+async def get_feedback(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    f = await _svc(db, kafka).get_with_history_or_404(feedback_id, org_id=org_id)
     return {
         **feedback_out(f),
         "actions":     [action_out(a) for a in sorted(f.actions, key=lambda x: x.performed_at)],
@@ -124,30 +131,187 @@ async def get_feedback(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep, _: St
         "appeal":      appeal_out(f.appeal) if f.appeal else None,
     }
 
-@router.patch("/{feedback_id}/acknowledge", summary="Acknowledge receipt")
-async def acknowledge_feedback(feedback_id: uuid.UUID, body: AcknowledgeFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).acknowledge(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
+@router.patch("/{feedback_id}/acknowledge", summary="Acknowledge receipt [manager+]")
+async def acknowledge_feedback(feedback_id: uuid.UUID, body: AcknowledgeFeedback, db: DbDep, kafka: KafkaDep, token: GRMOfficerDep) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return feedback_out(await _svc(db, kafka).acknowledge(feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id))
 
-@router.patch("/{feedback_id}/assign", summary="Assign to staff member or committee")
-async def assign_feedback(feedback_id: uuid.UUID, body: AssignFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).assign(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
+@router.patch("/{feedback_id}/assign", summary="Assign to staff member or committee [manager+]")
+async def assign_feedback(feedback_id: uuid.UUID, body: AssignFeedback, db: DbDep, kafka: KafkaDep, token: GRMOfficerDep) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return feedback_out(await _svc(db, kafka).assign(feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id))
 
-@router.post("/{feedback_id}/escalate", status_code=status.HTTP_200_OK, summary="Escalate to next GRM level")
-async def escalate_feedback(feedback_id: uuid.UUID, body: EscalateFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).escalate(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
+@router.post("/{feedback_id}/escalate", status_code=status.HTTP_200_OK, summary="Escalate to next GRM level [manager+]")
+async def escalate_feedback(feedback_id: uuid.UUID, body: EscalateFeedback, db: DbDep, kafka: KafkaDep, token: GRMOfficerDep) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return feedback_out(await _svc(db, kafka).escalate(feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id))
 
-@router.post("/{feedback_id}/resolve", status_code=status.HTTP_200_OK, summary="Record resolution")
-async def resolve_feedback(feedback_id: uuid.UUID, body: ResolveFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).resolve(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
+@router.post("/{feedback_id}/resolve", status_code=status.HTTP_200_OK, summary="Record resolution [manager+]")
+async def resolve_feedback(feedback_id: uuid.UUID, body: ResolveFeedback, db: DbDep, kafka: KafkaDep, token: GRMOfficerDep) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return feedback_out(await _svc(db, kafka).resolve(feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id))
 
-@router.post("/{feedback_id}/appeal", status_code=status.HTTP_200_OK, summary="File appeal against resolution")
-async def file_appeal(feedback_id: uuid.UUID, body: AppealFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).appeal(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
+@router.post("/{feedback_id}/appeal", status_code=status.HTTP_200_OK, summary="File appeal against resolution [manager+]")
+async def file_appeal(feedback_id: uuid.UUID, body: AppealFeedback, db: DbDep, kafka: KafkaDep, token: GRMOfficerDep) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return feedback_out(await _svc(db, kafka).appeal(feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id))
 
-@router.patch("/{feedback_id}/close", summary="Close feedback [final state]")
-async def close_feedback(feedback_id: uuid.UUID, body: CloseFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).close(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
+@router.patch("/{feedback_id}/close", summary="Close feedback [manager+]")
+async def close_feedback(feedback_id: uuid.UUID, body: CloseFeedback, db: DbDep, kafka: KafkaDep, token: GRMOfficerDep) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return feedback_out(await _svc(db, kafka).close(feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id))
 
-@router.patch("/{feedback_id}/dismiss", summary="Dismiss feedback")
-async def dismiss_feedback(feedback_id: uuid.UUID, body: DismissFeedback, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return feedback_out(await _svc(db, kafka).dismiss(feedback_id, body.model_dump(exclude_none=True), by=token.sub))
+@router.patch("/{feedback_id}/dismiss", summary="Dismiss feedback [admin/owner only]")
+async def dismiss_feedback(feedback_id: uuid.UUID, body: DismissFeedback, db: DbDep, kafka: KafkaDep, token: GRMCoordinatorDep) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return feedback_out(await _svc(db, kafka).dismiss(feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id))
+
+
+# ── Internal AI enrichment endpoint ───────────────────────────────────────────
+# Called by ai_service after classifying feedback with Ollama + RAG.
+# Secured by X-Service-Key header — no JWT required.
+
+@router.get(
+    "/by-ref/{unique_ref}",
+    status_code=status.HTTP_200_OK,
+    summary="Look up feedback status by reference number (internal service only)",
+    include_in_schema=False,
+)
+async def get_feedback_by_ref_internal(unique_ref: str, request: Request, db: DbDep, kafka: KafkaDep) -> dict:
+    """Internal: no JWT. Used by ai_service for PAP follow-up status queries."""
+    from fastapi.responses import JSONResponse
+    from core.config import settings
+    from sqlmodel import select
+    from models.feedback import Feedback
+
+    service_key = request.headers.get("X-Service-Key", "")
+    if service_key != settings.INTERNAL_SERVICE_KEY:
+        return JSONResponse(status_code=403, content={"error": "FORBIDDEN", "message": "Invalid service key."})
+
+    result = await db.execute(
+        select(Feedback).where(Feedback.unique_ref == unique_ref.upper()).limit(1)
+    )
+    f = result.scalar_one_or_none()
+    if not f:
+        return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Reference not found."})
+
+    return {
+        "id":          str(f.id),
+        "unique_ref":  f.unique_ref,
+        "status":      f.status.value if f.status else None,
+        "feedback_type": f.feedback_type.value if f.feedback_type else None,
+        "subject":     f.subject,
+        "description": (f.description or "")[:150],
+        "submitted_at": f.submitted_at.isoformat() if f.submitted_at else None,
+        "resolved_at":  f.resolved_at.isoformat() if f.resolved_at else None,
+    }
+
+
+@router.get(
+    "/{feedback_id}/for-ai",
+    status_code=status.HTTP_200_OK,
+    summary="Fetch feedback data for AI classification (internal service only)",
+    include_in_schema=False,
+)
+async def get_feedback_for_ai(feedback_id: uuid.UUID, request: Request, db: DbDep, kafka: KafkaDep) -> dict:
+    """
+    Internal-only. Returns the fields ai_service needs to classify a feedback record.
+    Requires X-Service-Key header — no JWT needed.
+    """
+    from fastapi.responses import JSONResponse
+    from core.config import settings
+    from sqlmodel import select
+    from models.feedback import Feedback
+
+    service_key = request.headers.get("X-Service-Key", "")
+    if service_key != settings.INTERNAL_SERVICE_KEY:
+        return JSONResponse(status_code=403, content={"error": "FORBIDDEN", "message": "Invalid service key."})
+
+    result = await db.execute(select(Feedback).where(Feedback.id == feedback_id))
+    f = result.scalar_one_or_none()
+    if not f:
+        return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Feedback not found."})
+
+    return {
+        "id":                          str(f.id),
+        "project_id":                  str(f.project_id) if f.project_id else None,
+        "category_def_id":             str(f.category_def_id) if f.category_def_id else None,
+        "feedback_type":               f.feedback_type.value if f.feedback_type else None,
+        "category":                    f.category.value if f.category else None,
+        "subject":                     f.subject,
+        "description":                 f.description,
+        "issue_location_description":  f.issue_location_description,
+        "issue_region":                f.issue_region,
+        "issue_district":              f.issue_district,
+        "issue_lga":                   f.issue_lga,
+        "issue_ward":                  f.issue_ward,
+        "issue_mtaa":                  f.issue_mtaa,
+        "submitted_at":                f.submitted_at.isoformat() if f.submitted_at else None,
+    }
+
+
+@router.patch(
+    "/{feedback_id}/ai-enrich",
+    status_code=status.HTTP_200_OK,
+    summary="AI enrichment: set project_id and/or category_def_id (internal service only)",
+    include_in_schema=False,  # hidden from public docs
+)
+async def ai_enrich_feedback(feedback_id: uuid.UUID, request: Request, db: DbDep, kafka: KafkaDep) -> dict:
+    """
+    Internal-only endpoint called by ai_service to backfill:
+      - project_id  — when feedback was submitted without one
+      - category_def_id — auto-classified by Ollama
+    Requires X-Service-Key header matching INTERNAL_SERVICE_KEY.
+    """
+    from fastapi.responses import JSONResponse
+    from core.config import settings
+    from sqlmodel import select
+    from models.feedback import Feedback, FeedbackAction, ActionType
+    from datetime import datetime, timezone
+
+    # Validate internal service key
+    service_key = request.headers.get("X-Service-Key", "")
+    if service_key != settings.INTERNAL_SERVICE_KEY:
+        return JSONResponse(status_code=403, content={"error": "FORBIDDEN", "message": "Invalid service key."})
+
+    body = await request.json()
+    project_id_raw      = body.get("project_id")
+    category_def_id_raw = body.get("category_def_id")
+    note                = body.get("note", "Auto-enriched by AI service (Ollama classification)")
+
+    if not project_id_raw and not category_def_id_raw:
+        return {"enriched": False, "reason": "Nothing to update"}
+
+    result = await db.execute(select(Feedback).where(Feedback.id == feedback_id))
+    f = result.scalar_one_or_none()
+    if not f:
+        return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Feedback not found."})
+
+    changed = False
+    if project_id_raw and not f.project_id:
+        f.project_id = uuid.UUID(str(project_id_raw))
+        changed = True
+    if category_def_id_raw and not f.category_def_id:
+        f.category_def_id = uuid.UUID(str(category_def_id_raw))
+        changed = True
+
+    if changed:
+        action = FeedbackAction(
+            feedback_id=f.id,
+            action_type=ActionType.NOTE,
+            description=note,
+            is_internal=True,
+            performed_at=datetime.now(timezone.utc),
+        )
+        db.add(f)
+        db.add(action)
+        await db.flush()
+
+    return {"enriched": changed, "feedback_id": str(feedback_id)}

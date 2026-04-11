@@ -19,7 +19,7 @@ Additions specific to feedback_service:
     Stage-level flags take precedence over project-level when the stage is ACTIVE.
 ═══════════════════════════════════════════════════════════════════════════════
 """
-from __future__ import annotations
+# from __future__ import annotations  # removed: breaks List[Model] SQLModel relationship annotations
 
 import uuid
 from datetime import date, datetime
@@ -27,6 +27,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, Date, DateTime, Enum as SAEnum, ForeignKey, Text, UniqueConstraint, text
+from typing import List
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -76,6 +77,10 @@ class ProjectCache(SQLModel, table=True):
     start_date:   Optional[date] = Field(default=None, sa_column=Column(Date, nullable=True))
     end_date:     Optional[date] = Field(default=None, sa_column=Column(Date, nullable=True))
 
+    # ── Media ─────────────────────────────────────────────────────────────────
+    cover_image_url: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    org_logo_url:    Optional[str] = Field(default=None, max_length=500, nullable=True)
+
     # ── Feedback acceptance gates ─────────────────────────────────────────────
     # These mirror the flags on ProjectCache in stakeholder_service.
     # Stage-level flags (ProjectStageCache) override these when a stage is ACTIVE.
@@ -88,11 +93,11 @@ class ProjectCache(SQLModel, table=True):
     created_at:   datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False))
     updated_at:   datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"), nullable=False))
 
-    stages:   ProjectStageCache = Relationship(
+    stages:   List["ProjectStageCache"] = Relationship(
         back_populates="project",
         sa_relationship_kwargs={"cascade": "all, delete-orphan", "order_by": "ProjectStageCache.stage_order"},
     )
-    feedbacks: Feedback = Relationship(
+    feedbacks: List["Feedback"] = Relationship(
         back_populates="project",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )

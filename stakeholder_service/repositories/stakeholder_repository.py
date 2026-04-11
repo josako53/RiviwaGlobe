@@ -336,6 +336,7 @@ class StakeholderRepository:
                 StakeholderProject.project_id     == project_id,
             )
             .values(consultation_count=StakeholderProject.consultation_count + 1)
+            .execution_options(synchronize_session=False)
         )
 
     # ── Contacts ──────────────────────────────────────────────────────────────

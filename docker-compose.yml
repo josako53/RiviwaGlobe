@@ -386,6 +386,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
       # Service-to-service
       AUTH_SERVICE_URL: http://riviwa_auth_service:8000
+      AI_SERVICE_URL:   http://ai_service:8085
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       # Admin seed
       ADMIN_EMAIL: ${ADMIN_EMAIL}
@@ -486,6 +487,9 @@ services:
       REDIS_URL: ${NOTIFICATION_REDIS_URL:-redis://redis:6379/3}
       # Service-to-service auth (same shared secret as other services)
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      # JWT — notification_service verifies tokens issued by auth_service
+      AUTH_SECRET_KEY: ${SECRET_KEY}
+      AUTH_ALGORITHM: ${AUTH_ALGORITHM:-HS256}
       # Runtime
       ENVIRONMENT: ${ENVIRONMENT}
       DEBUG: ${DEBUG:-false}
@@ -679,6 +683,106 @@ services:
       redis:
         condition: service_healthy
 
+  # ── AI Service — Rivai conversation engine ───────────────────────────────
+  ai_db:
+    image: postgres:15-alpine
+    container_name: ai_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER: ${AI_DB_USER:-ai_admin}
+      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:-ai_pass_789}
+      POSTGRES_DB: ${AI_DB_NAME:-ai_db}
+    ports: ["5440:5432"]
+    volumes: [ai_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AI_DB_USER:-ai_admin} -d ${AI_DB_NAME:-ai_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["11434:11434"]
+    volumes:
+      - ollama_data:/root/.ollama
+    # Pull the model on first start
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 10 && ollama pull ${OLLAMA_MODEL:-llama3.2:3b} && wait"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 300s
+
+  ai_service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: ai_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8085:8085"]
+    volumes:
+      - ./models/sentence-transformers:/models/sentence-transformers
+    environment:
+      # Database
+      AI_DB_HOST:     ai_db
+      DB_PORT:        5432
+      AI_DB_USER:     ${AI_DB_USER:-ai_admin}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD:-ai_pass_789}
+      AI_DB_NAME:     ${AI_DB_NAME:-ai_db}
+      # JWT
+      AUTH_SECRET_KEY: ${SECRET_KEY}
+      AUTH_ALGORITHM:  ${ALGORITHM:-HS256}
+      # Infrastructure
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      # Service-to-service
+      INTERNAL_SERVICE_KEY:    ${INTERNAL_SERVICE_KEY}
+      FEEDBACK_SERVICE_URL:    http://feedback_service:8090
+      AUTH_SERVICE_URL:        http://riviwa_auth_service:8000
+      STAKEHOLDER_SERVICE_URL: http://stakeholder_service:8070
+      # Ollama LLM
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL:    ${OLLAMA_MODEL:-llama3.2:3b}
+      # Qdrant vector DB
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      # Embedding
+      EMBEDDING_MODEL:      ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      EMBEDDING_MODEL_PATH: /models/sentence-transformers
+      # WhatsApp
+      WHATSAPP_ACCESS_TOKEN:    ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_API_VERSION:     ${WHATSAPP_API_VERSION:-v18.0}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_VERIFY_TOKEN:    ${WHATSAPP_VERIFY_TOKEN:-riviwa_ai_webhook_verify}
+      # STT
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # MinIO
+      MINIO_ENDPOINT:   http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      # Groq LLM (optional — replaces local Ollama for chat if key is set)
+      GROQ_API_KEY:  ${GROQ_API_KEY:-}
+      GROQ_MODEL:    ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+      # Runtime
+      ENVIRONMENT: ${ENVIRONMENT}
+      DEBUG:       ${DEBUG}
+    depends_on:
+      ai_db:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      qdrant:
+        condition: service_healthy
+
   # ── KAFKA UI ──────────────────────────────────────────────────────────────
   kafka-ui:
     image: kafbat/kafka-ui:v1.4.2
@@ -806,4 +910,6 @@ volumes:
   translation_db_data:
   recommendation_db_data:
   qdrant_data:
+  ai_db_data:
+  ollama_data:
   certbot_certs:

@@ -20,27 +20,30 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAP / END-USER SUBMISSION (simplified — no project_id required)
+# PAP / END-USER SUBMISSION (simplified)
 # POST /api/v1/my/feedback
 # ══════════════════════════════════════════════════════════════════════════════
 
 class PAPSubmitFeedback(BaseModel):
     """
     Simplified feedback submission for Project-Affected Persons.
-    Channel is auto-set by the endpoint (web_portal / mobile_app).
-    Priority is always medium. Project_id is optional — ML/AI will
-    auto-detect the relevant project from the description if omitted.
+
+    project_id and category are optional — AI auto-detects them from your
+    description and location (issue_lga is required to enable detection).
+
+    If the AI cannot identify a unique project, the API returns HTTP 422
+    with a `candidate_projects` list so the frontend can show a picker
+    and re-submit with the chosen project_id.
     """
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "feedback_type": "grievance",
-            "category": "construction_impact",
-            "subject": "Road construction blocking access to my shop",
-            "description": "Since Monday the construction crew has blocked the only road to my shop in Kariakoo. I am losing customers every day.",
+            "description": "Since Monday the construction crew has blocked the only road to my shop. I am losing customers every day.",
             "submitter_name": "Juma Bakari",
             "submitter_phone": "+255787654321",
             "issue_lga": "Ilala",
             "issue_ward": "Kariakoo",
+            "issue_location_description": "Near Kariakoo market, next to the blue gate",
             "date_of_incident": "2026-04-01",
         }
     })
@@ -51,20 +54,27 @@ class PAPSubmitFeedback(BaseModel):
         description="grievance | suggestion | applause",
         json_schema_extra={"enum": ["grievance", "suggestion", "applause"]},
     )
-    description: str = Field(..., min_length=10, description="What happened — detailed description")
+    description: str = Field(
+        ..., min_length=10,
+        description="What happened — the more detail you give, the better the AI can identify the project.",
+    )
+    issue_lga: str = Field(
+        ..., min_length=2,
+        description="District / LGA where the issue occurred. Required so the AI can identify the relevant project.",
+    )
 
-    # ── Optional (PAP may or may not fill these) ──────────────────────────────
+    # ── AI auto-detected if omitted ───────────────────────────────────────────
     project_id: Optional[uuid.UUID] = Field(
         default=None,
-        description="Project UUID. If omitted, ML/AI will auto-detect from description.",
+        description="Project UUID. Omit to let the AI detect it from your location and description.",
     )
     category: Optional[str] = Field(
         default=None,
-        description="Category. If omitted, ML will auto-classify.",
+        description="Category slug. Omit to let the AI classify from your description.",
     )
     subject: Optional[str] = Field(
         default=None, max_length=500,
-        description="Short summary. If omitted, auto-generated from description.",
+        description="Short summary. Auto-generated from description if omitted.",
     )
 
     # ── Submitter identity ────────────────────────────────────────────────────
@@ -73,11 +83,16 @@ class PAPSubmitFeedback(BaseModel):
     submitter_phone: Optional[str] = Field(default=None, max_length=20)
 
     # ── Issue location ────────────────────────────────────────────────────────
-    issue_lga: Optional[str] = Field(default=None, description="LGA where the issue occurred")
     issue_ward: Optional[str] = Field(default=None, description="Ward where the issue occurred")
-    issue_location_description: Optional[str] = Field(default=None, description="Describe where the issue is")
+    issue_location_description: Optional[str] = Field(
+        default=None,
+        description="Free-text location description — landmark, road name, village, etc.",
+    )
     issue_gps_lat: Optional[float] = Field(default=None, ge=-90, le=90)
     issue_gps_lng: Optional[float] = Field(default=None, ge=-180, le=180)
+
+    # ── Sub-project link ──────────────────────────────────────────────────────
+    subproject_id: Optional[uuid.UUID] = Field(default=None, description="Sub-project (work package) UUID")
 
     # ── Date and media ────────────────────────────────────────────────────────
     date_of_incident: Optional[str] = Field(default=None, description="When the issue happened (YYYY-MM-DD)")
@@ -182,6 +197,7 @@ class StaffSubmitFeedback(BaseModel):
     media_urls: Optional[List[str]] = Field(default=None, description="Photos, scanned documents (URLs)")
 
     # ── SECTION G — Cross-references ──────────────────────────────────────────
+    subproject_id: Optional[uuid.UUID] = Field(default=None, description="Sub-project (work package) this feedback relates to")
     service_location_id: Optional[uuid.UUID] = Field(default=None)
     stakeholder_engagement_id: Optional[uuid.UUID] = Field(default=None, description="From public meeting (Annex 5)")
     distribution_id: Optional[uuid.UUID] = Field(default=None)

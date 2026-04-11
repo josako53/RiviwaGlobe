@@ -63,8 +63,10 @@ class ProjectCache(SQLModel, table=True):
     updated_at:   datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"), nullable=False))
 
     stages:               ProjectStageCache   = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan", "order_by": "ProjectStageCache.stage_order"})
-    stakeholder_projects: StakeholderProject  = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan"})
-    activities:           EngagementActivity  = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    # stakeholder_projects intentionally omitted — StakeholderProject.project_id has no FK
+    # to this table (stakeholders may be registered before the project syncs from Kafka).
+    # Queries use explicit WHERE clauses instead of this relationship.
+    # activities intentionally omitted — EngagementActivity.project_id has no FK.
     communications:       CommunicationRecord = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     focal_persons:        FocalPerson         = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 

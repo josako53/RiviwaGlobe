@@ -11,10 +11,6 @@ Consumed by the mobile app and web frontend to:
   · Display the notification bell / badge count
   · Show the notification feed
   · Mark individual or all notifications as read
-
-Authentication uses the same X-User-Id header pattern (from validated JWT
-decoded at the API gateway) — the notification_service trusts the gateway
-to validate the JWT and pass the user_id header.
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
@@ -22,9 +18,12 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import ExpiredSignatureError, JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from core.dependencies import DbDep
 from repositories.notification_repository import NotificationRepository
 from schemas.notification import (
@@ -35,21 +34,27 @@ from schemas.notification import (
 
 router = APIRouter(prefix="/notifications", tags=["Notification Inbox"])
 
+_bearer = HTTPBearer(auto_error=True)
 
-def _user_id_from_header(
-    x_user_id: str = Header(..., alias="X-User-Id"),
+
+def _user_id_from_token(
+    creds: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
 ) -> uuid.UUID:
-    """
-    Trusts the API gateway to set X-User-Id after JWT validation.
-    In direct calls (tests / internal), pass the UUID directly.
-    """
+    """Decode the Bearer JWT and extract the user_id (sub claim)."""
     try:
-        return uuid.UUID(x_user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid X-User-Id header.")
+        payload = jwt.decode(
+            creds.credentials,
+            settings.AUTH_SECRET_KEY,
+            algorithms=[settings.AUTH_ALGORITHM],
+        )
+        return uuid.UUID(payload["sub"])
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired.")
+    except (JWTError, KeyError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
 
 
-UserIdDep = Annotated[uuid.UUID, Depends(_user_id_from_header)]
+UserIdDep = Annotated[uuid.UUID, Depends(_user_id_from_token)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

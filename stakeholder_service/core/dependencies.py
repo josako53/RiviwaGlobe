@@ -87,7 +87,7 @@ def _decode_token(raw: str) -> TokenClaims:
             jti           = uuid.UUID(payload.get("jti", str(uuid.uuid4()))),
             exp           = int(payload["exp"]),
             org_id        = uuid.UUID(payload["org_id"]) if payload.get("org_id") else None,
-            org_role      = payload.get("org_role"),
+            org_role      = (payload.get("org_role") or "").lower() or None,
             platform_role = payload.get("platform_role"),
         )
     except (KeyError, ValueError, TypeError):

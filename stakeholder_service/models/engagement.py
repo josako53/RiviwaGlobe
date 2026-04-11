@@ -280,7 +280,8 @@ class EngagementActivity(SQLModel, table=True):
     )
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    project: ProjectCache = Relationship(back_populates="activities")
+    # project relationship intentionally omitted — project_id has no FK to the projects
+    # table. Queries use explicit WHERE clauses on project_id instead.
 
     attendances: StakeholderEngagement = Relationship(
         back_populates="activity",

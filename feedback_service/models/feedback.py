@@ -96,12 +96,12 @@ TABLE INVENTORY
   GrievanceCommitteeMember — who sits on which GHC
 ═══════════════════════════════════════════════════════════════════════════════
 """
-from __future__ import annotations
+# from __future__ import annotations  # removed: breaks List[Model] SQLModel relationship annotations
 
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -727,25 +727,25 @@ class Feedback(SQLModel, table=True):
 
     # ── Relationships ──────────────────────────────────────────────────────────
     project:     ProjectCache                 = Relationship(back_populates="feedbacks")
-    category_def: FeedbackCategoryDef = Relationship(
+    category_def: "FeedbackCategoryDef" = Relationship(
         back_populates="feedbacks",
         sa_relationship_kwargs={"foreign_keys": "[Feedback.category_def_id]"},
     )
-    actions:     FeedbackAction         = Relationship(
+    actions:     List["FeedbackAction"]     = Relationship(
         back_populates="feedback",
         sa_relationship_kwargs={"order_by": "FeedbackAction.performed_at"},
     )
-    escalations: FeedbackEscalation     = Relationship(
+    escalations: List["FeedbackEscalation"] = Relationship(
         back_populates="feedback",
         sa_relationship_kwargs={"order_by": "FeedbackEscalation.escalated_at"},
     )
-    resolution:  FeedbackResolution = Relationship(back_populates="feedback")
-    appeal:      FeedbackAppeal     = Relationship(back_populates="feedback")
-    committee:   GrievanceCommittee = Relationship(
+    resolution:  Optional["FeedbackResolution"] = Relationship(back_populates="feedback")
+    appeal:      Optional["FeedbackAppeal"]     = Relationship(back_populates="feedback")
+    committee:   Optional["GrievanceCommittee"] = Relationship(
         back_populates="feedbacks",
         sa_relationship_kwargs={"foreign_keys": "[Feedback.assigned_committee_id]"},
     )
-    escalation_requests: EscalationRequest = Relationship(
+    escalation_requests: List["EscalationRequest"] = Relationship(
         back_populates="feedback",
         sa_relationship_kwargs={"order_by": "EscalationRequest.requested_at"},
     )
@@ -918,8 +918,8 @@ class FeedbackEscalation(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
     )
 
-    feedback:                  Feedback           = Relationship(back_populates="escalations")
-    escalated_to_committee:    GrievanceCommittee = Relationship(
+    feedback:                  Feedback                      = Relationship(back_populates="escalations")
+    escalated_to_committee:    Optional["GrievanceCommittee"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[FeedbackEscalation.escalated_to_committee_id]"}
     )
 
@@ -1172,11 +1172,11 @@ class GrievanceCommittee(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"), nullable=False)
     )
 
-    members:   GrievanceCommitteeMember = Relationship(
+    members:   List["GrievanceCommitteeMember"] = Relationship(
         back_populates="committee",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    feedbacks: Feedback = Relationship(back_populates="committee")
+    feedbacks: List[Feedback] = Relationship(back_populates="committee")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -1450,7 +1450,7 @@ class FeedbackCategoryDef(SQLModel, table=True):
     )
 
     # ── Relationships ──────────────────────────────────────────────────────────
-    feedbacks: Feedback = Relationship(
+    feedbacks: List[Feedback] = Relationship(
         back_populates="category_def",
         sa_relationship_kwargs={"foreign_keys": "[Feedback.category_def_id]"},
     )

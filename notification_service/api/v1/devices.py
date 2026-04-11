@@ -8,20 +8,28 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import ExpiredSignatureError, JWTError, jwt
 
+from core.config import settings
 from core.dependencies import DbDep
 from repositories.notification_repository import NotificationRepository
 from schemas.notification import DeviceRegisterRequest, DeviceResponse, DeviceTokenUpdateRequest
 
 router = APIRouter(prefix="/devices", tags=["Push Devices"])
 
+_bearer = HTTPBearer(auto_error=True)
 
-def _user_id(x_user_id: str = Header(..., alias="X-User-Id")) -> uuid.UUID:
+
+def _user_id(creds: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)]) -> uuid.UUID:
     try:
-        return uuid.UUID(x_user_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid X-User-Id header.")
+        payload = jwt.decode(creds.credentials, settings.AUTH_SECRET_KEY, algorithms=[settings.AUTH_ALGORITHM])
+        return uuid.UUID(payload["sub"])
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired.")
+    except (JWTError, KeyError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
 
 
 UserIdDep = Annotated[uuid.UUID, Depends(_user_id)]

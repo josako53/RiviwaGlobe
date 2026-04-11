@@ -38,6 +38,8 @@ class ProjectService:
         return project
 
     async def get_with_counts(self, project_id: uuid.UUID) -> tuple[ProjectCache, dict]:
-        project = await self.get_or_404(project_id)
-        counts  = await self.repo.engagement_counts(project_id)
+        project = await self.repo.get_by_id_with_stages(project_id)
+        if not project:
+            raise ProjectNotFoundError()
+        counts = await self.repo.engagement_counts(project_id)
         return project, counts

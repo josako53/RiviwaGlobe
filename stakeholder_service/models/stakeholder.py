@@ -565,8 +565,9 @@ class StakeholderProject(SQLModel, table=True):
     registered_by_user_id: Optional[uuid.UUID] = Field(default=None, nullable=True)
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    stakeholder: Stakeholder  = Relationship(back_populates="stakeholder_projects")
-    project:     ProjectCache = Relationship(back_populates="stakeholder_projects")
+    stakeholder: Stakeholder = Relationship(back_populates="stakeholder_projects")
+    # project relationship intentionally omitted — project_id has no FK to the projects
+    # table. Queries use explicit WHERE clauses on project_id instead.
 
     def __repr__(self) -> str:
         return (

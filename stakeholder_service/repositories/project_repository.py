@@ -12,10 +12,11 @@ from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from models.communication import CommunicationRecord, FocalPerson
 from models.engagement import ActivityStatus, EngagementActivity
-from models.project import ProjectCache, ProjectStatus
+from models.project import ProjectCache, ProjectStageCache, ProjectStatus
 from models.stakeholder import StakeholderProject
 
 
@@ -27,6 +28,14 @@ class ProjectRepository:
     async def get_by_id(self, project_id: uuid.UUID) -> Optional[ProjectCache]:
         result = await self.db.execute(
             select(ProjectCache).where(ProjectCache.id == project_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_id_with_stages(self, project_id: uuid.UUID) -> Optional[ProjectCache]:
+        result = await self.db.execute(
+            select(ProjectCache)
+            .where(ProjectCache.id == project_id)
+            .options(selectinload(ProjectCache.stages))
         )
         return result.scalar_one_or_none()
 

@@ -54,8 +54,13 @@ class FeedbackRepository:
         self,
         feedback_id: uuid.UUID,
         load_relations: bool = False,
+        org_id: Optional[uuid.UUID] = None,
     ) -> Optional[Feedback]:
         q = select(Feedback).where(Feedback.id == feedback_id)
+        if org_id:
+            q = q.join(ProjectCache, Feedback.project_id == ProjectCache.id).where(
+                ProjectCache.organisation_id == org_id
+            )
         if load_relations:
             q = q.options(
                 selectinload(Feedback.actions),
@@ -67,8 +72,12 @@ class FeedbackRepository:
         result = await self.db.execute(q)
         return result.scalar_one_or_none()
 
-    async def get_with_history(self, feedback_id: uuid.UUID) -> Optional[Feedback]:
-        result = await self.db.execute(
+    async def get_with_history(
+        self,
+        feedback_id: uuid.UUID,
+        org_id: Optional[uuid.UUID] = None,
+    ) -> Optional[Feedback]:
+        q = (
             select(Feedback)
             .options(
                 selectinload(Feedback.actions),
@@ -78,10 +87,16 @@ class FeedbackRepository:
             )
             .where(Feedback.id == feedback_id)
         )
+        if org_id:
+            q = q.join(ProjectCache, Feedback.project_id == ProjectCache.id).where(
+                ProjectCache.organisation_id == org_id
+            )
+        result = await self.db.execute(q)
         return result.scalar_one_or_none()
 
     async def list(
         self,
+        org_id:                      Optional[uuid.UUID] = None,
         project_id:                  Optional[uuid.UUID] = None,
         feedback_type:               Optional[str]       = None,
         status:                      Optional[str]       = None,
@@ -104,6 +119,10 @@ class FeedbackRepository:
         limit: int = 50,
     ) -> list[Feedback]:
         q = select(Feedback)
+        if org_id:
+            q = q.join(ProjectCache, Feedback.project_id == ProjectCache.id).where(
+                ProjectCache.organisation_id == org_id
+            )
         if project_id:                  q = q.where(Feedback.project_id                   == project_id)
         if feedback_type:               q = q.where(Feedback.feedback_type                == feedback_type)
         if status:                      q = q.where(Feedback.status                       == status)
@@ -153,6 +172,12 @@ class FeedbackRepository:
 
     async def count_total(self) -> int:
         return await self.db.scalar(select(func.count(Feedback.id))) or 0
+
+    async def count_by_type(self, feedback_type) -> int:
+        """Global count of all feedback of a given type — used for unique_ref generation."""
+        return await self.db.scalar(
+            select(func.count(Feedback.id)).where(Feedback.feedback_type == feedback_type)
+        ) or 0
 
     async def save(self, f: Feedback) -> None:
         self.db.add(f)

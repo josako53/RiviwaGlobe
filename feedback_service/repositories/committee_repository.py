@@ -80,12 +80,34 @@ class CommitteeRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_any_member(
+        self, committee_id: uuid.UUID, user_id: uuid.UUID
+    ) -> Optional[GrievanceCommitteeMember]:
+        """Return an existing member row regardless of is_active status."""
+        result = await self.db.execute(
+            select(GrievanceCommitteeMember).where(
+                GrievanceCommitteeMember.committee_id == committee_id,
+                GrievanceCommitteeMember.user_id      == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def create_member(
         self,
         committee_id: uuid.UUID,
         user_id:      uuid.UUID,
         role:         CommitteeRole = CommitteeRole.MEMBER,
     ) -> GrievanceCommitteeMember:
+        # Reactivate an existing row rather than inserting (unique constraint on committee_id+user_id)
+        existing = await self.get_any_member(committee_id, user_id)
+        if existing:
+            existing.is_active = True
+            existing.role      = role
+            existing.left_at   = None
+            self.db.add(existing)
+            await self.db.flush()
+            await self.db.refresh(existing)
+            return existing
         m = GrievanceCommitteeMember(
             committee_id = committee_id,
             user_id      = user_id,

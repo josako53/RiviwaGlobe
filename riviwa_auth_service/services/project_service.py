@@ -397,6 +397,7 @@ class ProjectService:
 
         stage = await self.repo.create_stage(project_id, data)
         await self.db.commit()
+        stage = await self.repo.get_stage(stage.id, load_relations=True)
         return stage
 
     async def list_stages(
