@@ -4,12 +4,19 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core.dependencies import DbDep, require_internal_key
 from models.entity import ActivityEvent
 from repositories.entity_repository import EntityRepository
-from schemas.recommendation import IndexActivityRequest, IndexEntityRequest
+from schemas.recommendation import (
+    EntityListResponse,
+    EntityResponse,
+    IndexActivityRequest,
+    IndexEntityRequest,
+)
 from services import cache_service, embedding_service
 
 router = APIRouter(prefix="/index", tags=["Indexing"], dependencies=[Depends(require_internal_key)])
@@ -91,3 +98,59 @@ async def index_activity(body: IndexActivityRequest, db: DbDep):
     await db.commit()
     await cache_service.invalidate("recs", str(body.entity_id))
     return {"status": "recorded", "entity_id": str(body.entity_id)}
+
+
+@router.get(
+    "/entity/{entity_id}",
+    response_model=EntityResponse,
+    summary="Retrieve a single indexed entity",
+    description="Returns full metadata for an indexed entity. Useful for verifying indexing correctness.",
+)
+async def get_entity(entity_id: uuid.UUID, db: DbDep) -> EntityResponse:
+    repo = EntityRepository(db)
+    entity = await repo.get_by_id(entity_id)
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found in recommendation index.")
+    return EntityResponse.from_entity(entity)
+
+
+@router.get(
+    "/entities",
+    response_model=EntityListResponse,
+    summary="List all indexed entities",
+    description=(
+        "Returns a paginated list of all entities in the recommendation index. "
+        "Supports filtering by entity_type, category, region, and status."
+    ),
+)
+async def list_entities(
+    db: DbDep,
+    entity_type: Optional[str] = Query(default=None, description="project | organisation"),
+    category: Optional[str] = Query(default=None),
+    region: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None, description="active | inactive | paused"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+) -> EntityListResponse:
+    repo = EntityRepository(db)
+    offset = (page - 1) * page_size
+    entities = await repo.list_entities(
+        entity_type=entity_type,
+        category=category,
+        region=region,
+        status=status,
+        limit=page_size,
+        offset=offset,
+    )
+    total = await repo.count_entities(
+        entity_type=entity_type,
+        category=category,
+        region=region,
+        status=status,
+    )
+    return EntityListResponse(
+        items=[EntityResponse.from_entity(e) for e in entities],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )

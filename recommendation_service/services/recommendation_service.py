@@ -17,6 +17,7 @@ from core.exceptions import EntityNotFoundError
 from models.entity import RecommendationEntity
 from repositories.entity_repository import EntityRepository
 from schemas.recommendation import (
+    InteractionSummary,
     NearbyResponse,
     RecommendationResponse,
     RecommendedEntity,

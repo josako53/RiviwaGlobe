@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Column, Index, Text, text
+from sqlalchemy import Column, DateTime, Index, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -63,14 +63,17 @@ class RecommendationEntity(SQLModel, table=True):
     embedding_text_hash: Optional[str] = Field(default=None, max_length=64)
 
     # ── Timestamps ────────────────────────────────────────────────────────────
-    last_active_at: Optional[datetime] = Field(default=None)
+    last_active_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
     )
 
     # ── Accepts flags (from project) ─────────────────────────────────────────
@@ -93,6 +96,6 @@ class ActivityEvent(SQLModel, table=True):
     feedback_type: Optional[str] = Field(default=None, max_length=50)
     occurred_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
     )
     payload: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSONB, nullable=True))

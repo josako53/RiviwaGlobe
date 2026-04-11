@@ -44,7 +44,7 @@ class EntityRepository:
 
         entity = RecommendationEntity(
             id=entity_id or uuid.uuid4(),
-            **{k: v for k, v in data.items() if k != "entity_id" and hasattr(RecommendationEntity, k)},
+            **{k: v for k, v in data.items() if k not in ("id", "entity_id", "created_at") and hasattr(RecommendationEntity, k)},
         )
         self.db.add(entity)
         await self.db.flush()
@@ -188,3 +188,44 @@ class EntityRepository:
             .values(is_indexed=True, embedding_text_hash=text_hash, updated_at=datetime.now(timezone.utc))
         )
         await self.db.flush()
+
+    async def list_entities(
+        self,
+        entity_type: str | None = None,
+        category: str | None = None,
+        region: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[RecommendationEntity]:
+        q = select(RecommendationEntity)
+        if entity_type:
+            q = q.where(RecommendationEntity.entity_type == entity_type)
+        if category:
+            q = q.where(RecommendationEntity.category == category)
+        if region:
+            q = q.where(RecommendationEntity.region == region)
+        if status:
+            q = q.where(RecommendationEntity.status == status)
+        q = q.order_by(RecommendationEntity.created_at.desc()).limit(limit).offset(offset)
+        result = await self.db.execute(q)
+        return list(result.scalars().all())
+
+    async def count_entities(
+        self,
+        entity_type: str | None = None,
+        category: str | None = None,
+        region: str | None = None,
+        status: str | None = None,
+    ) -> int:
+        q = select(func.count(RecommendationEntity.id))
+        if entity_type:
+            q = q.where(RecommendationEntity.entity_type == entity_type)
+        if category:
+            q = q.where(RecommendationEntity.category == category)
+        if region:
+            q = q.where(RecommendationEntity.region == region)
+        if status:
+            q = q.where(RecommendationEntity.status == status)
+        result = await self.db.execute(q)
+        return result.scalar_one()
