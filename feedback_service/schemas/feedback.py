@@ -18,6 +18,23 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+# Channel alias map — maps short/alternate names to canonical FeedbackChannel enum values.
+# Allows React clients to send "WEB", "MOBILE", "CALL" etc.
+_CHANNEL_ALIASES: dict = {
+    "web":          "web_portal",
+    "mobile":       "mobile_app",
+    "app":          "mobile_app",
+    "call":         "phone_call",
+    "voice":        "phone_call",
+    "walk_in":      "in_person",
+    "walk-in":      "in_person",
+    "meeting":      "public_meeting",
+    "paper":        "paper_form",
+    "form":         "paper_form",
+    "wa":           "whatsapp",
+    "wa_voice":     "whatsapp_voice",
+}
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAP / END-USER SUBMISSION (simplified)
@@ -212,22 +229,6 @@ class StaffSubmitFeedback(BaseModel):
     officer_recorded: bool = Field(default=False, description="Staff entered on behalf of PAP")
     internal_notes: Optional[str] = Field(default=None, description="Internal PIU notes (Annex 5: Response/Follow up)")
 
-    # Normalise case + channel aliases so clients can send "WEB" or "MOBILE"
-    _CHANNEL_ALIASES: dict = {
-        "web":         "web_portal",
-        "mobile":      "mobile_app",
-        "app":         "mobile_app",
-        "call":        "phone_call",
-        "voice":       "phone_call",
-        "walk_in":     "in_person",
-        "walk-in":     "in_person",
-        "meeting":     "public_meeting",
-        "paper":       "paper_form",
-        "form":        "paper_form",
-        "wa":          "whatsapp",
-        "wa_voice":    "whatsapp_voice",
-    }
-
     @field_validator("feedback_type", "category", "priority", mode="before")
     @classmethod
     def normalise_to_lower(cls, v: str) -> str:
@@ -239,7 +240,7 @@ class StaffSubmitFeedback(BaseModel):
         if not isinstance(v, str):
             return v
         lower = v.lower()
-        return cls._CHANNEL_ALIASES.get(lower, lower)
+        return _CHANNEL_ALIASES.get(lower, lower)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
