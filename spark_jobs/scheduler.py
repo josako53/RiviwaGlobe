@@ -12,6 +12,8 @@ Schedule
   ml_escalation.py          →  daily at 04:00
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import signal
