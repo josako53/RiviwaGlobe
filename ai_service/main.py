@@ -36,6 +36,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         log.warning("ai.startup.rag_failed", error=str(exc))
 
+    # Index Obsidian vault knowledge base
+    try:
+        from services.obsidian_rag_service import get_obsidian_rag
+        obsidian_rag = get_obsidian_rag()
+        chunk_count = obsidian_rag.index_vault()
+        log.info("ai.startup.obsidian_rag_indexed", chunks=chunk_count)
+    except Exception as exc:
+        log.warning("ai.startup.obsidian_rag_failed", error=str(exc))
+
     # Check Ollama connectivity
     try:
         ollama_ok = await get_ollama().health_check()

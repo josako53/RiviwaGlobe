@@ -178,11 +178,22 @@ class ConversationService:
         # Build project context for RAG injection
         project_context = await self._build_project_context(conv)
 
+        # Search Obsidian knowledge base for relevant GRM context
+        knowledge_context = ""
+        try:
+            from services.obsidian_rag_service import get_obsidian_rag
+            kb_results = get_obsidian_rag().search(message)
+            if kb_results:
+                knowledge_context = get_obsidian_rag().format_context(kb_results)
+        except Exception as exc:
+            log.warning("conversation.knowledge_search_failed", error=str(exc))
+
         # Call LLM
         try:
             llm_resp = await self.ollama.chat(
                 messages=self._format_turns_for_llm(conv.get_turns()),
                 project_context=project_context,
+                knowledge_context=knowledge_context,
             )
         except Exception as exc:
             log.error("conversation.llm_failed", conv_id=str(conversation_id), error=str(exc))

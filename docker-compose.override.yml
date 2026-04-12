@@ -153,6 +153,33 @@ services:
     volumes:
       - ./ai_service:/app/ai_service
       - /opt/venv
+      - ./obsidian_vault:/opt/riviwa/obsidian_vault:ro
+
+  # ── analytics_service dev override ──────────────────────────────────────
+  # Hot-reload enabled. No Kafka dependency. Reads feedback_db read-only.
+  analytics_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8095 --reload --reload-dir /app/analytics_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+    volumes:
+      - ./analytics_service:/app/analytics_service
+      - /opt/venv
+
+  # ── spark_jobs dev override ───────────────────────────────────────────────
+  # In dev: bind-mount source so code changes are picked up on container restart.
+  # Spark still runs against a single-node Kafka (kafka-1 only).
+  # Reduce worker memory to fit on a dev machine.
+  spark_worker:
+    environment:
+      SPARK_WORKER_MEMORY: 1G
+      SPARK_WORKER_CORES: 1
+
+  spark_jobs:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+    volumes:
+      - ./spark_jobs:/app
 
   # ── MinIO dev overrides ────────────────────────────────────────────────────
   minio:

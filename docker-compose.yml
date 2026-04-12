@@ -731,6 +731,7 @@ services:
     ports: ["8085:8085"]
     volumes:
       - ./models/sentence-transformers:/models/sentence-transformers
+      - ./obsidian_vault:/opt/riviwa/obsidian_vault:ro
     environment:
       # Database
       AI_DB_HOST:     ai_db
@@ -850,6 +851,74 @@ services:
       "
     restart: "no"
 
+  # ── ANALYTICS DB ─────────────────────────────────────────────────────────
+  analytics_db:
+    image: postgres:15-alpine
+    container_name: analytics_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${ANALYTICS_DB_USER:-analytics_admin}
+      POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD:-analytics_pass_123}
+      POSTGRES_DB:       ${ANALYTICS_DB_NAME:-analytics_db}
+    ports: ["5441:5432"]
+    volumes: [analytics_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ANALYTICS_DB_USER:-analytics_admin} -d ${ANALYTICS_DB_NAME:-analytics_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # ── ANALYTICS SERVICE ─────────────────────────────────────────────────────
+  # Pre-computed and real-time analytics for the Riviwa GRM platform.
+  # Reads from its own analytics_db AND from feedback_db (read-only).
+  # No Kafka dependency — pulls data directly via SQL on request.
+  analytics_service:
+    build:
+      context: ./analytics_service
+      dockerfile: Dockerfile
+    container_name: analytics_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8095:8095"]
+    environment:
+      # Own database
+      ANALYTICS_DB_HOST:     analytics_db
+      ANALYTICS_DB_PORT:     5432
+      ANALYTICS_DB_USER:     ${ANALYTICS_DB_USER:-analytics_admin}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:-analytics_pass_123}
+      ANALYTICS_DB_NAME:     ${ANALYTICS_DB_NAME:-analytics_db}
+      # feedback_db (read-only cross-service analytics)
+      FEEDBACK_DB_HOST:     feedback_db
+      FEEDBACK_DB_PORT:     5432
+      FEEDBACK_DB_USER:     ${FEEDBACK_DB_USER}
+      FEEDBACK_DB_PASSWORD: ${FEEDBACK_DB_PASSWORD}
+      FEEDBACK_DB_NAME:     ${FEEDBACK_DB_NAME}
+      # JWT — verifies tokens issued by auth_service
+      AUTH_SECRET_KEY: ${SECRET_KEY}
+      AUTH_ALGORITHM:  ${ALGORITHM:-HS256}
+      # Service-to-service
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      # Redis — DB 6 (isolated from all other services)
+      REDIS_URL: redis://redis:6379/6
+      # Groq AI Insights
+      GROQ_API_KEY:  ${GROQ_API_KEY:-}
+      GROQ_MODEL:    ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
+      # Runtime
+      ENVIRONMENT: ${ENVIRONMENT}
+      DEBUG:        ${DEBUG:-false}
+    depends_on:
+      analytics_db:
+        condition: service_healthy
+      feedback_db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ── Nginx reverse proxy + SSL termination ─────────────────────────────────
   nginx:
     image: nginx:1.27-alpine
@@ -872,6 +941,7 @@ services:
       - feedback_service
       - payment_service
       - notification_service
+      - analytics_service
     healthcheck:
       test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:80/ || exit 0"]
       interval: 30s
@@ -889,6 +959,107 @@ services:
     entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 43200 & wait $${!}; done"
     depends_on:
       - nginx
+
+  # ── SPARK MASTER ──────────────────────────────────────────────────────────
+  spark_master:
+    image: bitnami/spark:3.5
+    container_name: spark_master
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      SPARK_MODE: master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+    ports:
+      - "8080:8080"   # Spark Web UI
+      - "7077:7077"   # Spark master port
+    volumes:
+      - spark_master_data:/bitnami/spark
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 7077 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ── SPARK WORKER ──────────────────────────────────────────────────────────
+  spark_worker:
+    image: bitnami/spark:3.5
+    container_name: spark_worker
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark_master:7077
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_WORKER_CORES: 2
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+    volumes:
+      - spark_worker_data:/bitnami/spark
+    depends_on:
+      spark_master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z spark_master 7077 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ── SPARK JOBS ─────────────────────────────────────────────────────────────
+  # Structured Streaming (SLA monitor, hotspot detector, live dashboard) and
+  # batch jobs (historical analytics, staff analytics, ML escalation scoring).
+  spark_jobs:
+    build:
+      context: ./spark_jobs
+      dockerfile: Dockerfile
+    container_name: spark_jobs
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      SPARK_MASTER: spark://spark_master:7077
+      # feedback_db (read source for batch jobs)
+      FEEDBACK_DB_HOST:     feedback_db
+      FEEDBACK_DB_PORT:     5432
+      FEEDBACK_DB_USER:     ${FEEDBACK_DB_USER}
+      FEEDBACK_DB_PASSWORD: ${FEEDBACK_DB_PASSWORD}
+      FEEDBACK_DB_NAME:     ${FEEDBACK_DB_NAME}
+      # analytics_db (write target)
+      ANALYTICS_DB_HOST:     analytics_db
+      ANALYTICS_DB_PORT:     5432
+      ANALYTICS_DB_USER:     ${ANALYTICS_DB_USER:-analytics_admin}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:-analytics_pass_123}
+      ANALYTICS_DB_NAME:     ${ANALYTICS_DB_NAME:-analytics_db}
+      # Kafka
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+      KAFKA_SECURITY_PROTOCOL: PLAINTEXT
+      # Redis (DB 6)
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_SPARK_DB: "6"
+    depends_on:
+      spark_master:
+        condition: service_healthy
+      spark_worker:
+        condition: service_healthy
+      analytics_db:
+        condition: service_healthy
+      feedback_db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+    volumes:
+      - spark_checkpoints:/tmp/spark_checkpoints
 
 networks:
   riviwa-net:
@@ -912,4 +1083,9 @@ volumes:
   qdrant_data:
   ai_db_data:
   ollama_data:
+  analytics_db_data:
+  spark_master_data:
+  spark_worker_data:
+  spark_checkpoints:
+  obsidian_vault_data:
   certbot_certs:

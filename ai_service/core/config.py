@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     GROQ_MODEL:    str = Field(default="llama-3.3-70b-versatile", description="Groq model name")
     GROQ_BASE_URL: str = Field(default="https://api.groq.com/openai/v1")
 
+    # ── Obsidian vault RAG (knowledge base from .md files) ───────────────────
+    OBSIDIAN_VAULT_PATH: str = Field(
+        default="/opt/riviwa/obsidian_vault",
+        description="Path to Obsidian vault directory with .md knowledge files",
+    )
+    QDRANT_COLLECTION_KNOWLEDGE: str = Field(default="riviwa_knowledge")
+    RAG_CHUNK_SIZE_WORDS: int = Field(default=300)
+    RAG_TOP_K: int = Field(default=3)
+
     # ── STT (Speech-to-Text for voice notes) ─────────────────────────────────
     OPENAI_API_KEY: str = Field(default="", description="OpenAI Whisper API key")
     GOOGLE_STT_API_KEY: str = Field(default="")
