@@ -28,7 +28,9 @@ Routes
     POST   /api/v1/orgs/{org_id}/transfer-ownership  Transfer ownership
 
   Logo
-    POST   /api/v1/orgs/{org_id}/logo                Upload organisation logo
+    GET    /api/v1/orgs/{org_id}/logo                Get current logo URL
+    POST   /api/v1/orgs/{org_id}/logo                Upload / replace organisation logo
+    DELETE /api/v1/orgs/{org_id}/logo                Remove organisation logo
 
   Invites
     POST   /api/v1/orgs/{org_id}/invites             Send invite
@@ -629,18 +631,55 @@ async def cancel_invite(
     return MessageResponse(message=f"Invite {invite_id} cancelled.")
 
 
-# ── Logo upload ────────────────────────────────────────────────────────────────
+# ── Logo CRUD ──────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/{org_id}/logo",
+    status_code=status.HTTP_200_OK,
+    summary="Get organisation logo",
+    responses={
+        200: {"description": "Returns current logo_url (null if none uploaded yet)"},
+        404: {"description": "Organisation not found"},
+    },
+)
+async def get_org_logo(
+    org_id: uuid.UUID,
+    db:     DbDep,
+    _user:  Annotated[User, Depends(require_active_user)],
+) -> dict:
+    """
+    Return the current logo URL for an organisation.
+    Any authenticated user may call this — no role restriction.
+    """
+    from sqlalchemy import select
+    from models.organisation import Organisation
+
+    row = await db.execute(
+        select(Organisation.id, Organisation.logo_url).where(Organisation.id == org_id)
+    )
+    org = row.one_or_none()
+    if not org:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Organisation not found.")
+
+    return {
+        "org_id":   str(org_id),
+        "logo_url": org.logo_url,   # null if no logo uploaded yet
+    }
+
 
 @router.post(
     "/{org_id}/logo",
     status_code=status.HTTP_200_OK,
-    summary="Upload organisation logo",
+    summary="Upload / replace organisation logo",
     description=(
         "Upload a logo image for the organisation. "
-        "Accepted formats: JPEG, PNG, WebP, SVG. Max 5 MB. "
-        "The file is stored in MinIO and the URL is saved to Organisation.logo_url. "
-        "A Kafka event is published so downstream services (feedback_service, "
-        "stakeholder_service) can sync the new logo_url to their ProjectCache. "
+        "Accepted formats: JPEG, PNG, WebP, SVG, GIF. Max 5 MB. "
+        "The file is stored in MinIO at "
+        "`organisations/{org_id}/logo.{ext}` and the URL is saved to "
+        "`Organisation.logo_url`. Re-uploading overwrites the previous file. "
+        "A Kafka event is published so feedback_service and stakeholder_service "
+        "sync the new logo_url to their ProjectCache rows. "
         "Requires MANAGER role or higher."
     ),
     responses={
@@ -657,14 +696,14 @@ async def upload_org_logo(
     membership: Annotated[OrganisationMember, Depends(require_org_role(OrgMemberRole.MANAGER))],
 ) -> dict:
     """
-    Upload an organisation logo.
+    Upload or replace an organisation logo.
 
-    The upload flow:
-      1. ImageService validates MIME type and size.
-      2. File is stored at images/organisations/{org_id}/logo.{ext} in MinIO.
+    Upload flow:
+      1. ImageService validates MIME type (JPEG/PNG/WebP/SVG/GIF) and size (≤ 5 MB).
+      2. File is stored in MinIO at organisations/{org_id}/logo.{ext}.
+         Uploading again simply overwrites the previous object.
       3. Organisation.logo_url is updated in the DB.
-      4. A Kafka org.events message is published so subscriber services can
-         update their cached logo_url on any ProjectCache rows.
+      4. Kafka org.updated event is published so downstream services sync the URL.
     """
     from core.config import settings as cfg
     from services.image_service import ImageService, ImageUploadError
@@ -672,29 +711,32 @@ async def upload_org_logo(
     from models.organisation import Organisation
     from events.producer import EventProducer
     from events.topics import OrgEvents
+    from fastapi import HTTPException
 
-    # Validate and store
-    svc = ImageService(cfg)
+    # Verify org exists
+    exists = await db.scalar(select(Organisation.id).where(Organisation.id == org_id))
+    if not exists:
+        raise HTTPException(status_code=404, detail="Organisation not found.")
+
+    # Validate and store in MinIO
+    img_svc = ImageService(cfg)
     try:
-        logo_url = await svc.upload(
+        logo_url = await img_svc.upload(
             file=file,
             entity_type="organisations",
             entity_id=org_id,
             slot="logo",
         )
     except ImageUploadError as exc:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Persist to DB
+    # Persist new URL
     await db.execute(
-        update(Organisation)
-        .where(Organisation.id == org_id)
-        .values(logo_url=logo_url)
+        update(Organisation).where(Organisation.id == org_id).values(logo_url=logo_url)
     )
     await db.commit()
 
-    # Publish Kafka event so feedback_service / stakeholder_service can sync
+    # Notify downstream services
     producer = EventProducer()
     await producer.publish(
         topic=OrgEvents.UPDATED,
@@ -706,3 +748,74 @@ async def upload_org_logo(
     )
 
     return {"org_id": str(org_id), "logo_url": logo_url}
+
+
+@router.delete(
+    "/{org_id}/logo",
+    status_code=status.HTTP_200_OK,
+    summary="Remove organisation logo",
+    description=(
+        "Delete the logo for an organisation. "
+        "The object is removed from MinIO and `Organisation.logo_url` is set to null. "
+        "A Kafka event is published so downstream services clear their cached logo_url. "
+        "Requires MANAGER role or higher."
+    ),
+    responses={
+        200: {"description": "Logo removed"},
+        403: {"description": "MANAGER role required"},
+        404: {"description": "Organisation not found or no logo set"},
+    },
+)
+async def delete_org_logo(
+    org_id:     uuid.UUID,
+    db:         DbDep,
+    membership: Annotated[OrganisationMember, Depends(require_org_role(OrgMemberRole.MANAGER))],
+) -> dict:
+    """
+    Remove the organisation logo.
+
+    The file is deleted from MinIO (if it exists) and logo_url is cleared in
+    the DB.  A Kafka event lets downstream services remove the cached URL.
+    """
+    from core.config import settings as cfg
+    from services.image_service import ImageService
+    from sqlalchemy import select, update
+    from models.organisation import Organisation
+    from events.producer import EventProducer
+    from events.topics import OrgEvents
+    from fastapi import HTTPException
+
+    org = await db.scalar(
+        select(Organisation).where(Organisation.id == org_id)
+    )
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found.")
+    if not org.logo_url:
+        raise HTTPException(status_code=404, detail="This organisation has no logo.")
+
+    # Remove from MinIO (tries all supported extensions — ignores missing)
+    img_svc = ImageService(cfg)
+    await img_svc.delete(
+        entity_type="organisations",
+        entity_id=org_id,
+        slot="logo",
+    )
+
+    # Clear DB column
+    await db.execute(
+        update(Organisation).where(Organisation.id == org_id).values(logo_url=None)
+    )
+    await db.commit()
+
+    # Notify downstream services
+    producer = EventProducer()
+    await producer.publish(
+        topic=OrgEvents.UPDATED,
+        payload={
+            "event":    OrgEvents.UPDATED,
+            "org_id":   str(org_id),
+            "logo_url": None,
+        },
+    )
+
+    return {"org_id": str(org_id), "logo_url": None, "message": "Logo removed."}

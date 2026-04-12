@@ -269,6 +269,14 @@ class Settings(BaseSettings):
     FRAUD_SCORE_REVIEW_THRESHOLD: int = 50
     FRAUD_SCORE_BLOCK_THRESHOLD: int = 80
 
+    # ── Object storage (MinIO / S3) ───────────────────────────────────────────
+    MINIO_ENDPOINT:   str = Field(default="http://minio:9000")
+    MINIO_ACCESS_KEY: str = Field(default="minioadmin")
+    MINIO_SECRET_KEY: str = Field(default="minioadmin")
+    IMAGES_BUCKET:    str = Field(default="riviwa-images")
+    # Maximum logo file size (bytes). Default 5 MB.
+    LOGO_MAX_BYTES:   int = Field(default=5 * 1024 * 1024)
+
     # ── Computed DB URLs ──────────────────────────────────────────────────────
     @property
     def SYNC_DATABASE_URL(self) -> str:
