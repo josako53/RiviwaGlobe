@@ -1,4 +1,4 @@
-FROM bitnami/spark:3.5
+FROM apache/spark:3.5.3
 
 USER root
 
@@ -24,7 +24,10 @@ RUN chmod +x /app/entrypoint.sh
 # Create checkpoint directory
 RUN mkdir -p /tmp/spark_checkpoints && chmod 777 /tmp/spark_checkpoints
 
-# Run as the default bitnami non-root user (UID 1001)
-USER 1001
+# spark-submit is at /opt/spark/bin — add to PATH
+ENV PATH="/opt/spark/bin:$PATH"
+
+# Run as the default apache/spark non-root user (UID 185)
+USER 185
 
 ENTRYPOINT ["/app/entrypoint.sh"]
