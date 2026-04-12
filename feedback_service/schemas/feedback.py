@@ -212,11 +212,34 @@ class StaffSubmitFeedback(BaseModel):
     officer_recorded: bool = Field(default=False, description="Staff entered on behalf of PAP")
     internal_notes: Optional[str] = Field(default=None, description="Internal PIU notes (Annex 5: Response/Follow up)")
 
-    # Normalise case — clients may send uppercase ("GRIEVANCE", "HIGH", "WEB")
-    @field_validator("feedback_type", "category", "channel", "priority", mode="before")
+    # Normalise case + channel aliases so clients can send "WEB" or "MOBILE"
+    _CHANNEL_ALIASES: dict = {
+        "web":         "web_portal",
+        "mobile":      "mobile_app",
+        "app":         "mobile_app",
+        "call":        "phone_call",
+        "voice":       "phone_call",
+        "walk_in":     "in_person",
+        "walk-in":     "in_person",
+        "meeting":     "public_meeting",
+        "paper":       "paper_form",
+        "form":        "paper_form",
+        "wa":          "whatsapp",
+        "wa_voice":    "whatsapp_voice",
+    }
+
+    @field_validator("feedback_type", "category", "priority", mode="before")
     @classmethod
     def normalise_to_lower(cls, v: str) -> str:
         return v.lower() if isinstance(v, str) else v
+
+    @field_validator("channel", mode="before")
+    @classmethod
+    def normalise_channel(cls, v: str) -> str:
+        if not isinstance(v, str):
+            return v
+        lower = v.lower()
+        return cls._CHANNEL_ALIASES.get(lower, lower)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
