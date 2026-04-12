@@ -7,3 +7,13 @@ proxy_set_header Connection "";
 proxy_connect_timeout 30s;
 proxy_send_timeout 60s;
 proxy_read_timeout 60s;
+
+# Strip any CORS headers the backend services add (e.g. FastAPI CORSMiddleware
+# in dev/staging mode). Nginx owns CORS via cors_params — having both produces
+# the "multiple values" error that browsers reject.
+proxy_hide_header Access-Control-Allow-Origin;
+proxy_hide_header Access-Control-Allow-Methods;
+proxy_hide_header Access-Control-Allow-Headers;
+proxy_hide_header Access-Control-Allow-Credentials;
+proxy_hide_header Access-Control-Expose-Headers;
+proxy_hide_header Access-Control-Max-Age;
