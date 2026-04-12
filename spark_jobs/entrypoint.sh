@@ -37,7 +37,7 @@ echo "[entrypoint] Spark master is up."
 # Wait for analytics_db PostgreSQL to be reachable (up to 60 s)
 # ---------------------------------------------------------------------------
 ANALYTICS_DB_HOST="${ANALYTICS_DB_HOST:-analytics_db}"
-ANALYTICS_DB_PORT="${ANALYTICS_DB_PORT:-5441}"
+ANALYTICS_DB_PORT="${ANALYTICS_DB_PORT:-5432}"
 
 echo "[entrypoint] Waiting for analytics_db at $ANALYTICS_DB_HOST:$ANALYTICS_DB_PORT …"
 attempts=0
@@ -91,4 +91,4 @@ sleep 10
 # exec replaces this shell so SIGTERM/SIGINT are forwarded directly
 # ---------------------------------------------------------------------------
 echo "[entrypoint] Starting APScheduler …"
-exec python /app/scheduler.py
+exec python3 /app/scheduler.py
