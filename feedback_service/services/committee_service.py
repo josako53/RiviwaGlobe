@@ -14,12 +14,14 @@ class CommitteeService:
 
     async def create(self, data: dict) -> GrievanceCommittee:
         sids = data.get("stakeholder_ids")
+        def _uuid(v):
+            return v if isinstance(v, uuid.UUID) else uuid.UUID(str(v))
         c = GrievanceCommittee(
             name               = data["name"],
             level              = CommitteeLevel(data["level"]),
-            project_id         = uuid.UUID(data["project_id"])         if data.get("project_id")         else None,
+            project_id         = _uuid(data["project_id"])         if data.get("project_id")         else None,
             lga                = data.get("lga"),
-            org_sub_project_id = uuid.UUID(data["org_sub_project_id"]) if data.get("org_sub_project_id") else None,
+            org_sub_project_id = _uuid(data["org_sub_project_id"]) if data.get("org_sub_project_id") else None,
             stakeholder_ids    = {"stakeholder_ids": sids}             if sids                            else None,
             description        = data.get("description"),
         )
@@ -42,7 +44,8 @@ class CommitteeService:
             if field in data:
                 setattr(c, field, data[field])
         if "org_sub_project_id" in data:
-            c.org_sub_project_id = uuid.UUID(data["org_sub_project_id"]) if data["org_sub_project_id"] else None
+            v = data["org_sub_project_id"]
+            c.org_sub_project_id = (v if isinstance(v, uuid.UUID) else uuid.UUID(str(v))) if v else None
         if "stakeholder_ids" in data:
             ids = data["stakeholder_ids"]
             c.stakeholder_ids = {"stakeholder_ids": ids} if ids else None
@@ -76,7 +79,7 @@ class CommitteeService:
         await self.get_or_404(committee_id)
         m = await self.repo.create_member(
             committee_id = committee_id,
-            user_id      = uuid.UUID(data["user_id"]),
+            user_id      = (data["user_id"] if isinstance(data["user_id"], uuid.UUID) else uuid.UUID(str(data["user_id"]))),
             role         = CommitteeRole(data.get("role", "member")),
         )
         await self.db.commit()

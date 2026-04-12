@@ -683,7 +683,7 @@ services:
       redis:
         condition: service_healthy
 
-  # ── AI Service — Rivai conversation engine ───────────────────────────────
+  # ── AI Service — Riviwa AI conversation engine ───────────────────────────────
   ai_db:
     image: postgres:15-alpine
     container_name: ai_db

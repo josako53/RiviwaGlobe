@@ -2665,7 +2665,7 @@ Port 8085. Routes under `/api/v1/ai`.
 ### 6.1 Conversations
 
 #### `POST /ai/conversations`
-Start a new AI conversation (Rivai assistant).
+Start a new AI conversation (Riviwa AI assistant).
 
 **Auth:** Optional Bearer token
 

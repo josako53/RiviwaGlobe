@@ -25,6 +25,11 @@ from repositories.feedback_repository import FeedbackRepository
 PeriodType = Literal["second", "minute", "hour", "day", "week", "month", "quarter", "year"]
 
 
+def _to_uuid(v) -> uuid.UUID:
+    """Accept both uuid.UUID objects (from Pydantic) and plain strings."""
+    return v if isinstance(v, uuid.UUID) else uuid.UUID(str(v))
+
+
 class CategoryService:
 
     def __init__(self, db: AsyncSession) -> None:
@@ -36,7 +41,7 @@ class CategoryService:
 
     async def create(self, data: dict, created_by: uuid.UUID) -> FeedbackCategoryDef:
         slug = data.get("slug", "").strip() or re.sub(r"[^a-z0-9]+", "-", data["name"].lower()).strip("-")
-        project_id = uuid.UUID(data["project_id"]) if data.get("project_id") else None
+        project_id = _to_uuid(data["project_id"]) if data.get("project_id") else None
 
         if await self.repo.get_by_slug(slug, project_id):
             raise ValidationError(
@@ -132,7 +137,7 @@ class CategoryService:
 
     async def merge(self, cat_id: uuid.UUID, data: dict) -> FeedbackCategoryDef:
         c      = await self.get_or_404(cat_id)
-        target = await self.get_or_404(uuid.UUID(data["merge_into_id"]))
+        target = await self.get_or_404(_to_uuid(data["merge_into_id"]))
         if not target.is_assignable():
             raise ValidationError("Target category must be ACTIVE and not itself merged.")
         c.merged_into_id = target.id
@@ -229,7 +234,7 @@ class CategoryService:
         fb = await self.fb_repo.get_by_id(feedback_id)
         if not fb:
             raise FeedbackNotFoundError()
-        cat = await self.get_or_404(uuid.UUID(data["category_def_id"]))
+        cat = await self.get_or_404(_to_uuid(data["category_def_id"]))
         if not cat.is_assignable():
             raise ValidationError("Category is not assignable (inactive, merged, or pending review).")
         if not cat.applies_to(fb.feedback_type.value):

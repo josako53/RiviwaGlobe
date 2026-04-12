@@ -38,13 +38,13 @@ log = structlog.get_logger(__name__)
 
 # ── Greetings ─────────────────────────────────────────────────────────────────
 _GREETING_SW = (
-    "Habari! Mimi ni Rivai, msaidizi wa AI wa Riviwa. "
+    "Habari! Mimi ni Riviwa AI, msaidizi wa AI wa Riviwa. "
     "Ninaweza kukusaidia kutoa malalamiko, mapendekezo, au shukrani "
     "kuhusu mradi wa ujenzi karibu nawe. "
     "Niambie — una habari gani leo?"
 )
 _GREETING_EN = (
-    "Hello! I'm Rivai, the Riviwa AI assistant. "
+    "Hello! I'm Riviwa AI, your Riviwa assistant. "
     "I can help you submit a grievance, suggestion, or applause "
     "about a construction project near you. "
     "What would you like to share today?"

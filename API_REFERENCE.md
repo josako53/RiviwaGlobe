@@ -23,7 +23,7 @@
    - [Escalation Requests](#33-escalation-requests-staff)
    - [Categories](#34-categories)
    - [Committees](#35-committees-ghc)
-4. [AI Service (Rivai)](#4-ai-service-rivai--port-8085)
+4. [AI Service (Riviwa AI)](#4-ai-service-rivai--port-8085)
    - [Conversational AI](#41-conversational-ai)
    - [AI Admin](#42-ai-admin-staff)
    - [AI Internal](#43-ai-internal-service-to-service)
@@ -1296,7 +1296,7 @@ DELETE /api/v1/committees/{id}/members/{user_id}                      → remove
 
 ---
 
-## 4. AI Service (Rivai) — Port 8085
+## 4. AI Service (Riviwa AI) — Port 8085
 
 ### 4.1 Conversational AI
 
@@ -1347,7 +1347,7 @@ Auth: none (Bearer optional for registered PAPs)
 ```json
 {
   "conversation_id": "uuid",
-  "reply": "Karibu! Mimi ni Rivai, msaidizi wa malalamiko ya mradi. Unaweza kunieleza tatizo lako au maoni yako.",
+  "reply": "Karibu! Mimi ni Riviwa AI, msaidizi wa malalamiko ya mradi. Unaweza kunieleza tatizo lako au maoni yako.",
   "status": "active",
   "stage": "greeting",
   "turn_count": 1,

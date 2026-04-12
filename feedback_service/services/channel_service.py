@@ -19,6 +19,11 @@ from typing import Optional
 import httpx
 import structlog
 
+def _to_uuid(v) -> uuid.UUID:
+    """Accept both uuid.UUID objects (from Pydantic) and plain strings."""
+    return v if isinstance(v, uuid.UUID) else uuid.UUID(str(v))
+
+
 from core.config import settings
 from core.exceptions import NotFoundError, ValidationError
 from models.feedback import (
@@ -134,7 +139,7 @@ class ChannelService:
 
         session = ChannelSession(
             channel             = channel,
-            project_id          = uuid.UUID(data["project_id"]) if data.get("project_id") else None,
+            project_id          = _to_uuid(data["project_id"]) if data.get("project_id") else None,
             phone_number        = data.get("phone_number"),
             whatsapp_id         = data.get("whatsapp_id"),
             gateway_session_id  = data.get("gateway_session_id"),

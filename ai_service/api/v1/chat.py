@@ -46,7 +46,7 @@ def _conv_response(conv, reply: str, submitted: bool = False, submitted_feedback
     status_code=status.HTTP_201_CREATED,
     summary="Start a new AI conversation",
     description=(
-        "Start a new Rivai AI conversation for submitting grievances, suggestions, or applause. "
+        "Start a new Riviwa AI AI conversation for submitting grievances, suggestions, or applause. "
         "No authentication required for anonymous web/mobile PAPs. "
         "Pass user_id from JWT for registered PAPs (auto-identifies them)."
     ),
@@ -67,9 +67,9 @@ async def start_conversation(body: StartConversation, db: DbDep, token: OptToken
     "/conversations/{conversation_id}/message",
     summary="Send a message in an AI conversation",
     description=(
-        "Send the PAP's message to Rivai. The AI responds, extracts feedback fields, "
+        "Send the PAP's message to Riviwa AI. The AI responds, extracts feedback fields, "
         "and auto-submits when confidence ≥ 0.82. "
-        "Supports Swahili and English — Rivai auto-detects the language."
+        "Supports Swahili and English — Riviwa AI auto-detects the language."
     ),
 )
 async def send_message(conversation_id: uuid.UUID, body: SendMessage, db: DbDep) -> dict:

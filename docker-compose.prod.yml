@@ -239,7 +239,7 @@ services:
           memory: 128M
 
   # ── AI Service production overrides ──────────────────────────────────────
-  # ai_service hosts the Rivai conversational AI and classification engine.
+  # ai_service hosts the Riviwa AI conversational AI and classification engine.
   ai_service:
     environment:
       DEBUG: "false"

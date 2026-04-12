@@ -12,7 +12,7 @@ PAPs may submit grievances through any of the following channels:
 Send a text message to the designated GRM hotline number. A reference number (e.g. GRV-2025-0042) will be sent back by SMS. Keep this number to track your grievance.
 
 ### WhatsApp
-Send a message to the GRM WhatsApp number. Rivai (the AI assistant) will guide you through the submission process in Swahili or English. You can also send voice notes and photos.
+Send a message to the GRM WhatsApp number. Riviwa AI (the AI assistant) will guide you through the submission process in Swahili or English. You can also send voice notes and photos.
 
 ### Mobile App (Riviwa App)
 Download the Riviwa mobile application. Log in or register as a PAP. Submit a grievance from the home screen. Attach photos and your GPS location automatically.
