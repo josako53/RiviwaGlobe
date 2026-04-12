@@ -962,7 +962,7 @@ services:
 
   # ── SPARK MASTER ──────────────────────────────────────────────────────────
   spark_master:
-    image: bitnami/spark:3.5
+    image: bitnami/spark:3.5.3
     container_name: spark_master
     init: true
     restart: unless-stopped
@@ -987,7 +987,7 @@ services:
 
   # ── SPARK WORKER ──────────────────────────────────────────────────────────
   spark_worker:
-    image: bitnami/spark:3.5
+    image: bitnami/spark:3.5.3
     container_name: spark_worker
     init: true
     restart: unless-stopped
