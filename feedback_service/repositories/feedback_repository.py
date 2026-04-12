@@ -174,10 +174,27 @@ class FeedbackRepository:
         return await self.db.scalar(select(func.count(Feedback.id))) or 0
 
     async def count_by_type(self, feedback_type) -> int:
-        """Global count of all feedback of a given type — used for unique_ref generation."""
+        """Global count of all feedback of a given type."""
         return await self.db.scalar(
             select(func.count(Feedback.id)).where(Feedback.feedback_type == feedback_type)
         ) or 0
+
+    async def next_ref_sequence(self, prefix: str, year: int) -> int:
+        """
+        Return the next safe sequence number for a unique_ref like GRV-2026-NNNN.
+        Uses MAX of the numeric suffix in existing refs for the given prefix+year,
+        so gaps from failed inserts or deleted rows never cause a duplicate.
+        """
+        from sqlalchemy import text as _text
+        like_pattern = f"{prefix}-{year}-%"
+        result = await self.db.execute(
+            _text(
+                "SELECT COALESCE(MAX(CAST(SPLIT_PART(unique_ref, '-', 3) AS INTEGER)), 0) "
+                "FROM feedbacks WHERE unique_ref LIKE :pattern"
+            ),
+            {"pattern": like_pattern},
+        )
+        return (result.scalar() or 0) + 1
 
     async def save(self, f: Feedback) -> None:
         self.db.add(f)

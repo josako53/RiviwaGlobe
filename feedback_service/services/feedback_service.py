@@ -191,9 +191,10 @@ class FeedbackService:
         else:
             feedback_type = FeedbackType(data["feedback_type"])
 
-        # Use global type counter so unique_refs are globally unique across all projects
-        count = await self.repo.count_by_type(feedback_type)
-        unique_ref = f"{_PREFIX[feedback_type]}-{datetime.now().year}-{count + 1:04d}"
+        # Use MAX of existing sequence numbers so gaps/deletions never cause duplicates
+        _year = datetime.now().year
+        _seq  = await self.repo.next_ref_sequence(_PREFIX[feedback_type], _year)
+        unique_ref = f"{_PREFIX[feedback_type]}-{_year}-{_seq:04d}"
         is_anon = bool(data.get("is_anonymous", False))
 
         f = Feedback(
@@ -368,9 +369,10 @@ class FeedbackService:
         if fb_type == FeedbackType.APPLAUSE and not project.accepts_applause:
             raise ValidationError("This project is not currently accepting applause.")
 
-        count = await self.repo.count_by_type(fb_type)
-        prefix    = _PREFIX[fb_type]
-        unique_ref = f"{prefix}-{datetime.now().year}-{count + 1:04d}"
+        prefix = _PREFIX[fb_type]
+        _year  = datetime.now().year
+        _seq   = await self.repo.next_ref_sequence(prefix, _year)
+        unique_ref = f"{prefix}-{_year}-{_seq:04d}"
         is_anon   = bool(data.get("is_anonymous", False))
 
         f = Feedback(
