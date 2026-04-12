@@ -37,18 +37,51 @@ from services.stt_service import STTService
 log = structlog.get_logger(__name__)
 
 # ── Greetings ─────────────────────────────────────────────────────────────────
-_GREETING_SW = (
-    "Habari! Mimi ni Riviwa AI, msaidizi wa AI wa Riviwa. "
-    "Ninaweza kukusaidia kutoa malalamiko, mapendekezo, au shukrani "
-    "kuhusu mradi wa ujenzi karibu nawe. "
-    "Niambie — una habari gani leo?"
-)
-_GREETING_EN = (
+_GREETING_EN_BASE = (
     "Hello! I'm Riviwa AI, your Riviwa assistant. "
-    "I can help you submit a grievance, suggestion, or applause "
-    "about a construction project near you. "
-    "What would you like to share today?"
+    "I can help you to get your voice heard right now.\n"
+    "Do you have a grievance, suggestion, or applause?"
 )
+_GREETING_SW_BASE = (
+    "Habari! Mimi ni Riviwa AI, msaidizi wako wa Riviwa. "
+    "Ninaweza kukusaidia sauti yako isikike sasa hivi.\n"
+    "Je, una malalamiko, mapendekezo, au shukrani?"
+)
+
+
+def _build_greeting(language: str, projects: list) -> str:
+    """
+    Build the opening greeting. If active projects are known, append a
+    numbered list of locations so the PAP can identify their project.
+    """
+    base = _GREETING_EN_BASE if language == "en" else _GREETING_SW_BASE
+
+    if not projects:
+        return base
+
+    # Deduplicate locations: prefer "Name (Region / LGA)"
+    seen: set = set()
+    lines: list[str] = []
+    for p in projects:
+        parts = [p.name]
+        geo = ", ".join(filter(None, [p.region, p.primary_lga]))
+        if geo:
+            parts.append(f"({geo})")
+        label = " ".join(parts)
+        if label not in seen:
+            seen.add(label)
+            lines.append(label)
+
+    if not lines:
+        return base
+
+    if language == "en":
+        loc_header = "\n\nHere are the active project areas — which one is near you?"
+    else:
+        loc_header = "\n\nHizi ni maeneo ya miradi inayoendelea — uko karibu na ipi?"
+
+    numbered = "\n".join(f"{i+1}. {l}" for i, l in enumerate(lines))
+    return base + loc_header + "\n" + numbered
 _FOLLOWUP_STATUS_SW = "Hali ya malalamiko yako ({}): {} — {}"
 _FOLLOWUP_STATUS_EN = "Your feedback ({}) status: {} — {}"
 
@@ -95,7 +128,9 @@ class ConversationService:
         """
         Create a new conversation session and return (session, greeting_reply).
         """
-        greeting = _GREETING_EN if language == "en" else _GREETING_SW
+        # Load active projects so we can suggest locations in the greeting
+        active_projects = await self.kb_repo.list_active()
+        greeting = _build_greeting(language, active_projects)
         data = {
             "channel": ConversationChannel(channel.lower()),
             "language": language,
