@@ -181,20 +181,29 @@ class FeedbackRepository:
 
     async def next_ref_sequence(self, prefix: str, year: int) -> int:
         """
-        Return the next safe sequence number for a unique_ref like GRV-2026-NNNN.
-        Uses MAX of the numeric suffix in existing refs for the given prefix+year,
-        so gaps from failed inserts or deleted rows never cause a duplicate.
+        Return the next unique sequence number for a ref like GRV-2026-NNNN.
+
+        Uses an atomic INSERT … ON CONFLICT DO UPDATE … RETURNING on the
+        feedback_ref_sequences table.  PostgreSQL processes this as a single
+        statement — two concurrent calls on the same (prefix, year) can never
+        receive the same number, regardless of load.
+
+        Why not MAX()?  Under concurrent load two transactions can both read
+        the same MAX value and both attempt to insert the same ref, causing a
+        UniqueViolationError.  The atomic upsert eliminates the race entirely.
         """
         from sqlalchemy import text as _text
-        like_pattern = f"{prefix}-{year}-%"
         result = await self.db.execute(
-            _text(
-                "SELECT COALESCE(MAX(CAST(SPLIT_PART(unique_ref, '-', 3) AS INTEGER)), 0) "
-                "FROM feedbacks WHERE unique_ref LIKE :pattern"
-            ),
-            {"pattern": like_pattern},
+            _text("""
+                INSERT INTO feedback_ref_sequences (prefix, year, last_value)
+                VALUES (:prefix, :year, 1)
+                ON CONFLICT (prefix, year)
+                DO UPDATE SET last_value = feedback_ref_sequences.last_value + 1
+                RETURNING last_value
+            """),
+            {"prefix": prefix, "year": year},
         )
-        return (result.scalar() or 0) + 1
+        return result.scalar()
 
     async def save(self, f: Feedback) -> None:
         self.db.add(f)

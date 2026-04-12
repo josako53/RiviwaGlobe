@@ -136,6 +136,16 @@ class FeedbackType(str, Enum):
     SUGGESTION  = "suggestion"
     APPLAUSE    = "applause"
 
+    @classmethod
+    def _missing_(cls, value: object):
+        if not isinstance(value, str):
+            return None
+        clean = value.strip().lower()
+        for member in cls:
+            if clean == member.value or clean == member.name.lower():
+                return member
+        return None
+
 
 class FeedbackStatus(str, Enum):
     """
@@ -152,6 +162,16 @@ class FeedbackStatus(str, Enum):
     NOTED        = "noted"        # suggestion received but not implemented (SUGGESTION only)
     DISMISSED    = "dismissed"    # found unfounded, duplicate, or out of scope
     CLOSED       = "closed"       # final state — no further action
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if not isinstance(value, str):
+            return None
+        clean = value.strip().lower()
+        for member in cls:
+            if clean == member.value or clean == member.name.lower():
+                return member
+        return None
 
 
 class FeedbackPriority(str, Enum):
@@ -171,6 +191,16 @@ class FeedbackPriority(str, Enum):
     MEDIUM   = "medium"
     LOW      = "low"
 
+    @classmethod
+    def _missing_(cls, value: object):
+        if not isinstance(value, str):
+            return None
+        clean = value.strip().lower()
+        for member in cls:
+            if clean == member.value or clean == member.name.lower():
+                return member
+        return None
+
 
 class GRMLevel(str, Enum):
     """
@@ -184,6 +214,16 @@ class GRMLevel(str, Enum):
     TARURA_WBCU = "tarura_wbcu" # Level 4 — TARURA World Bank Coordinating Unit
     TANROADS    = "tanroads"    # Level 5 — For road/bridge-specific escalations
     WORLD_BANK  = "world_bank"  # Level 6 — Final escalation
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if not isinstance(value, str):
+            return None
+        clean = value.strip().lower()
+        for member in cls:
+            if clean == member.value or clean == member.name.lower():
+                return member
+        return None
 
 
 class FeedbackChannel(str, Enum):
@@ -229,6 +269,33 @@ class FeedbackChannel(str, Enum):
     PUBLIC_MEETING = "public_meeting" # Raised during a SEP consultation activity
     NOTICE_BOX    = "notice_box"    # Dropped in a suggestion/complaint box
     OTHER         = "other"
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if not isinstance(value, str):
+            return None
+        clean = value.strip().lower()
+        # Short-hand aliases clients may send
+        aliases = {
+            "web":       cls.WEB_PORTAL,
+            "mobile":    cls.MOBILE_APP,
+            "app":       cls.MOBILE_APP,
+            "call":      cls.PHONE_CALL,
+            "voice":     cls.PHONE_CALL,
+            "walk_in":   cls.IN_PERSON,
+            "walk-in":   cls.IN_PERSON,
+            "meeting":   cls.PUBLIC_MEETING,
+            "paper":     cls.PAPER_FORM,
+            "form":      cls.PAPER_FORM,
+            "wa":        cls.WHATSAPP,
+            "wa_voice":  cls.WHATSAPP_VOICE,
+        }
+        if clean in aliases:
+            return aliases[clean]
+        for member in cls:
+            if clean == member.value or clean == member.name.lower():
+                return member
+        return None
 
 
 class SubmissionMethod(str, Enum):
@@ -312,6 +379,16 @@ class FeedbackCategory(str, Enum):
     STAFF_CONDUCT    = "staff_conduct"
     COMMUNITY_IMPACT = "community_impact"
     RESPONSIVENESS   = "responsiveness"
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if not isinstance(value, str):
+            return None
+        clean = value.strip().lower()
+        for member in cls:
+            if clean == member.value or clean == member.name.lower():
+                return member
+        return None
 
 
 class ActionType(str, Enum):
@@ -1760,6 +1837,16 @@ class EscalationRequestStatus(str, Enum):
     APPROVED  = "approved"   # PIU approved — escalation will proceed
     REJECTED  = "rejected"   # PIU rejected — explained in reviewer_notes
     ACTIONED  = "actioned"   # PIU escalated the grievance following approval
+
+    @classmethod
+    def _missing_(cls, value: object):
+        if not isinstance(value, str):
+            return None
+        clean = value.strip().lower()
+        for member in cls:
+            if clean == member.value or clean == member.name.lower():
+                return member
+        return None
 
 
 class EscalationRequest(SQLModel, table=True):

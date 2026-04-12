@@ -16,24 +16,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-# Channel alias map — maps short/alternate names to canonical FeedbackChannel enum values.
-# Allows React clients to send "WEB", "MOBILE", "CALL" etc.
-_CHANNEL_ALIASES: dict = {
-    "web":          "web_portal",
-    "mobile":       "mobile_app",
-    "app":          "mobile_app",
-    "call":         "phone_call",
-    "voice":        "phone_call",
-    "walk_in":      "in_person",
-    "walk-in":      "in_person",
-    "meeting":      "public_meeting",
-    "paper":        "paper_form",
-    "form":         "paper_form",
-    "wa":           "whatsapp",
-    "wa_voice":     "whatsapp_voice",
-}
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -115,11 +98,6 @@ class PAPSubmitFeedback(BaseModel):
     date_of_incident: Optional[str] = Field(default=None, description="When the issue happened (YYYY-MM-DD)")
     media_urls: Optional[List[str]] = Field(default=None, description="Photo/video URLs")
 
-    # Normalise case — clients may send "GRIEVANCE" or "grievance"
-    @field_validator("feedback_type", mode="before")
-    @classmethod
-    def normalise_feedback_type(cls, v: str) -> str:
-        return v.lower() if isinstance(v, str) else v
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -229,18 +207,6 @@ class StaffSubmitFeedback(BaseModel):
     officer_recorded: bool = Field(default=False, description="Staff entered on behalf of PAP")
     internal_notes: Optional[str] = Field(default=None, description="Internal PIU notes (Annex 5: Response/Follow up)")
 
-    @field_validator("feedback_type", "category", "priority", mode="before")
-    @classmethod
-    def normalise_to_lower(cls, v: str) -> str:
-        return v.lower() if isinstance(v, str) else v
-
-    @field_validator("channel", mode="before")
-    @classmethod
-    def normalise_channel(cls, v: str) -> str:
-        if not isinstance(v, str):
-            return v
-        lower = v.lower()
-        return _CHANNEL_ALIASES.get(lower, lower)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
