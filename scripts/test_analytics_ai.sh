@@ -62,24 +62,38 @@ jval() {
 # =============================================================================
 section "0. Deploy analytics_service + rebuild ai_service"
 
+DEPLOY="${DEPLOY:-auto}"  # set DEPLOY=force to rebuild, DEPLOY=skip to skip
+
 if command -v docker &>/dev/null && [[ -f docker-compose.yml ]]; then
-  echo "  → Pulling latest git changes..."
-  git pull origin main --quiet || true
+  # Auto-detect: skip rebuilding if key services are already healthy
+  ANALYTICS_UP=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:8095/health 2>/dev/null || echo 0)
+  AUTH_UP=$(curl -sk -o /dev/null -w '%{http_code}' http://localhost:8000/health 2>/dev/null || echo 0)
 
-  echo "  → Building and starting analytics_service..."
-  docker compose up -d --build analytics_service 2>&1 | tail -3
+  if [[ "$DEPLOY" == "force" || ("$DEPLOY" == "auto" && ("$ANALYTICS_UP" != "200" || "$AUTH_UP" != "200")) ]]; then
+    echo "  → Pulling latest git changes..."
+    git pull origin main --quiet || true
 
-  echo "  → Rebuilding ai_service (new greeting + Obsidian RAG)..."
-  docker compose up -d --build ai_service 2>&1 | tail -3
+    echo "  → Building and starting analytics_service..."
+    docker compose up -d --build analytics_service 2>&1 | tail -3
 
-  echo "  → Starting Spark cluster..."
-  docker compose up -d spark_master spark_worker spark_jobs 2>&1 | tail -3
+    echo "  → Rebuilding ai_service (new greeting + Obsidian RAG)..."
+    docker compose up -d --build ai_service 2>&1 | tail -3
 
-  echo "  → Rebuilding nginx (analytics upstream)..."
-  docker compose up -d --build nginx 2>&1 | tail -3
+    echo "  → Starting Spark cluster..."
+    docker compose up -d spark_master spark_worker spark_jobs 2>&1 | tail -3 || echo "  (Spark skipped — image not available)" >&2
 
-  echo "  → Waiting 15s for services to initialise..."
-  sleep 15
+    echo "  → Rebuilding nginx (analytics upstream)..."
+    docker compose up -d --build nginx 2>&1 | tail -3
+
+    echo "  → Waiting 40s for services to initialise..."
+    sleep 40
+
+    echo "  → Reloading nginx to flush stale upstream IPs..."
+    docker exec nginx nginx -s reload 2>/dev/null || true
+    sleep 5
+  else
+    echo "  (Services already running — skipping rebuild. Use DEPLOY=force to rebuild.)"
+  fi
 else
   echo "  (Skipping deploy — not on server)"
 fi
