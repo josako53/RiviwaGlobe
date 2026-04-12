@@ -16,7 +16,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -97,6 +97,12 @@ class PAPSubmitFeedback(BaseModel):
     # ── Date and media ────────────────────────────────────────────────────────
     date_of_incident: Optional[str] = Field(default=None, description="When the issue happened (YYYY-MM-DD)")
     media_urls: Optional[List[str]] = Field(default=None, description="Photo/video URLs")
+
+    # Normalise case — clients may send "GRIEVANCE" or "grievance"
+    @field_validator("feedback_type", mode="before")
+    @classmethod
+    def normalise_feedback_type(cls, v: str) -> str:
+        return v.lower() if isinstance(v, str) else v
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -205,6 +211,12 @@ class StaffSubmitFeedback(BaseModel):
     # ── SECTION H — Officer metadata (Annex 5: Action Officer from LGA) ──────
     officer_recorded: bool = Field(default=False, description="Staff entered on behalf of PAP")
     internal_notes: Optional[str] = Field(default=None, description="Internal PIU notes (Annex 5: Response/Follow up)")
+
+    # Normalise case — clients may send uppercase ("GRIEVANCE", "HIGH", "WEB")
+    @field_validator("feedback_type", "category", "channel", "priority", mode="before")
+    @classmethod
+    def normalise_to_lower(cls, v: str) -> str:
+        return v.lower() if isinstance(v, str) else v
 
 
 # ══════════════════════════════════════════════════════════════════════════════
