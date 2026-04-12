@@ -23,10 +23,10 @@ ADMIN_TOKEN=""
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
 
-ok()   { echo -e "${GREEN}  ✓ PASS${RESET}  $1"; ((PASS++)) || true; }
-fail() { echo -e "${RED}  ✗ FAIL${RESET}  $1"; ((FAIL++)) || true; }
-skip() { echo -e "${YELLOW}  ⚠ SKIP${RESET}  $1"; ((SKIP++)) || true; }
-section() { echo -e "\n${BOLD}${CYAN}══ $1 ══${RESET}"; }
+ok()   { echo -e "${GREEN}  ✓ PASS${RESET}  $1" >&2; ((PASS++)) || true; }
+fail() { echo -e "${RED}  ✗ FAIL${RESET}  $1" >&2; ((FAIL++)) || true; }
+skip() { echo -e "${YELLOW}  ⚠ SKIP${RESET}  $1" >&2; ((SKIP++)) || true; }
+section() { echo -e "\n${BOLD}${CYAN}══ $1 ══${RESET}" >&2; }
 
 # ─── request helper ──────────────────────────────────────────────────────────
 # Usage: req <label> <expected_status_code> <METHOD> <path> [extra curl args...]
@@ -42,12 +42,12 @@ req() {
 
   if [[ "$status" == "$expected" ]]; then
     ok "$label  [HTTP $status]"
-    echo "$body"
+    echo "$body"   # stdout — available for piping to python3
     return 0
   else
     fail "$label  [expected $expected, got $status]"
-    echo "  Response: $(echo "$body" | head -c 300)"
-    echo "$body"
+    echo "  Response: $(echo "$body" | head -c 300)" >&2
+    echo "$body"   # stdout — available for piping to python3
     return 1
   fi
 }
@@ -92,7 +92,7 @@ section "1. Health Checks"
 req "Analytics service health"     200 GET /health/analytics \
   -H "Accept: application/json" || true
 
-req "AI service health"            200 GET /api/v1/ai/health \
+req "AI service health"            200 GET /health/ai \
   -H "Accept: application/json" 2>/dev/null || \
   skip "AI health endpoint (optional)"
 
@@ -101,45 +101,29 @@ req "AI service health"            200 GET /api/v1/ai/health \
 # =============================================================================
 section "2. Authentication"
 
-# Step 1: Login
+# Step 1: Login (testgrm@riviwa.com — DevOTPProvider returns 000000 in staging)
 echo "  → Requesting OTP..."
 LOGIN_RESP=$(curl -sk -X POST "${BASE}/api/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"identifier":"admin@riviwa.com","password":"admin123"}' 2>/dev/null || echo "{}")
+  -d '{"identifier":"testgrm@riviwa.com","password":"TestGRM@2026!"}' 2>/dev/null || echo "{}")
 
-LOGIN_TOKEN=$(echo "$LOGIN_RESP" | python3 -c \
-  "import sys,json; d=json.load(sys.stdin); print(d.get('login_token',''))" 2>/dev/null || true)
-OTP=$(echo "$LOGIN_RESP" | python3 -c \
-  "import sys,json; d=json.load(sys.stdin); print(d.get('otp','') or d.get('debug_otp',''))" 2>/dev/null || true)
+LOGIN_TOKEN=$(echo "$LOGIN_RESP" | grep -o '"login_token":"[^"]*"' | cut -d'"' -f4 || true)
+# DevOTPProvider in staging mode always accepts 000000
+OTP="000000"
 
-if [[ -z "$LOGIN_TOKEN" ]]; then
-  # Try alternative credentials
-  LOGIN_RESP=$(curl -sk -X POST "${BASE}/api/v1/auth/login" \
-    -H "Content-Type: application/json" \
-    -d '{"identifier":"josako@riviwa.com","password":"Password123!"}' 2>/dev/null || echo "{}")
-  LOGIN_TOKEN=$(echo "$LOGIN_RESP" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin); print(d.get('login_token',''))" 2>/dev/null || true)
-  OTP=$(echo "$LOGIN_RESP" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin); print(d.get('otp','') or d.get('debug_otp',''))" 2>/dev/null || true)
-fi
-
-if [[ -n "$OTP" && -n "$LOGIN_TOKEN" ]]; then
-  ok "Login step 1 — OTP: $OTP"
+if [[ -n "$LOGIN_TOKEN" ]]; then
+  ok "Login step 1 — DevOTP: $OTP"
 else
   fail "Login step 1 failed — response: $(echo "$LOGIN_RESP" | head -c 300)"
 fi
 
 # Step 2: Verify OTP
-if [[ -n "$LOGIN_TOKEN" && -n "$OTP" ]]; then
+if [[ -n "$LOGIN_TOKEN" ]]; then
   OTP_RESP=$(curl -sk -X POST "${BASE}/api/v1/auth/login/verify-otp" \
     -H "Content-Type: application/json" \
     -d "{\"login_token\":\"${LOGIN_TOKEN}\",\"otp_code\":\"${OTP}\"}" 2>/dev/null || echo "{}")
-  TOKEN=$(echo "$OTP_RESP" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin); print(d.get('access_token',''))" 2>/dev/null || true)
-  ORG_ID=$(echo "$OTP_RESP" | python3 -c \
-    "import sys,json; d=json.load(sys.stdin)
-orgs=d.get('user',{}).get('organisations',[])
-print(orgs[0].get('organisation_id','') if orgs else '')" 2>/dev/null || true)
+  TOKEN=$(echo "$OTP_RESP" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4 || true)
+  ORG_ID=$(echo "$OTP_RESP" | grep -o '"org_id":"[^"]*"' | cut -d'"' -f4 | head -1 || true)
 
   if [[ -n "$TOKEN" ]]; then
     ok "OTP verification — Bearer token obtained"

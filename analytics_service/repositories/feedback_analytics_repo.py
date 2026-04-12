@@ -100,8 +100,8 @@ class FeedbackAnalyticsRepository:
                 NULL              AS submitter_name
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.status = 'submitted'
-              AND f.feedback_type = 'grievance'
+              AND f.status::text = 'submitted'
+              AND f.feedback_type::text = 'grievance'
               {extra}
             ORDER BY f.submitted_at ASC
         """
@@ -120,10 +120,10 @@ class FeedbackAnalyticsRepository:
         extra_clauses = []
 
         if priority:
-            extra_clauses.append("f.priority = :priority")
+            extra_clauses.append("f.priority::text = :priority")
             params["priority"] = priority
         if feedback_type:
-            extra_clauses.append("f.feedback_type = :feedback_type")
+            extra_clauses.append("f.feedback_type::text = :feedback_type")
             params["feedback_type"] = feedback_type
 
         extra = ("AND " + " AND ".join(extra_clauses)) if extra_clauses else ""
@@ -131,16 +131,16 @@ class FeedbackAnalyticsRepository:
             SELECT
                 f.id              AS feedback_id,
                 f.unique_ref,
-                f.feedback_type,
-                f.priority,
+                f.feedback_type::text,
+                f.priority::text,
                 f.submitted_at,
                 EXTRACT(EPOCH FROM (NOW() - f.submitted_at)) / 86400.0 AS days_waiting,
-                f.channel,
+                f.channel::text,
                 f.issue_lga,
                 NULL              AS submitter_name
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.status = 'submitted'
+              AND f.status::text = 'submitted'
               {extra}
             ORDER BY f.submitted_at ASC
         """
@@ -159,15 +159,15 @@ class FeedbackAnalyticsRepository:
         params: Dict[str, Any] = {"project_id": str(project_id)}
         extra = ""
         if feedback_type:
-            extra = " AND f.feedback_type = :feedback_type"
+            extra = " AND f.feedback_type::text = :feedback_type"
             params["feedback_type"] = feedback_type
 
         sql = f"""
             SELECT
                 f.id                      AS feedback_id,
                 f.unique_ref,
-                f.priority,
-                f.status,
+                f.priority::text,
+                f.status::text,
                 f.submitted_at,
                 f.target_resolution_date,
                 EXTRACT(EPOCH FROM (NOW() - f.target_resolution_date)) / 86400.0 AS days_overdue,
@@ -175,7 +175,7 @@ class FeedbackAnalyticsRepository:
                 f.assigned_committee_id   AS committee_id
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.status IN ('acknowledged', 'in_review')
+              AND f.status::text IN ('acknowledged', 'in_review')
               AND f.target_resolution_date < NOW()
               {extra}
             ORDER BY f.target_resolution_date ASC
@@ -195,15 +195,15 @@ class FeedbackAnalyticsRepository:
         params: Dict[str, Any] = {"project_id": str(project_id)}
         extra = ""
         if feedback_type:
-            extra = " AND f.feedback_type = :feedback_type"
+            extra = " AND f.feedback_type::text = :feedback_type"
             params["feedback_type"] = feedback_type
 
         sql = f"""
             SELECT
                 f.id                      AS feedback_id,
                 f.unique_ref,
-                f.priority,
-                f.status,
+                f.priority::text,
+                f.status::text,
                 f.submitted_at,
                 f.target_resolution_date,
                 CASE
@@ -215,7 +215,7 @@ class FeedbackAnalyticsRepository:
                 f.assigned_committee_id   AS committee_id
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.status IN ('acknowledged', 'in_review')
+              AND f.status::text IN ('acknowledged', 'in_review')
               {extra}
             ORDER BY f.submitted_at ASC
         """
@@ -231,12 +231,12 @@ class FeedbackAnalyticsRepository:
             SELECT
                 f.id          AS feedback_id,
                 f.unique_ref,
-                f.priority,
-                f.category,
+                f.priority::text,
+                f.category::text,
                 f.updated_at  AS processed_at
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.status = 'in_review'
+              AND f.status::text = 'in_review'
               AND DATE(f.updated_at AT TIME ZONE 'UTC') = CURRENT_DATE
             ORDER BY f.updated_at DESC
         """
@@ -252,9 +252,9 @@ class FeedbackAnalyticsRepository:
             SELECT
                 f.id          AS feedback_id,
                 f.unique_ref,
-                f.feedback_type,
-                f.priority,
-                f.category,
+                f.feedback_type::text,
+                f.priority::text,
+                f.category::text,
                 f.resolved_at,
                 EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0 AS resolution_hours
             FROM feedbacks f
@@ -286,10 +286,10 @@ class FeedbackAnalyticsRepository:
             )
             params["min_days"] = min_days
         if priority:
-            extra_clauses.append("f.priority = :priority")
+            extra_clauses.append("f.priority::text = :priority")
             params["priority"] = priority
         if status:
-            extra_clauses.append("f.status = :status")
+            extra_clauses.append("f.status::text = :status")
             params["status"] = status
 
         extra = ("AND " + " AND ".join(extra_clauses)) if extra_clauses else ""
@@ -297,9 +297,9 @@ class FeedbackAnalyticsRepository:
             SELECT
                 f.id                      AS feedback_id,
                 f.unique_ref,
-                f.priority,
-                f.category,
-                f.status,
+                f.priority::text,
+                f.category::text,
+                f.status::text,
                 f.submitted_at,
                 EXTRACT(EPOCH FROM (NOW() - f.submitted_at)) / 86400.0 AS days_unresolved,
                 f.assigned_to_user_id,
@@ -308,8 +308,8 @@ class FeedbackAnalyticsRepository:
                 f.issue_ward
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.feedback_type = 'grievance'
-              AND f.status NOT IN ('resolved', 'closed', 'dismissed')
+              AND f.feedback_type::text = 'grievance'
+              AND f.status::text NOT IN ('resolved', 'closed', 'dismissed')
               {extra}
             ORDER BY f.submitted_at ASC
         """
@@ -334,8 +334,8 @@ class FeedbackAnalyticsRepository:
                 f.category
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.feedback_type = 'suggestion'
-              AND f.status = 'actioned'
+              AND f.feedback_type::text = 'suggestion'
+              AND f.status::text = 'actioned'
               AND f.resolved_at IS NOT NULL
             ORDER BY hours_to_implement ASC
         """
@@ -366,7 +366,7 @@ class FeedbackAnalyticsRepository:
                 ROUND(CAST(COUNT(*) AS NUMERIC) / {days}, 4) AS rate_per_day
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.feedback_type = 'suggestion'
+              AND f.feedback_type::text = 'suggestion'
               AND f.submitted_at >= NOW() - INTERVAL '{interval}'
             GROUP BY f.category, f.priority
             ORDER BY count DESC
@@ -387,18 +387,18 @@ class FeedbackAnalyticsRepository:
                 f.issue_lga                                               AS lga,
                 f.issue_ward                                              AS ward,
                 COUNT(*)                                                  AS count,
-                COUNT(*) FILTER (WHERE f.status = 'actioned')            AS implemented_count,
+                COUNT(*) FILTER (WHERE f.status::text = 'actioned')      AS implemented_count,
                 CASE
                     WHEN COUNT(*) > 0
                     THEN ROUND(
-                        CAST(COUNT(*) FILTER (WHERE f.status = 'actioned') AS NUMERIC) /
+                        CAST(COUNT(*) FILTER (WHERE f.status::text = 'actioned') AS NUMERIC) /
                         CAST(COUNT(*) AS NUMERIC) * 100.0, 2
                     )
                     ELSE NULL
                 END                                                       AS implementation_rate
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.feedback_type = 'suggestion'
+              AND f.feedback_type::text = 'suggestion'
             GROUP BY f.issue_region, f.issue_lga, f.issue_ward
             ORDER BY count DESC
         """
@@ -423,8 +423,8 @@ class FeedbackAnalyticsRepository:
                 f.issue_lga
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.status = 'submitted'
-              AND f.feedback_type = 'suggestion'
+              AND f.status::text = 'submitted'
+              AND f.feedback_type::text = 'suggestion'
             ORDER BY f.submitted_at ASC
         """
         return await self._fetchall(sql, {"project_id": str(project_id)})
@@ -447,8 +447,8 @@ class FeedbackAnalyticsRepository:
                 EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0 AS hours_to_implement
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.feedback_type = 'suggestion'
-              AND f.status = 'actioned'
+              AND f.feedback_type::text = 'suggestion'
+              AND f.status::text = 'actioned'
               AND DATE(f.resolved_at AT TIME ZONE 'UTC') = CURRENT_DATE
             ORDER BY f.resolved_at DESC
         """
@@ -472,8 +472,8 @@ class FeedbackAnalyticsRepository:
                 EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0 AS hours_to_implement
             FROM feedbacks f
             WHERE f.project_id = :project_id
-              AND f.feedback_type = 'suggestion'
-              AND f.status = 'actioned'
+              AND f.feedback_type::text = 'suggestion'
+              AND f.status::text = 'actioned'
               AND DATE_TRUNC('week', f.resolved_at AT TIME ZONE 'UTC') =
                   DATE_TRUNC('week', NOW() AT TIME ZONE 'UTC')
             ORDER BY f.resolved_at DESC
@@ -497,10 +497,10 @@ class FeedbackAnalyticsRepository:
                 c.project_id,
                 COUNT(f.id)                                   AS cases_assigned,
                 COUNT(f.id) FILTER (
-                    WHERE f.status IN ('resolved', 'closed')
+                    WHERE f.status::text IN ('resolved', 'closed')
                 )                                             AS cases_resolved,
                 COUNT(f.id) FILTER (
-                    WHERE f.status IN ('acknowledged', 'in_review')
+                    WHERE f.status::text IN ('acknowledged', 'in_review')
                       AND f.target_resolution_date < NOW()
                 )                                             AS cases_overdue,
                 ROUND(
@@ -518,7 +518,7 @@ class FeedbackAnalyticsRepository:
                     WHEN COUNT(f.id) > 0
                     THEN ROUND(
                         CAST(
-                            COUNT(f.id) FILTER (WHERE f.status IN ('resolved','closed')) AS NUMERIC
+                            COUNT(f.id) FILTER (WHERE f.status::text IN ('resolved','closed')) AS NUMERIC
                         ) / CAST(COUNT(f.id) AS NUMERIC) * 100.0, 2
                     )
                     ELSE NULL
@@ -549,7 +549,7 @@ class FeedbackAnalyticsRepository:
             FROM feedbacks f
             WHERE f.project_id = :project_id
               AND f.assigned_to_user_id IS NOT NULL
-              AND f.status = 'submitted'
+              AND f.status::text = 'submitted'
               AND NOT EXISTS (
                   SELECT 1
                   FROM feedback_actions fa
@@ -606,18 +606,18 @@ class FeedbackAnalyticsRepository:
         """
         sql = """
             SELECT
-                COUNT(*) FILTER (WHERE feedback_type='grievance')                         AS total_grievances,
-                COUNT(*) FILTER (WHERE feedback_type='suggestion')                        AS total_suggestions,
-                COUNT(*) FILTER (WHERE feedback_type='applause')                          AS total_applause,
-                COUNT(*) FILTER (WHERE status='submitted')                                AS unread_count,
+                COUNT(*) FILTER (WHERE feedback_type::text='grievance')                   AS total_grievances,
+                COUNT(*) FILTER (WHERE feedback_type::text='suggestion')                  AS total_suggestions,
+                COUNT(*) FILTER (WHERE feedback_type::text='applause')                    AS total_applause,
+                COUNT(*) FILTER (WHERE status::text='submitted')                          AS unread_count,
                 COUNT(*) FILTER (
-                    WHERE status IN ('acknowledged','in_review')
+                    WHERE status::text IN ('acknowledged','in_review')
                       AND target_resolution_date IS NOT NULL
                       AND target_resolution_date < NOW()
                 )                                                                         AS overdue_count,
                 COUNT(*) FILTER (
-                    WHERE feedback_type='grievance'
-                      AND status NOT IN ('resolved','closed','dismissed')
+                    WHERE feedback_type::text='grievance'
+                      AND status::text NOT IN ('resolved','closed','dismissed')
                 )                                                                         AS unresolved_grievances,
                 ROUND(CAST(
                     AVG(
@@ -626,7 +626,7 @@ class FeedbackAnalyticsRepository:
                         ELSE NULL END
                     ) AS NUMERIC
                 ), 2)                                                                     AS avg_resolution_hours,
-                MODE() WITHIN GROUP (ORDER BY category)                                   AS top_category
+                MODE() WITHIN GROUP (ORDER BY category::text)                             AS top_category
             FROM feedbacks
             WHERE project_id = :project_id
         """
