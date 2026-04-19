@@ -4,13 +4,26 @@ services/stakeholder_service.py
 Business logic for stakeholder registration, contacts, project registration,
 and engagement history.
 Orchestrates repositories and Kafka. Owns all validation rules.
+
+Address creation
+────────────────
+When a stakeholder is registered or updated with OSM/GPS address fields,
+this service calls auth_service POST /api/v1/addresses to create an Address
+record, then stores the returned UUID in Stakeholder.address_id and syncs
+lga/ward to the Stakeholder row for fast geographic filtering.
 """
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Any, Dict, Optional
 
+import httpx
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from core.config import settings
+
+log = structlog.get_logger(__name__)
 
 from core.exceptions import (
     DuplicateStakeholderProjectError,
@@ -42,9 +55,98 @@ class StakeholderService:
         self.producer = producer
         self.db       = db
 
+    # ── Address creation helper ───────────────────────────────────────────────
+
+    async def _create_address_for_stakeholder(
+        self,
+        stakeholder_id: uuid.UUID,
+        data: Dict[str, Any],
+        jwt_token: Optional[str] = None,
+    ) -> Optional[uuid.UUID]:
+        """
+        Call auth_service POST /api/v1/addresses to create an Address record
+        for this stakeholder. Returns the new address UUID, or None on failure.
+
+        Used during register and update when the caller provides OSM/GPS/address
+        fields rather than an existing address_id.
+
+        The JWT forwarded is the PIU staff member's token that originated the
+        request — auth_service will accept it for address creation.
+        """
+        has_osm = data.get("osm_place_id") is not None
+        has_gps = data.get("gps_latitude") is not None
+        has_manual = any(data.get(f) for f in ("region", "district", "lga", "ward", "mtaa", "line1"))
+
+        if not (has_osm or has_gps or has_manual):
+            return None
+
+        body: Dict[str, Any] = {
+            "entity_type":  "stakeholder",
+            "entity_id":    str(stakeholder_id),
+            "address_type": "registered",
+            "is_default":   True,
+        }
+        for field in (
+            "osm_place_id", "display_name", "osm_id", "osm_type",
+            "gps_latitude", "gps_longitude",
+            "region", "district", "lga", "ward", "mtaa", "line1", "address_notes",
+        ):
+            if data.get(field) is not None:
+                body[field] = data[field]
+
+        headers: Dict[str, str] = {
+            "Content-Type": "application/json",
+            "X-Internal-Service-Key": settings.INTERNAL_SERVICE_KEY,
+        }
+        if jwt_token:
+            headers["Authorization"] = f"Bearer {jwt_token}"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{settings.AUTH_SERVICE_URL}/api/v1/addresses",
+                    json=body,
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                result = resp.json()
+                addr_id = uuid.UUID(result["id"])
+                log.info(
+                    "stakeholder.address.created_in_auth",
+                    stakeholder_id=str(stakeholder_id),
+                    address_id=str(addr_id),
+                )
+                return addr_id
+        except Exception as exc:
+            log.error(
+                "stakeholder.address.creation_failed",
+                stakeholder_id=str(stakeholder_id),
+                error=str(exc),
+                exc_info=exc,
+            )
+            return None
+
     # ── Register ──────────────────────────────────────────────────────────────
 
-    async def register(self, data: dict, registered_by: uuid.UUID) -> Stakeholder:
+    async def register(
+        self,
+        data: dict,
+        registered_by: uuid.UUID,
+        jwt_token: Optional[str] = None,
+    ) -> Stakeholder:
+        """
+        Register a new stakeholder.
+
+        If data contains OSM/GPS/manual address fields (and no address_id),
+        a new Address record is created in auth_service and the returned UUID
+        is stored in Stakeholder.address_id. lga and ward are also denormalised
+        from the request data for fast geographic filtering.
+        """
+        # Resolve address_id: existing UUID or create new
+        address_id: Optional[uuid.UUID] = None
+        if data.get("address_id"):
+            address_id = uuid.UUID(str(data["address_id"]))
+
         s = await self.repo.create(
             stakeholder_type       = StakeholderType(data["stakeholder_type"]),
             entity_type            = EntityType(data["entity_type"]),
@@ -56,7 +158,7 @@ class StakeholderService:
             first_name             = data.get("first_name"),
             last_name              = data.get("last_name"),
             org_id                 = uuid.UUID(data["org_id"]) if data.get("org_id") else None,
-            address_id             = uuid.UUID(data["address_id"]) if data.get("address_id") else None,
+            address_id             = address_id,
             lga                    = data.get("lga"),
             ward                   = data.get("ward"),
             language_preference    = data.get("language_preference", "sw"),
@@ -70,6 +172,17 @@ class StakeholderService:
             registered_by_user_id  = registered_by,
         )
         await self.db.commit()
+
+        # If no explicit address_id but OSM/GPS fields provided, create address now
+        if not address_id and (
+            data.get("osm_place_id") or data.get("gps_latitude") or
+            any(data.get(f) for f in ("region", "district", "lga", "ward", "mtaa", "line1"))
+        ):
+            new_addr_id = await self._create_address_for_stakeholder(s.id, data, jwt_token)
+            if new_addr_id:
+                await self.repo.update(s, {"address_id": new_addr_id})
+                await self.db.commit()
+
         await self.producer.stakeholder_registered(s.id, s.entity_type.value, s.category.value)
         return s
 
@@ -127,7 +240,12 @@ class StakeholderService:
 
     # ── Update ────────────────────────────────────────────────────────────────
 
-    async def update(self, stakeholder_id: uuid.UUID, data: dict) -> Stakeholder:
+    async def update(
+        self,
+        stakeholder_id: uuid.UUID,
+        data: dict,
+        jwt_token: Optional[str] = None,
+    ) -> Stakeholder:
         s = await self.get_or_404(stakeholder_id)
         allowed = {
             "affectedness", "importance_rating", "org_name", "first_name", "last_name",
@@ -135,9 +253,6 @@ class StakeholderService:
             "needs_translation", "needs_transport", "needs_childcare", "is_vulnerable",
             "vulnerable_group_types", "participation_barriers", "notes",
             # ── Media ─────────────────────────────────────────────────────────
-            # logo_url is set via POST /stakeholders/{id}/logo (ImageService),
-            # but is also allowed here so the PATCH endpoint can clear it
-            # (pass null) or set a pre-existing URL without re-uploading.
             "logo_url",
         }
         coercions = {
@@ -149,6 +264,22 @@ class StakeholderService:
         for field, value in data.items():
             if field in allowed and value is not None:
                 fields[field] = coercions[field](value) if field in coercions else value
+
+        # If OSM/GPS address fields provided (no explicit address_id), create address
+        address_fields = ("osm_place_id", "gps_latitude", "gps_longitude",
+                          "region", "district", "lga", "ward", "mtaa", "line1")
+        needs_address_create = (
+            not data.get("address_id")
+            and any(data.get(f) for f in address_fields)
+        )
+        if needs_address_create:
+            new_addr_id = await self._create_address_for_stakeholder(s.id, data, jwt_token)
+            if new_addr_id:
+                fields["address_id"] = new_addr_id
+                # Sync denormalised location fields
+                for f in ("lga", "ward"):
+                    if data.get(f):
+                        fields[f] = data[f]
 
         if fields:
             await self.repo.update(s, fields)

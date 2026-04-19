@@ -39,7 +39,9 @@ from sqlmodel import select
 from core.config import settings
 from db.session import AsyncSessionLocal
 from events.topics import (
+    AddressEvents,
     KafkaTopics,
+    OrgEvents,
     OrgProjectEvents,
     OrgProjectStageEvents,
     OrgServiceEvents,
@@ -47,7 +49,7 @@ from events.topics import (
     FeedbackEvents,
 )
 from models.project import ProjectCache, ProjectStageCache, ProjectStatus, StageStatus
-from models.stakeholder import StakeholderContact
+from models.stakeholder import Stakeholder, StakeholderContact
 from models.engagement import StakeholderEngagement
 from models.communication import CommunicationDistribution
 
@@ -338,6 +340,34 @@ async def _handle_org_logo_updated(payload: dict, db: AsyncSession) -> None:
     log.info("stakeholder.org_logo.synced", org_id=org_id, logo_url=logo_url)
 
 
+async def _handle_address_deleted(payload: dict, db: AsyncSession) -> None:
+    """
+    address.deleted — published by auth_service when an Address record is removed.
+
+    Nulls Stakeholder.address_id wherever it equals the deleted address UUID.
+    Also clears lga and ward since those were denormalised from the deleted record.
+
+    This maintains referential integrity for the cross-service soft link:
+      Stakeholder.address_id → auth_service.addresses.id
+    """
+    address_id_str = payload.get("address_id")
+    if not address_id_str:
+        return
+
+    address_id = uuid.UUID(address_id_str)
+    result = await db.execute(
+        update(Stakeholder)
+        .where(Stakeholder.address_id == address_id)
+        .values(address_id=None, lga=None, ward=None)
+    )
+    await db.commit()
+    log.info(
+        "stakeholder.address_link.nulled",
+        address_id=address_id_str,
+        rows_updated=result.rowcount,
+    )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dispatcher
 # ─────────────────────────────────────────────────────────────────────────────
@@ -409,6 +439,15 @@ async def _dispatch(event_type: str, payload: dict, db: AsyncSession) -> None:
             OrgServiceEvents.SUSPENDED, OrgServiceEvents.CLOSED,
         ):
             log.debug("stakeholder.consumer.org_service_ignored", event_type=event_type)
+
+        # ── Address events ────────────────────────────────────────────────────
+        elif event_type == AddressEvents.DELETED:
+            await _handle_address_deleted(payload, db)
+
+        elif event_type in (AddressEvents.CREATED, AddressEvents.UPDATED):
+            log.debug("stakeholder.consumer.address_event_ignored",
+                      event_type=event_type,
+                      address_id=payload.get("address_id"))
 
         # ── Feedback events ───────────────────────────────────────────────────
         elif event_type == FeedbackEvents.SUBMITTED:

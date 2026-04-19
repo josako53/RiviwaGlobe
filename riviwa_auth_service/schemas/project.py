@@ -60,21 +60,36 @@ class AddressEmbed(BaseModel):
     id:             uuid.UUID
     address_type:   str
     label:          Optional[str] = None
-    line1:          str
-    line2:          Optional[str] = None
-    city:           Optional[str] = None
-    state:          Optional[str] = None
-    postal_code:    Optional[str] = None
+    is_default:     bool = False
+
+    # Source & OSM metadata
+    source:         str = "manual"
+    osm_id:         Optional[int]   = None
+    osm_type:       Optional[str]   = None
+    place_id:       Optional[int]   = None
+    display_name:   Optional[str]   = None
+    place_type:     Optional[str]   = None
+    address_class:  Optional[str]   = None
+
+    # Structured address
+    line1:          Optional[str]   = None
+    line2:          Optional[str]   = None
+    city:           Optional[str]   = None
+    state:          Optional[str]   = None
+    postal_code:    Optional[str]   = None
     country_code:   str
-    region:         Optional[str] = None
-    district:       Optional[str] = None
-    lga:            Optional[str] = None
-    ward:           Optional[str] = None
-    mtaa:           Optional[str] = None
+
+    # Tanzania hierarchy
+    region:         Optional[str]   = None
+    district:       Optional[str]   = None
+    lga:            Optional[str]   = None
+    ward:           Optional[str]   = None
+    mtaa:           Optional[str]   = None
+
+    # GPS
     gps_latitude:   Optional[float] = None
     gps_longitude:  Optional[float] = None
-    address_notes:  Optional[str] = None
-    is_default:     bool = False
+    address_notes:  Optional[str]   = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

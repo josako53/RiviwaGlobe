@@ -87,6 +87,11 @@ Named methods — complete inventory
     fraud_score_computed(user_id, total_score, action, details)
     fraud_id_verification_passed(user_id, provider)
     fraud_id_verification_failed(user_id, provider, rejection_reason)
+
+  ADDRESS  (topic: riviwa.organisation.events — consumed by stakeholder_service)
+    address_created(address, created_by_id)
+    address_updated(address, changed_fields)
+    address_deleted(address_id, entity_type, entity_id)
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
@@ -99,7 +104,7 @@ from typing import Any, Optional
 import structlog
 
 from core.config import settings
-from events.topics import AuthEvents, FraudEvents, KafkaTopics, OrgEvents, OrgServiceEvents, OrgProjectEvents, OrgProjectStageEvents, UserEvents
+from events.topics import AddressEvents, AuthEvents, FraudEvents, KafkaTopics, OrgEvents, OrgServiceEvents, OrgProjectEvents, OrgProjectStageEvents, UserEvents
 from models.organisation import Organisation, OrganisationMember
 from models.user import User
 from workers.kafka_producer import KafkaEventProducer
@@ -918,4 +923,80 @@ class EventPublisher:
             event_type=OrgProjectStageEvents.SKIPPED,
             key=str(project.id),
             payload=self._stage_payload(stage, project, "skipped"),
+        )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Address events  (topic: riviwa.organisation.events)
+    # Consumed by stakeholder_service to keep soft-link address data in sync.
+    # Partition key = entity_id so all address events for an entity are ordered.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    async def address_created(self, address, created_by_id: Optional[uuid.UUID] = None) -> None:
+        """Fired when a new Address row is persisted."""
+        await self._publish(
+            topic=KafkaTopics.ORG_EVENTS,
+            event_type=AddressEvents.CREATED,
+            key=str(address.entity_id),
+            payload={
+                "address_id":   str(address.id),
+                "entity_type":  address.entity_type,
+                "entity_id":    str(address.entity_id),
+                "address_type": address.address_type,
+                "source":       address.source,
+                "is_default":   address.is_default,
+                "region":       address.region,
+                "district":     address.district,
+                "lga":          address.lga,
+                "ward":         address.ward,
+                "mtaa":         address.mtaa,
+                "display_name": address.display_name,
+                "gps_latitude":  address.gps_latitude,
+                "gps_longitude": address.gps_longitude,
+                "created_by_id": str(created_by_id) if created_by_id else None,
+            },
+        )
+
+    async def address_updated(self, address, changed_fields: list[str]) -> None:
+        """Fired when address fields are modified (PATCH or set-default)."""
+        await self._publish(
+            topic=KafkaTopics.ORG_EVENTS,
+            event_type=AddressEvents.UPDATED,
+            key=str(address.entity_id),
+            payload={
+                "address_id":    str(address.id),
+                "entity_type":   address.entity_type,
+                "entity_id":     str(address.entity_id),
+                "changed_fields": changed_fields,
+                "is_default":    address.is_default,
+                "region":        address.region,
+                "district":      address.district,
+                "lga":           address.lga,
+                "ward":          address.ward,
+                "mtaa":          address.mtaa,
+                "display_name":  address.display_name,
+                "gps_latitude":  address.gps_latitude,
+                "gps_longitude": address.gps_longitude,
+            },
+        )
+
+    async def address_deleted(
+        self,
+        address_id:  uuid.UUID,
+        entity_type: str,
+        entity_id:   uuid.UUID,
+    ) -> None:
+        """
+        Fired after an Address row is deleted.
+        stakeholder_service consumers must null Stakeholder.address_id
+        wherever it equals address_id.
+        """
+        await self._publish(
+            topic=KafkaTopics.ORG_EVENTS,
+            event_type=AddressEvents.DELETED,
+            key=str(entity_id),
+            payload={
+                "address_id":  str(address_id),
+                "entity_type": entity_type,
+                "entity_id":   str(entity_id),
+            },
         )

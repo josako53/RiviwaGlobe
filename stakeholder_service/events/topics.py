@@ -125,3 +125,10 @@ class FeedbackEvents:
     """Feedback events this service consumes."""
     SUBMITTED = "feedback.submitted"
     RESOLVED  = "feedback.resolved"
+
+
+class AddressEvents:
+    """Address lifecycle events published by auth_service on riviwa.organisation.events."""
+    CREATED = "address.created"
+    UPDATED = "address.updated"
+    DELETED = "address.deleted"

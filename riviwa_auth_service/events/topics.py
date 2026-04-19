@@ -160,3 +160,13 @@ class OrgProjectStageEvents:
     ACTIVATED  = "org_project_stage.activated"
     COMPLETED  = "org_project_stage.completed"
     SKIPPED    = "org_project_stage.skipped"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Address event types  (topic: riviwa.organisation.events)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AddressEvents:
+    CREATED = "address.created"
+    UPDATED = "address.updated"
+    DELETED = "address.deleted"

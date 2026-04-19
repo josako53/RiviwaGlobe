@@ -6,11 +6,19 @@
 from __future__ import annotations
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from core.dependencies import DbDep, KafkaDep, StaffDep, require_platform_role
 from models.stakeholder import ImportanceRating
 from schemas.stakeholder import RegisterStakeholder, UpdateStakeholder, RegisterStakeholderProject
 from services.stakeholder_service import StakeholderService
+
+
+def _extract_jwt(request: Request) -> Optional[str]:
+    """Extract raw JWT string from the Authorization: Bearer header."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[len("Bearer "):]
+    return None
 
 router = APIRouter(prefix="/stakeholders", tags=["Stakeholders"])
 
@@ -23,8 +31,8 @@ def _eng_out(e): return {"id":str(e.id),"contact_id":str(e.contact_id),"activity
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, summary="Register a stakeholder")
-async def register_stakeholder(body: RegisterStakeholder, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
-    return _s_out(await _svc(db, kafka).register(body.model_dump(exclude_none=True), registered_by=token.sub))
+async def register_stakeholder(body: RegisterStakeholder, request: Request, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
+    return _s_out(await _svc(db, kafka).register(body.model_dump(exclude_none=True), registered_by=token.sub, jwt_token=_extract_jwt(request)))
 
 
 @router.get("", summary="List stakeholders with optional filters")
@@ -105,8 +113,8 @@ async def get_stakeholder(stakeholder_id: uuid.UUID, db: DbDep, kafka: KafkaDep,
 
 
 @router.patch("/{stakeholder_id}", summary="Update stakeholder profile")
-async def update_stakeholder(stakeholder_id: uuid.UUID, body: UpdateStakeholder, db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
-    return _s_out(await _svc(db, kafka).update(stakeholder_id, body.model_dump(exclude_none=True)))
+async def update_stakeholder(stakeholder_id: uuid.UUID, body: UpdateStakeholder, request: Request, db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
+    return _s_out(await _svc(db, kafka).update(stakeholder_id, body.model_dump(exclude_none=True), jwt_token=_extract_jwt(request)))
 
 
 @router.delete("/{stakeholder_id}", status_code=status.HTTP_200_OK, summary="Soft-delete a stakeholder [admin]", dependencies=[Depends(require_platform_role("admin"))])

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from api.v1 import admin_dashboard, auth, channel_auth, checklists, organisations, org_extended, password, projects, register, system_settings, users, webhooks
+from api.v1 import addresses, admin_dashboard, auth, channel_auth, checklists, organisations, org_extended, password, projects, register, system_settings, users, webhooks
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
@@ -27,3 +27,4 @@ api_v1_router.include_router(checklists.router)
 api_v1_router.include_router(webhooks.router)
 api_v1_router.include_router(admin_dashboard.router)
 api_v1_router.include_router(system_settings.router)
+api_v1_router.include_router(addresses.router)

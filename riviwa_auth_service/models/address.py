@@ -55,16 +55,36 @@ ADDRESS FIELD MAPPING (Tanzania administrative hierarchy)
     Especially important for community groups and field addresses
     that don't have a formal postal address.
 
+OSM / NOMINATIM INTEGRATION
+──────────────────────────────────────────────────────────────────────────────
+  Addresses can be created in three ways:
+    "osm"    — resolved via Nominatim search (place_id, osm_id, display_name set)
+    "gps"    — resolved via Nominatim reverse geocode (lat/lon → address fields)
+    "manual" — entered manually by the user (no OSM metadata)
+
+  OSM metadata fields (osm_id, osm_type, place_id, display_name, place_rank,
+  place_type, address_class) are populated for "osm" and "gps" sources.
+  They are always nullable and ignored for manual entries.
+
+  Nominatim address → Tanzania hierarchy mapping:
+    address.state            → region
+    address.state_district   → district (fallback: address.county)
+    address.county           → lga
+    address.suburb / address.city_district → ward
+    address.quarter / address.neighbourhood → mtaa
+    address.city / address.town / address.village → city
+    address.road + address.house_number → line1
+    address.postcode         → postal_code
+    address.country_code     → country_code (uppercased)
+
 BACKWARD COMPATIBILITY
 ──────────────────────────────────────────────────────────────────────────────
   All existing User address rows continue to work unchanged:
     · user_id remains a FK (now nullable, but populated for User addresses)
     · address_type = "billing" | "shipping" | "home" is preserved
-    · line1, line2, city, state, postal_code, country_code are unchanged
+    · line1 is now nullable — existing rows are unaffected (their line1 is set)
+    · line2, city, state, postal_code, country_code are unchanged
     · is_default is preserved
-
-  The only breaking change: user_id column is now nullable at the DB level.
-  Existing rows are unaffected (their user_id is already set).
 
 CROSS-SERVICE USAGE (stakeholder_service)
 ──────────────────────────────────────────────────────────────────────────────
@@ -84,7 +104,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text, text
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, String, Text, text
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -100,6 +120,11 @@ class Address(SQLModel, table=True):
       User addresses:          "billing" | "shipping" | "home"
       OrgSubProject addresses: "site" | "office" | "depot"
       Stakeholder addresses:   "registered" | "operational" | "contact"
+
+    source values:
+      "osm"    — populated from OpenStreetMap / Nominatim search
+      "gps"    — populated from Nominatim reverse geocode (lat/lon input)
+      "manual" — entered manually (no OSM metadata)
     """
     __tablename__ = "addresses"
 
@@ -127,8 +152,6 @@ class Address(SQLModel, table=True):
     )
 
     # ── Convenience FKs for same-DB entities (nullable for cross-service) ─────
-    # user_id: populated when entity_type = "user". Enables cascading deletes
-    # and efficient User → addresses JOINs without going through entity_id.
     user_id: Optional[uuid.UUID] = Field(
         default=None,
         sa_column=Column(
@@ -141,7 +164,6 @@ class Address(SQLModel, table=True):
             "Null for org_subproject and stakeholder addresses."
         ),
     )
-    # subproject_id: populated when entity_type = "org_subproject".
     subproject_id: Optional[uuid.UUID] = Field(
         default=None,
         sa_column=Column(
@@ -178,10 +200,61 @@ class Address(SQLModel, table=True):
         description="True for the primary address when an entity has multiple.",
     )
 
+    # ── Data source ───────────────────────────────────────────────────────────
+    source: str = Field(
+        default="manual",
+        max_length=10,
+        nullable=False,
+        description="How the address was created: 'osm' | 'gps' | 'manual'.",
+    )
+
+    # ── OSM / Nominatim metadata ──────────────────────────────────────────────
+    # Populated for source='osm' and source='gps'; null for source='manual'.
+    osm_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(BigInteger, nullable=True),
+        description="OpenStreetMap element ID (node/way/relation).",
+    )
+    osm_type: Optional[str] = Field(
+        default=None,
+        max_length=10,
+        nullable=True,
+        description="OSM element type: 'node' | 'way' | 'relation'.",
+    )
+    place_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(BigInteger, nullable=True, index=True),
+        description="Nominatim internal place_id. Useful for deduplication.",
+    )
+    display_name: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+        description=(
+            "Full human-readable address string from Nominatim. "
+            "e.g. 'Kariakoo Market, Market Street, Kariakoo, Ilala, Dar es Salaam, Tanzania'"
+        ),
+    )
+    place_rank: Optional[int] = Field(
+        default=None,
+        nullable=True,
+        description="Nominatim place importance rank (lower = more important).",
+    )
+    place_type: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        nullable=True,
+        description="OSM place type e.g. 'house', 'suburb', 'city', 'administrative'.",
+    )
+    address_class: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        nullable=True,
+        description="OSM address class e.g. 'amenity', 'highway', 'place', 'boundary'.",
+    )
+
     # ── Standard address fields (global / Western format) ─────────────────────
-    # Retained for backward compatibility and international addresses.
-    line1:       str            = Field(max_length=200, nullable=False,
-                                        description="Street address line 1 e.g. 'Plot 14, Lindi Street'.")
+    line1:       Optional[str]  = Field(default=None, max_length=200, nullable=True,
+                                        description="Street address line 1 e.g. 'Plot 14, Lindi Street'. Derived from OSM road+house_number for OSM sources.")
     line2:       Optional[str]  = Field(default=None, max_length=200, nullable=True,
                                         description="Additional detail e.g. 'Floor 3, Suite 301'.")
     city:        Optional[str]  = Field(default=None, max_length=100, nullable=True,
@@ -193,27 +266,25 @@ class Address(SQLModel, table=True):
                                         description="ISO 3166-1 alpha-2 e.g. 'TZ', 'KE', 'UG', 'US'.")
 
     # ── Tanzania administrative hierarchy fields ───────────────────────────────
-    # Use these for Tanzanian addresses alongside or instead of city/state.
-    # Hierarchy: country → region → district → lga → ward → mtaa
     region:   Optional[str] = Field(
         default=None, max_length=150, nullable=True, index=True,
-        description="Administrative region e.g. 'Dar es Salaam', 'Coast', 'Morogoro'.",
+        description="Administrative region e.g. 'Dar es Salaam', 'Coast', 'Morogoro'. Maps to OSM address.state.",
     )
     district: Optional[str] = Field(
         default=None, max_length=100, nullable=True, index=True,
-        description="District e.g. 'Ilala', 'Kinondoni', 'Temeke', 'Ubungo', 'Kisarawe'.",
+        description="District e.g. 'Ilala', 'Kinondoni'. Maps to OSM address.state_district or address.county.",
     )
     lga: Optional[str] = Field(
         default=None, max_length=100, nullable=True, index=True,
-        description="Local Government Authority e.g. 'Ilala Municipal Council'.",
+        description="Local Government Authority e.g. 'Ilala Municipal Council'. Maps to OSM address.county.",
     )
     ward: Optional[str] = Field(
         default=None, max_length=100, nullable=True, index=True,
-        description="Ward name e.g. 'Jangwani', 'Kariakoo', 'Msimbazi'.",
+        description="Ward name e.g. 'Jangwani', 'Kariakoo'. Maps to OSM address.suburb or address.city_district.",
     )
     mtaa: Optional[str] = Field(
         default=None, max_length=100, nullable=True,
-        description="Sub-ward / cell (Mtaa) e.g. 'Mtaa wa Gerezani'.",
+        description="Sub-ward / cell (Mtaa). Maps to OSM address.quarter or address.neighbourhood.",
     )
 
     # ── GPS coordinates ────────────────────────────────────────────────────────
@@ -232,8 +303,7 @@ class Address(SQLModel, table=True):
         sa_column=Column(Text, nullable=True),
         description=(
             "Directions, landmarks, or access instructions. "
-            "e.g. 'Near Jangwani market, second building after the mosque'. "
-            "e.g. 'Access via Morogoro Road, site entrance 200m past Jangwani Bridge'."
+            "e.g. 'Near Jangwani market, second building after the mosque'."
         ),
     )
 
@@ -269,8 +339,10 @@ class Address(SQLModel, table=True):
     def full_address_lines(self) -> list[str]:
         """
         Returns ordered non-empty address components as display lines.
-        Uses Tanzania hierarchy when available, falls back to Western fields.
+        Uses display_name for OSM addresses, falls back to structured fields.
         """
+        if self.source in ("osm", "gps") and self.display_name:
+            return [self.display_name]
         parts = []
         if self.line1:              parts.append(self.line1)
         if self.line2:              parts.append(self.line2)
@@ -291,6 +363,14 @@ class Address(SQLModel, table=True):
             "address_type":   self.address_type,
             "label":          self.label,
             "is_default":     self.is_default,
+            "source":         self.source,
+            "osm_id":         self.osm_id,
+            "osm_type":       self.osm_type,
+            "place_id":       self.place_id,
+            "display_name":   self.display_name,
+            "place_rank":     self.place_rank,
+            "place_type":     self.place_type,
+            "address_class":  self.address_class,
             "line1":          self.line1,
             "line2":          self.line2,
             "city":           self.city,
@@ -309,9 +389,9 @@ class Address(SQLModel, table=True):
         }
 
     def __repr__(self) -> str:
-        loc = self.lga or self.city or self.district or "?"
+        loc = self.lga or self.city or self.district or self.display_name or "?"
         return (
-            f"<Address [{self.address_type}] "
-            f"{self.line1!r}, {loc} "
+            f"<Address [{self.address_type}/{self.source}] "
+            f"{self.line1 or '(osm)'!r}, {loc} "
             f"entity={self.entity_type}:{self.entity_id}>"
         )

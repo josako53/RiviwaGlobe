@@ -3,13 +3,28 @@ schemas/stakeholder.py — Pydantic request schemas for stakeholder_service.
 
 Replaces the raw Dict[str, Any] bodies that caused Swagger to show
 {additionalProp1: {}} and gave no validation at the API boundary.
+
+Address fields on RegisterStakeholder / UpdateStakeholder
+─────────────────────────────────────────────────────────
+Three modes for providing a stakeholder address (mirrors auth_service Address API):
+
+  · address_id — pass an existing Address UUID from auth_service (no new creation).
+  · osm_place_id [+ GPS + echoed text fields] — stakeholder_service will call
+    POST /api/v1/addresses on auth_service, receive the new address UUID, store it.
+  · gps_latitude + gps_longitude (no osm_place_id) — GPS-only mode; auth_service
+    reverse-geocodes and creates the Address record.
+  · Manual text fields (region, district, lga, ward, mtaa) with no osm/GPS — stored
+    directly on the Stakeholder row (no Address record created).
+
+GPS coordinates are always the ground truth: when provided they are stored exactly
+as sent — Nominatim's own coordinates are never used in their place.
 """
 from __future__ import annotations
 
 import uuid
 from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -56,9 +71,40 @@ class RegisterStakeholder(BaseModel):
         json_schema_extra={"enum": ["high", "medium", "low"]},
     )
 
-    # ── Location ───────────────────────────────────────────────────────────────
-    lga:  Optional[str] = Field(default=None, description="Local Government Authority")
-    ward: Optional[str] = Field(default=None, description="Ward")
+    # ── Location — three modes (mirrors auth_service Address API) ─────────────
+    # Mode A: pass existing Address UUID (no new creation)
+    address_id: Optional[uuid.UUID] = Field(default=None, description="Existing Address UUID from auth_service. Mutually exclusive with address creation fields.")
+
+    # Mode B/C: inline address creation (stakeholder_service calls auth_service)
+    # OSM mode: set osm_place_id (from GET /addresses/search) and echo text fields
+    osm_place_id:  Optional[int]   = Field(default=None, description="Nominatim place_id from /addresses/search. Triggers address creation in auth_service.")
+    display_name:  Optional[str]   = Field(default=None, description="Full display string echoed from NominatimResult.")
+    osm_id:        Optional[int]   = Field(default=None, description="OSM element ID echoed from NominatimResult.")
+    osm_type:      Optional[str]   = Field(default=None, max_length=10, description="'node'|'way'|'relation' echoed from NominatimResult.")
+    # GPS mode: set lat/lon (reverse-geocoded by auth_service)
+    gps_latitude:  Optional[float] = Field(default=None, ge=-90.0,   le=90.0,   description="GPS latitude (decimal degrees). Ground truth — always stored exactly as sent.")
+    gps_longitude: Optional[float] = Field(default=None, ge=-180.0, le=180.0, description="GPS longitude (decimal degrees). Ground truth — always stored exactly as sent.")
+    # Shared manual / hierarchy fields (used in all modes for Tanzania admin hierarchy)
+    region:        Optional[str]   = Field(default=None, max_length=150, description="Region (state level)")
+    district:      Optional[str]   = Field(default=None, max_length=100, description="District")
+    lga:           Optional[str]   = Field(default=None, max_length=100, description="Local Government Authority")
+    ward:          Optional[str]   = Field(default=None, max_length=100, description="Ward")
+    mtaa:          Optional[str]   = Field(default=None, max_length=100, description="Sub-ward / neighbourhood")
+    line1:         Optional[str]   = Field(default=None, max_length=200, description="Street address line 1")
+    address_notes: Optional[str]   = Field(default=None, description="Free-text address notes")
+
+    @model_validator(mode="after")
+    def check_address_fields(self) -> "RegisterStakeholder":
+        if self.address_id and (self.osm_place_id or self.gps_latitude):
+            raise ValueError(
+                "address_id is mutually exclusive with osm_place_id and gps_latitude. "
+                "Either pass an existing address UUID or provide OSM/GPS fields to create one."
+            )
+        if self.gps_latitude is not None and self.gps_longitude is None:
+            raise ValueError("gps_longitude is required when gps_latitude is provided.")
+        if self.gps_longitude is not None and self.gps_latitude is None:
+            raise ValueError("gps_latitude is required when gps_longitude is provided.")
+        return self
 
     # ── Communication preferences ──────────────────────────────────────────────
     language_preference: str = Field(default="sw", description="Preferred language code: sw | en")
@@ -87,8 +133,7 @@ class RegisterStakeholder(BaseModel):
     participation_barriers: Optional[str] = Field(default=None, description="Free-text description of barriers to participation")
 
     # ── Cross-references ───────────────────────────────────────────────────────
-    org_id:     Optional[uuid.UUID] = Field(default=None, description="Riviwa organisation UUID")
-    address_id: Optional[uuid.UUID] = Field(default=None, description="Address record UUID")
+    org_id: Optional[uuid.UUID] = Field(default=None, description="Riviwa organisation UUID")
 
     # ── Notes ──────────────────────────────────────────────────────────────────
     notes: Optional[str] = Field(default=None, description="Internal PIU notes")
@@ -124,9 +169,23 @@ class UpdateStakeholder(BaseModel):
     org_name:          Optional[str]       = Field(default=None, max_length=255)
     first_name:        Optional[str]       = Field(default=None, max_length=100)
     last_name:         Optional[str]       = Field(default=None, max_length=100)
-    address_id:        Optional[uuid.UUID] = Field(default=None)
-    lga:               Optional[str]       = Field(default=None)
-    ward:              Optional[str]       = Field(default=None)
+
+    # ── Location — same three modes as RegisterStakeholder ────────────────────
+    address_id:    Optional[uuid.UUID] = Field(default=None, description="Existing Address UUID. Clears inline-created address if set to null.")
+    osm_place_id:  Optional[int]       = Field(default=None, description="Nominatim place_id — triggers new address creation in auth_service.")
+    display_name:  Optional[str]       = Field(default=None)
+    osm_id:        Optional[int]       = Field(default=None)
+    osm_type:      Optional[str]       = Field(default=None, max_length=10)
+    gps_latitude:  Optional[float]     = Field(default=None, ge=-90.0,   le=90.0)
+    gps_longitude: Optional[float]     = Field(default=None, ge=-180.0, le=180.0)
+    region:        Optional[str]       = Field(default=None, max_length=150)
+    district:      Optional[str]       = Field(default=None, max_length=100)
+    lga:           Optional[str]       = Field(default=None, max_length=100)
+    ward:          Optional[str]       = Field(default=None, max_length=100)
+    mtaa:          Optional[str]       = Field(default=None, max_length=100)
+    line1:         Optional[str]       = Field(default=None, max_length=200)
+    address_notes: Optional[str]       = Field(default=None)
+
     language_preference: Optional[str]    = Field(default=None)
     preferred_channel: Optional[str]      = Field(default=None)
     needs_translation: Optional[bool]     = Field(default=None)

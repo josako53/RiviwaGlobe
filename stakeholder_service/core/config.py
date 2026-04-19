@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     )
 
     # ── Auth service integration ───────────────────────────────────────────────
+    # Base URL for internal calls to auth_service (e.g. address creation).
+    AUTH_SERVICE_URL: str = Field(
+        default="http://riviwa_auth_service:8000",
+        description="Internal base URL for auth_service. Used for cross-service address creation.",
+    )
+    # Shared secret for internal service-to-service calls.
+    INTERNAL_SERVICE_KEY: str = Field(
+        default="internal_service_key_placeholder",
+        description="Passed as X-Internal-Service-Key header on service-to-service calls.",
+    )
     # Used to validate JWTs issued by auth_service on protected endpoints.
     # Must match auth_service SECRET_KEY and ALGORITHM exactly.
     AUTH_SECRET_KEY: str = Field(
