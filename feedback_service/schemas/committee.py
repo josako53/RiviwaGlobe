@@ -25,15 +25,15 @@ class CreateCommittee(BaseModel):
 
     name: str = Field(
         ..., min_length=3, max_length=255,
-        description="Committee name (e.g. 'Kariakoo Ward GHC', 'Ilala LGA PIU Committee')",
+        description="Committee name (e.g. 'Kariakoo Ward GHC', 'Ilala LGA GRM Unit Committee')",
     )
     level: str = Field(
         ...,
         description=(
             "GRM escalation level this committee handles. "
             "ward = Level 1 (community). "
-            "lga_piu = Level 2 (LGA/PIU). "
-            "pcu = Level 3 (Programme Coordinating Unit). "
+            "lga_piu = Level 2 (LGA GRM Unit). "
+            "pcu = Level 3 (Coordinating Unit). "
             "tarura_wbcu = Level 4 (TARURA World Bank Unit). "
             "tanroads = Level 5 (road/bridge-specific)."
         ),

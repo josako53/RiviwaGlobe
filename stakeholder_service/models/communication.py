@@ -11,12 +11,12 @@ Three tables covering the full communication lifecycle.
 
   CommunicationRecord        → every outgoing or incoming communication logged
   CommunicationDistribution  → what happened AFTER a contact received a comm
-  FocalPerson                → named PIU contact per LGA/TANROADS/PO-RALG (SEP Table 9)
+  FocalPerson                → named GRM Unit contact per LGA/TANROADS/PO-RALG (SEP Table 9)
 
 THE COMMUNICATION LIFECYCLE
 ──────────────────────────────────────────────────────────────────────────────
 
-  1. PIU sends a notice to M18 community (stakeholder entity)
+  1. GRM Unit sends a notice to M18 community (stakeholder entity)
      → CommunicationRecord created
        direction=OUTGOING, channel=LETTER
        stakeholder_id=M18, contact_id=Chairperson
@@ -26,7 +26,7 @@ THE COMMUNICATION LIFECYCLE
        distributed_to_count=120, method=PUBLIC_MEETING
        concerns_raised_after="3 members asked about compensation timeline"
 
-  3. M18 community sends a written response to PIU
+  3. M18 community sends a written response to GRM Unit
      → CommunicationRecord created
        direction=INCOMING, channel=LETTER
        stakeholder_id=M18, contact_id=Chairperson
@@ -38,7 +38,7 @@ THE COMMUNICATION LIFECYCLE
 
 WHY CommunicationDistribution MATTERS FOR COMPLIANCE
 ──────────────────────────────────────────────────────────────────────────────
-  The SEP requires the PIU to demonstrate that information ACTUALLY REACHED
+  The SEP requires the GRM Unit to demonstrate that information ACTUALLY REACHED
   communities, not just that it was sent to the contact person. The
   distribution row provides this audit trail:
     - "We sent it to the Chairperson on 2025-06-01"  (CommunicationRecord)
@@ -51,7 +51,7 @@ FOCAL PERSON (SEP Table 9)
   The SEP mandates a named focal person at each implementing LGA, TANROADS,
   and PO-RALG. This table captures those named contacts so the system can
   route communications and grievances to the right person.
-  FocalPersons are distinct from StakeholderContacts — they are PIU STAFF,
+  FocalPersons are distinct from StakeholderContacts — they are GRM Unit STAFF,
   not stakeholder representatives.
 ═══════════════════════════════════════════════════════════════════════════════
 """
@@ -96,8 +96,8 @@ class CommChannel(str, Enum):
 
 
 class CommDirection(str, Enum):
-    OUTGOING = "outgoing"   # PIU/implementing agency → stakeholder
-    INCOMING = "incoming"   # stakeholder → PIU/implementing agency
+    OUTGOING = "outgoing"   # GRM Unit/implementing agency → stakeholder
+    INCOMING = "incoming"   # stakeholder → GRM Unit/implementing agency
 
 
 class CommPurpose(str, Enum):
@@ -256,7 +256,7 @@ class CommunicationRecord(SQLModel, table=True):
     # ── Metadata ──────────────────────────────────────────────────────────────
     sent_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True,
-        description="auth_service User.id of the PIU staff who sent/logged this comm.",
+        description="auth_service User.id of the GRM Unit staff who sent/logged this comm.",
     )
     sent_at: Optional[datetime] = Field(
         default=None,
@@ -317,7 +317,7 @@ class CommunicationDistribution(SQLModel, table=True):
     community received the information? The answer is this table.
 
     Key workflow:
-      1. PIU sends notice → CommunicationRecord (outgoing)
+      1. GRM Unit sends notice → CommunicationRecord (outgoing)
       2. Contact distributes it → CommunicationDistribution logged
          · Who: contact_id
          · How many: distributed_to_count (e.g. 120 households)
@@ -385,11 +385,11 @@ class CommunicationDistribution(SQLModel, table=True):
     acknowledged_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
-        description="When the PIU confirmed the distribution was completed.",
+        description="When the GRM Unit confirmed the distribution was completed.",
     )
     acknowledged_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True,
-        description="auth_service User.id of the PIU staff who confirmed distribution.",
+        description="auth_service User.id of the GRM Unit staff who confirmed distribution.",
     )
 
     # ── Post-distribution concerns ────────────────────────────────────────────
@@ -461,7 +461,7 @@ class FocalPerson(SQLModel, table=True):
     IMPORTANT DISTINCTION FROM StakeholderContact:
       · StakeholderContact = representative of a stakeholder ENTITY
         (community leader, NGO spokesperson) — they speak FOR stakeholders
-      · FocalPerson = PIU/implementing agency STAFF member who handles SEP
+      · FocalPerson = GRM Unit/implementing agency STAFF member who handles SEP
         (community development officer, public relations officer)
         — they speak FOR the project/implementing agency
 
@@ -472,7 +472,7 @@ class FocalPerson(SQLModel, table=True):
       · Stakeholder inquiries
       · Grievance registration (from walk-ins, phone, letters)
       · Communication distribution coordination
-      · SEP reporting upward to PIU
+      · SEP reporting upward to GRM Unit
 
     Relationship wiring:
       FocalPerson.project  ←→  Project.focal_persons

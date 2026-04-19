@@ -208,7 +208,7 @@ class User(SQLModel, table=True):
             "How this account was created. "
             "channel-registered accounts (sms/whatsapp/phone_call) start with "
             "status=CHANNEL_REGISTERED and no password. "
-            "They upgrade to ACTIVE when the PAP logs in and sets a password."
+            "They upgrade to ACTIVE when the Consumer logs in and sets a password."
         ),
     )
 

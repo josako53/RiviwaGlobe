@@ -80,14 +80,14 @@ class CreateChannelSession(BaseModel):
         description="sms | whatsapp | whatsapp_voice | phone_call | mobile_app | web_portal | in_person | paper_form | email | public_meeting | notice_box | other",
     )
     project_id: Optional[uuid.UUID] = Field(default=None, description="Project the session is linked to")
-    phone_number: Optional[str] = Field(default=None, max_length=20, description="PAP phone number (E.164)")
+    phone_number: Optional[str] = Field(default=None, max_length=20, description="Consumer phone number (E.164)")
     whatsapp_id: Optional[str] = Field(default=None, max_length=100, description="WhatsApp sender ID")
     gateway_session_id: Optional[str] = Field(default=None, max_length=200, description="Gateway-assigned session ID")
     gateway_provider: Optional[str] = Field(default="other", max_length=50, description="Gateway provider name")
     language: Optional[str] = Field(default="sw", max_length=10, description="IETF language tag: 'sw' or 'en'")
     is_officer_assisted: bool = Field(
         default=False,
-        description="True when a PIU officer is operating on behalf of a walk-in PAP",
+        description="True when a GRM Unit officer is operating on behalf of a walk-in Consumer",
     )
 
 

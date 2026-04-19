@@ -106,7 +106,7 @@ app = FastAPI(
     description=(
         "Multilingual translation and language detection for the Riviwa platform.\n\n"
         "**Primary use cases:**\n"
-        "- Translating PAP feedback (Swahili → English) for GRM staff\n"
+        "- Translating Consumer feedback (Swahili → English) for GRM staff\n"
         "- Translating notification templates into user-preferred languages\n"
         "- Translating SMS/WhatsApp channel session messages in real time\n"
         "- Language detection for incoming voice/text feedback\n\n"

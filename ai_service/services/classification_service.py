@@ -168,7 +168,7 @@ class ClassificationService:
 
         # Use a short timeout for pre-submit classification — if Ollama is slow/busy,
         # fail fast and fall through to the candidate-projects picker instead of
-        # making the PAP wait 60 seconds.
+        # making the Consumer wait 60 seconds.
         _classify_timeout = min(15, settings.OLLAMA_TIMEOUT_SECS)
         try:
             async with httpx.AsyncClient(base_url=settings.OLLAMA_BASE_URL,
@@ -284,7 +284,7 @@ class ClassificationService:
     ) -> dict:
         """
         Classify a feedback record BEFORE it is created in the DB.
-        Called synchronously by feedback_service during PAP submission.
+        Called synchronously by feedback_service during Consumer submission.
 
         Returns a dict with:
           - project_id (str UUID or None)
@@ -321,7 +321,7 @@ class ClassificationService:
         out["category_slug"] = result.get("category_slug", "other")
 
         # ── Resolve project_id ────────────────────────────────────────────────
-        # Prefer: hint (PAP pre-selected) > Ollama suggestion > Qdrant search
+        # Prefer: hint (Consumer pre-selected) > Ollama suggestion > Qdrant search
         resolved_project_id: Optional[uuid.UUID] = None
         if project_id_hint:
             try:

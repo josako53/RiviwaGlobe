@@ -298,7 +298,7 @@ class StakeholderRepository:
         self,
         stakeholder_id:        uuid.UUID,
         project_id:            uuid.UUID,
-        is_pap:                bool                = False,
+        is_consumer:           bool                = False,
         affectedness:          Optional[AffectednessType] = None,
         impact_description:    Optional[str]       = None,
         registered_by_user_id: Optional[uuid.UUID] = None,
@@ -306,7 +306,7 @@ class StakeholderRepository:
         sp = StakeholderProject(
             stakeholder_id        = stakeholder_id,
             project_id            = project_id,
-            is_pap                = is_pap,
+            is_consumer           = is_consumer,
             affectedness          = affectedness,
             impact_description    = impact_description,
             registered_by_user_id = registered_by_user_id,

@@ -2,12 +2,12 @@
 schemas/feedback.py — Pydantic request/response schemas for feedback submission.
 
 Four submission paths:
-  1. PAP self-service: POST /api/v1/my/feedback         → PAPSubmitFeedback
-  2. Staff/officer:    POST /api/v1/feedback             → StaffSubmitFeedback
-  3. Staff bulk:       POST /api/v1/feedback/bulk-upload  → CSV file
-  4. AI/ML channel:    POST /api/v1/ai/sessions           → AIChannelSessionCreate
+  1. Consumer self-service: POST /api/v1/my/feedback         → ConsumerSubmitFeedback
+  2. Staff/officer:         POST /api/v1/feedback             → StaffSubmitFeedback
+  3. Staff bulk:            POST /api/v1/feedback/bulk-upload  → CSV file
+  4. AI/ML channel:         POST /api/v1/ai/sessions           → AIChannelSessionCreate
 
-PAP: project_id optional (ML auto-assigns), channel auto-detected, priority=medium.
+Consumer: project_id optional (ML auto-assigns), channel auto-detected, priority=medium.
 Staff: full control — can set project_id, backdate, set priority, GPS, etc.
 """
 from __future__ import annotations
@@ -20,13 +20,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAP / END-USER SUBMISSION (simplified)
+# CONSUMER / END-USER SUBMISSION (simplified)
 # POST /api/v1/my/feedback
 # ══════════════════════════════════════════════════════════════════════════════
 
-class PAPSubmitFeedback(BaseModel):
+class ConsumerSubmitFeedback(BaseModel):
     """
-    Simplified feedback submission for Project-Affected Persons.
+    Simplified feedback submission for Consumers.
 
     project_id and category are optional — AI auto-detects them from your
     description and location (issue_lga is required to enable detection).
@@ -107,7 +107,7 @@ class PAPSubmitFeedback(BaseModel):
 
 class StaffSubmitFeedback(BaseModel):
     """
-    Full feedback submission by GHC/PIU staff or officer.
+    Full feedback submission by GHC/GRM Unit staff or officer.
     Covers all Annex 5 fields + digital extensions.
     Staff can backdate, set project_id, priority, GPS, etc.
     """
@@ -118,7 +118,7 @@ class StaffSubmitFeedback(BaseModel):
             "category": "compensation",
             "channel": "paper_form",
             "subject": "Unfair compensation for land acquisition",
-            "description": "PAP claims the compensation offered for 2 acres is below market rate. Land was acquired on 15 Sep 2025.",
+            "description": "Consumer claims the compensation offered for 2 acres is below market rate. Land was acquired on 15 Sep 2025.",
             "submitter_name": "Amina Hassan",
             "submitter_phone": "+255712345678",
             "submitter_type": "individual",
@@ -128,7 +128,7 @@ class StaffSubmitFeedback(BaseModel):
             "submitted_at": "2025-10-01",
             "priority": "high",
             "officer_recorded": True,
-            "internal_notes": "PAP has supporting documents. Scheduled for valuation review.",
+            "internal_notes": "Consumer has supporting documents. Scheduled for valuation review.",
         }
     })
 
@@ -204,8 +204,8 @@ class StaffSubmitFeedback(BaseModel):
     distribution_id: Optional[uuid.UUID] = Field(default=None)
 
     # ── SECTION H — Officer metadata (Annex 5: Action Officer from LGA) ──────
-    officer_recorded: bool = Field(default=False, description="Staff entered on behalf of PAP")
-    internal_notes: Optional[str] = Field(default=None, description="Internal PIU notes (Annex 5: Response/Follow up)")
+    officer_recorded: bool = Field(default=False, description="Staff entered on behalf of Consumer")
+    internal_notes: Optional[str] = Field(default=None, description="Internal GRM Unit notes (Annex 5: Response/Follow up)")
 
 
 

@@ -471,7 +471,7 @@ class ReportService:
     def _implementation_time_hours(self, f) -> float | None:
         """
         Time from submitted_at → resolved_at for ACTIONED suggestions.
-        resolved_at is set when the PIU records the resolution (marks as ACTIONED).
+        resolved_at is set when the GRM Unit records the resolution (marks as ACTIONED).
         """
         if f.submitted_at and f.resolved_at:
             return round((f.resolved_at - f.submitted_at).total_seconds() / 3600, 2)

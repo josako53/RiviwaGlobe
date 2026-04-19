@@ -23,7 +23,7 @@ class StartConversation(BaseModel):
     )
     user_id: Optional[uuid.UUID] = Field(
         default=None,
-        description="Authenticated user ID (from JWT). If provided, the PAP is auto-identified.",
+        description="Authenticated user ID (from JWT). If provided, the Consumer is auto-identified.",
     )
     web_token: Optional[str] = Field(
         default=None,
@@ -37,7 +37,7 @@ class SendMessage(BaseModel):
         ...,
         min_length=1,
         max_length=4000,
-        description="The PAP's message text.",
+        description="The Consumer's message text.",
     )
     media_urls: Optional[List[str]] = Field(
         default=None,

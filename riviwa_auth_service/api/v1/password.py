@@ -217,7 +217,7 @@ async def channel_set_password(
     user: Annotated[object, Depends(require_active_user_or_channel)],
 ) -> dict:
     """
-    Completes the PAP account upgrade after channel login.
+    Completes the Consumer account upgrade after channel login.
 
     Called after:
       POST /auth/channel-login/verify-otp → returns must_set_password: true
@@ -227,7 +227,7 @@ async def channel_set_password(
       → full account active, all platform features available
 
     No current_password required — phone ownership was proven at:
-      1. Channel registration (PAP initiated the SMS/WhatsApp conversation)
+      1. Channel registration (Consumer initiated the SMS/WhatsApp conversation)
       2. Login OTP (verified in /auth/channel-login/verify-otp)
 
     Request body:

@@ -2,9 +2,9 @@
 services/conversation_service.py — Core AI conversation orchestrator.
 
 Flow:
-  PAP sends message
+  Consumer sends message
   → find/create conversation session
-  → check PAP registration (by phone)
+  → check Consumer registration (by phone)
   → build RAG project context
   → call Ollama LLM
   → extract fields from LLM response
@@ -52,7 +52,7 @@ _GREETING_SW_BASE = (
 def _build_greeting(language: str, projects: list) -> str:
     """
     Build the opening greeting. If active projects are known, append a
-    numbered list of locations so the PAP can identify their project.
+    numbered list of locations so the Consumer can identify their project.
     """
     base = _GREETING_EN_BASE if language == "en" else _GREETING_SW_BASE
 
@@ -167,7 +167,7 @@ class ConversationService:
         media_urls: Optional[List[str]] = None,
     ) -> Tuple[AIConversation, str, bool, List[dict]]:
         """
-        Process a PAP message. Returns (conv, reply, submitted, submitted_feedback_list).
+        Process a Consumer message. Returns (conv, reply, submitted, submitted_feedback_list).
         """
         conv = await self.conv_repo.get_or_404(conversation_id)
 
@@ -200,7 +200,7 @@ class ConversationService:
             await self.conv_repo.save(conv)
             return conv, timeout_msg, False, []
 
-        # Add PAP's turn
+        # Add Consumer's turn
         conv.add_turn("user", message)
 
         # Check follow-up pattern (reference number like GRV-2025-0042)
@@ -388,12 +388,12 @@ class ConversationService:
         name = conv.get_extracted().get("submitter_name", "")
         if not name or not conv.phone_number:
             return
-        user = await self.auth_client.register_pap(name=name, phone=conv.phone_number)
+        user = await self.auth_client.register_consumer(name=name, phone=conv.phone_number)
         if user:
             conv.is_registered = True
             conv.user_id       = uuid.UUID(user["id"])
             conv.merge_extracted({"user_id": str(conv.user_id)})
-            log.info("conversation.pap_registered", conv_id=str(conv.id), phone=conv.phone_number)
+            log.info("conversation.consumer_registered", conv_id=str(conv.id), phone=conv.phone_number)
 
     async def _identify_project(self, conv: AIConversation) -> None:
         """Use RAG to identify the project from extracted location/description."""
@@ -497,7 +497,7 @@ class ConversationService:
         return False, []
 
     async def _handle_followup(self, conv: AIConversation, message: str) -> str:
-        """Look up feedback status when PAP provides a reference number."""
+        """Look up feedback status when Consumer provides a reference number."""
         ref = self._extract_ref_number(message)
         if not ref:
             return (

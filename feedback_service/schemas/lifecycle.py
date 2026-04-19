@@ -36,7 +36,7 @@ class EscalateFeedback(BaseModel):
     """Escalate a grievance to the next GRM level."""
     model_config = ConfigDict(json_schema_extra={"example": {
         "to_level": "lga_piu",
-        "reason": "Ward-level GHC unable to resolve within 30 days. PAP requires LGA intervention.",
+        "reason": "Ward-level GHC unable to resolve within 30 days. Consumer requires LGA intervention.",
     }})
     to_level: str = Field(
         ...,
@@ -50,10 +50,10 @@ class EscalateFeedback(BaseModel):
 class ResolveFeedback(BaseModel):
     """Record resolution of a feedback item."""
     model_config = ConfigDict(json_schema_extra={"example": {
-        "resolution_summary": "Compensation re-assessed at market rate. PAP agrees to new valuation of TZS 45M.",
+        "resolution_summary": "Compensation re-assessed at market rate. Consumer agrees to new valuation of TZS 45M.",
         "response_method": "in_person_meeting",
         "grievant_satisfied": True,
-        "grievant_response": "PAP accepted the revised compensation amount.",
+        "grievant_response": "Consumer accepted the revised compensation amount.",
     }})
     resolution_summary: str = Field(..., min_length=10, description="Summary of how the issue was resolved")
     response_method: Optional[str] = Field(
@@ -75,14 +75,14 @@ class AppealFeedback(BaseModel):
 
 class CloseFeedback(BaseModel):
     """Close a feedback item (final state)."""
-    model_config = ConfigDict(json_schema_extra={"example": {"notes": "PAP confirmed satisfaction. Case closed."}})
+    model_config = ConfigDict(json_schema_extra={"example": {"notes": "Consumer confirmed satisfaction. Case closed."}})
     notes: Optional[str] = Field(default=None, description="Closing notes")
 
 
 class DismissFeedback(BaseModel):
     """Dismiss a feedback item as unfounded, duplicate, or out of scope."""
     model_config = ConfigDict(json_schema_extra={"example": {
-        "reason": "Duplicate of GRV-2026-0003. Same issue reported by same PAP.",
+        "reason": "Duplicate of GRV-2026-0003. Same issue reported by same Consumer.",
     }})
     reason: str = Field(..., min_length=5, description="Reason for dismissal (required for audit)")
 
@@ -103,31 +103,31 @@ class LogAction(BaseModel):
         ),
     )
     description: str = Field(..., min_length=5, description="What was done")
-    is_internal: bool = Field(default=False, description="True = staff-only note, not visible to PAP")
+    is_internal: bool = Field(default=False, description="True = staff-only note, not visible to Consumer")
     response_method: Optional[str] = Field(default=None, description="How response was delivered (if applicable)")
     response_summary: Optional[str] = Field(default=None, description="Summary of the response given")
 
 
-class PAPEscalationRequest(BaseModel):
-    """PAP requests escalation of their grievance."""
+class ConsumerEscalationRequest(BaseModel):
+    """Consumer requests escalation of their grievance."""
     model_config = ConfigDict(json_schema_extra={"example": {
         "reason": "No response after 30 days despite multiple follow-ups",
         "requested_level": "lga_piu",
     }})
     reason: str = Field(..., min_length=10, description="Why you want your case escalated")
-    requested_level: Optional[str] = Field(default=None, description="Requested GRM level (optional — PIU decides)")
+    requested_level: Optional[str] = Field(default=None, description="Requested GRM level (optional — GRM Unit decides)")
 
 
-class PAPAppeal(BaseModel):
-    """PAP files a formal appeal against an unsatisfactory resolution."""
+class ConsumerAppeal(BaseModel):
+    """Consumer files a formal appeal against an unsatisfactory resolution."""
     model_config = ConfigDict(json_schema_extra={"example": {
         "grounds": "Resolution does not address the core issue of fair compensation for my land.",
     }})
     grounds: str = Field(..., min_length=10, description="Grounds for your appeal")
 
 
-class PAPComment(BaseModel):
-    """PAP adds a follow-up comment to their submission."""
+class ConsumerComment(BaseModel):
+    """Consumer adds a follow-up comment to their submission."""
     model_config = ConfigDict(json_schema_extra={"example": {
         "comment": "I have new photographs showing the damage from last week's construction activity.",
     }})
@@ -135,14 +135,14 @@ class PAPComment(BaseModel):
 
 
 class ApproveEscalation(BaseModel):
-    """Staff approves a PAP's escalation request."""
+    """Staff approves a Consumer's escalation request."""
     model_config = ConfigDict(json_schema_extra={"example": {"notes": "Justified — unresolved for 45 days."}})
     notes: Optional[str] = Field(default=None, description="Approval notes")
 
 
 class RejectEscalation(BaseModel):
-    """Staff rejects a PAP's escalation request with explanation."""
+    """Staff rejects a Consumer's escalation request with explanation."""
     model_config = ConfigDict(json_schema_extra={"example": {
         "notes": "Case is being actively investigated. Resolution expected within 7 days.",
     }})
-    notes: str = Field(..., min_length=5, description="Reason for rejection (visible to PAP)")
+    notes: str = Field(..., min_length=5, description="Reason for rejection (visible to Consumer)")

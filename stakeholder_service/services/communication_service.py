@@ -213,16 +213,16 @@ class CommunicationService:
     async def stakeholder_reach(self, project_id: uuid.UUID) -> dict:
         stakeholder_ids = await self.report_repo.stakeholder_ids_for_project(project_id)
         if not stakeholder_ids:
-            return {"project_id": str(project_id), "total": 0, "pap_count": 0,
+            return {"project_id": str(project_id), "total": 0, "consumer_count": 0,
                     "by_category": [], "vulnerable_count": 0, "by_entity_type": []}
-        by_cat   = await self.report_repo.stakeholder_counts_by_category(stakeholder_ids)
-        by_type  = await self.report_repo.stakeholder_counts_by_entity_type(stakeholder_ids)
-        vuln_cnt = await self.report_repo.vulnerable_count(stakeholder_ids)
-        pap_cnt  = await self.report_repo.pap_count(project_id)
+        by_cat       = await self.report_repo.stakeholder_counts_by_category(stakeholder_ids)
+        by_type      = await self.report_repo.stakeholder_counts_by_entity_type(stakeholder_ids)
+        vuln_cnt     = await self.report_repo.vulnerable_count(stakeholder_ids)
+        consumer_cnt = await self.report_repo.consumer_count(project_id)
         return {
             "project_id":     str(project_id),
             "total":          len(stakeholder_ids),
-            "pap_count":      pap_cnt,
+            "consumer_count": consumer_cnt,
             "vulnerable_count": vuln_cnt,
             "by_category":    [{"category": r[0], "count": r[1]} for r in by_cat],
             "by_entity_type": [{"entity_type": r[0], "count": r[1]} for r in by_type],

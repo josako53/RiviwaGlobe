@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         description=(
             "Riviwa AI AI — conversational feedback collection for GRM. "
-            "Handles PAP conversations via SMS, WhatsApp, phone call, web, and mobile. "
+            "Handles Consumer conversations via SMS, WhatsApp, phone call, web, and mobile. "
             "Uses Ollama LLM + Qdrant RAG to auto-identify projects, collect feedback fields, "
             "and submit to feedback_service."
         ),

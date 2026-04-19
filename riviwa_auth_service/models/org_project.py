@@ -917,7 +917,7 @@ class ImagePhase(str, Enum):
     Phase of the project at the time the image was captured.
 
     Used for before/during/after progress tracking. A gallery filtered by
-    phase gives the PIU and World Bank a visual evidence trail showing what
+    phase gives the GRM Unit and World Bank a visual evidence trail showing what
     the site looked like before works began, during construction, and after
     completion.
     """

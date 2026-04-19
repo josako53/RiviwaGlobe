@@ -237,14 +237,14 @@ class EngagementActivity(SQLModel, table=True):
     summary_of_responses: Optional[str] = Field(
         default=None,
         sa_column=Column(Text, nullable=True),
-        description="Summary of how the PIU/implementing agency responded to issues.",
+        description="Summary of how the GRM Unit/implementing agency responded to issues.",
     )
     action_items: Optional[Dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),
         description=(
             'Structured action items from the session. '
-            'Example: {"items": [{"action": "Share design drawings", "by": "PIU", "by_date": "2025-06-01"}]}'
+            'Example: {"items": [{"action": "Share design drawings", "by": "GRM Unit", "by_date": "2025-06-01"}]}'
         ),
     )
     minutes_url: Optional[str] = Field(
@@ -260,7 +260,7 @@ class EngagementActivity(SQLModel, table=True):
     # ── Who ran it ────────────────────────────────────────────────────────────
     conducted_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True,
-        description="auth_service User.id of the facilitator/PIU staff who ran this session.",
+        description="auth_service User.id of the facilitator/GRM Unit staff who ran this session.",
     )
     cancelled_reason: Optional[str] = Field(
         default=None, max_length=500, nullable=True,
@@ -382,7 +382,7 @@ class StakeholderEngagement(SQLModel, table=True):
     response_given: Optional[str] = Field(
         default=None,
         sa_column=Column(Text, nullable=True),
-        description="How the PIU/facilitator responded to the concerns raised.",
+        description="How the GRM Unit/facilitator responded to the concerns raised.",
     )
     feedback_submitted: bool = Field(
         default=False,
@@ -407,7 +407,7 @@ class StakeholderEngagement(SQLModel, table=True):
 
     logged_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True,
-        description="auth_service User.id of the PIU staff who logged this attendance record.",
+        description="auth_service User.id of the GRM Unit staff who logged this attendance record.",
     )
 
     created_at: datetime = Field(

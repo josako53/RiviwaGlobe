@@ -17,7 +17,7 @@ each organisation can now define its own hierarchy.  Examples:
 
   Road contractor:    Branch → District Engineer → Regional Manager → HQ
   NGO/CBO:            Field Officer → Programme Manager → Executive Director
-  World Bank project: Ward GHC → LGA PIU → PCU → WBCU → World Bank
+  World Bank project: Ward GHC → LGA GRM Unit → Coordinating Unit → WBCU → World Bank
 
 Hierarchy selection
 ────────────────────
@@ -93,15 +93,15 @@ SYSTEM_TEMPLATE_SEED = {
             "sla_overrides": SYSTEM_DEFAULT_SLA_OVERRIDES,
         },
         {
-            "level_order": 2, "name": "LGA PIU", "code": "lga_piu",
-            "description": "Local Government Authority — Project Implementation Unit.",
+            "level_order": 2, "name": "LGA GRM Unit", "code": "lga_piu",
+            "description": "Local Government Authority — GRM Unit.",
             "grm_level_ref": "lga_piu", "is_final": False,
             "auto_escalate_on_breach": False,
             "sla_overrides": SYSTEM_DEFAULT_SLA_OVERRIDES,
         },
         {
-            "level_order": 3, "name": "Programme Coordinating Unit", "code": "pcu",
-            "description": "PCU — PO-RALG / central coordination level.",
+            "level_order": 3, "name": "Coordinating Unit", "code": "pcu",
+            "description": "Coordinating Unit — PO-RALG / central coordination level.",
             "grm_level_ref": "pcu", "is_final": False,
             "auto_escalate_on_breach": False,
             "sla_overrides": SYSTEM_DEFAULT_SLA_OVERRIDES,

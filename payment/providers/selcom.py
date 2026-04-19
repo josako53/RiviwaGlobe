@@ -58,13 +58,13 @@ class SelcomProvider(BasePaymentProvider):
 
     async def initiate(self, payment: Payment, phone: str) -> Dict[str, Any]:
         order_id  = payment.external_ref or f"RVW-{uuid.uuid4().hex[:12].upper()}"
-        fname     = (payment.payer_name or "PAP").split()[0]
-        lname     = (payment.payer_name or "PAP User").split()[-1]
+        fname     = (payment.payer_name or "Consumer").split()[0]
+        lname     = (payment.payer_name or "Consumer").split()[-1]
         body_dict = {
             "vendor":          settings.SELCOM_VENDOR,
             "order_id":        order_id,
             "buyer_email":     payment.payer_email or "",
-            "buyer_name":      payment.payer_name or "PAP",
+            "buyer_name":      payment.payer_name or "Consumer",
             "buyer_phone":     phone,
             "amount":          int(payment.amount),
             "currency":        payment.currency.value,

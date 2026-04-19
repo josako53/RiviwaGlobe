@@ -20,7 +20,7 @@ def _svc(db) -> ConversationService:
     status_code=status.HTTP_200_OK,
     summary="Inbound SMS webhook — Africa's Talking / Twilio",
     description=(
-        "Fully automated: PAP sends SMS → Riviwa AI AI responds → auto-submits feedback. "
+        "Fully automated: Consumer sends SMS → Riviwa AI AI responds → auto-submits feedback. "
         "Supports Africa's Talking (phoneNumber/text) and Twilio (From/Body) payload formats."
     ),
 )
@@ -51,7 +51,7 @@ async def inbound_sms(request: Request, db: DbDep) -> dict:
     status_code=status.HTTP_200_OK,
     summary="Inbound WhatsApp webhook — Meta Cloud API",
     description=(
-        "Fully automated: PAP sends WhatsApp message → Riviwa AI AI responds → auto-submits feedback. "
+        "Fully automated: Consumer sends WhatsApp message → Riviwa AI AI responds → auto-submits feedback. "
         "Supports text messages and voice notes (STT transcription). "
         "Images/documents are accepted as proof attachments."
     ),
@@ -102,7 +102,7 @@ async def verify_whatsapp(request: Request) -> object:
 # ── WhatsApp send helper ──────────────────────────────────────────────────────
 
 async def _send_whatsapp_reply(to: str, text: str) -> None:
-    """Send a WhatsApp text message back to the PAP via Meta Cloud API."""
+    """Send a WhatsApp text message back to the Consumer via Meta Cloud API."""
     import httpx, structlog
     log = structlog.get_logger(__name__)
     url = (

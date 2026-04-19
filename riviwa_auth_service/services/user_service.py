@@ -188,7 +188,7 @@ class UserService:
         Set a first password for a CHANNEL_REGISTERED account and upgrade
         status to ACTIVE.
 
-        Called when a PAP who registered via SMS/WhatsApp/Call logs in for
+        Called when a Consumer who registered via SMS/WhatsApp/Call logs in for
         the first time through the mobile app or web portal.
 
         Rules:

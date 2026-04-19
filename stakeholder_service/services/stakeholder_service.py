@@ -70,7 +70,7 @@ class StakeholderService:
         Used during register and update when the caller provides OSM/GPS/address
         fields rather than an existing address_id.
 
-        The JWT forwarded is the PIU staff member's token that originated the
+        The JWT forwarded is the GRM Unit staff member's token that originated the
         request — auth_service will accept it for address creation.
         """
         has_osm = data.get("osm_place_id") is not None
@@ -311,7 +311,7 @@ class StakeholderService:
         sp = await self.repo.create_stakeholder_project(
             stakeholder_id        = stakeholder_id,
             project_id            = project_id,
-            is_pap                = data.get("is_pap", False),
+            is_consumer           = data.get("is_consumer", False),
             affectedness          = AffectednessType(data["affectedness"]) if data.get("affectedness") else None,
             impact_description    = data.get("impact_description"),
             registered_by_user_id = registered_by,

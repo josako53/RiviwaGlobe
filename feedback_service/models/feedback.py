@@ -39,8 +39,8 @@ FEEDBACK LIFECYCLE
 GRM ESCALATION HIERARCHY (SEP Section 5)
 ──────────────────────────────────────────────────────────────────────────────
   Level 1  WARD          Ward/sub-project GHC — first point of contact
-  Level 2  LGA_PIU       LGA Grievance Handling Committee at PIU level
-  Level 3  PCU           Programme Coordinating Unit (PO-RALG/TARURA)
+  Level 2  LGA_PIU       LGA Grievance Handling Committee at LGA GRM Unit level
+  Level 3  PCU           Coordinating Unit (PO-RALG/TARURA)
   Level 4  TARURA_WBCU   TARURA World Bank Coordinating Unit
   Level 5  TANROADS      For bridge/road-specific grievances
   Level 6  WORLD_BANK    Final escalation — World Bank direct
@@ -66,7 +66,7 @@ SUBMITTER IDENTITY CHAIN (three paths)
     submitted_by_stakeholder_id / contact_id auto-populated if found
 
   Path 2 — Known stakeholder contact (no platform account)
-    submitted_by_stakeholder_id + submitted_by_contact_id set by PIU staff
+    submitted_by_stakeholder_id + submitted_by_contact_id set by GRM Unit staff
     Feedback entered on the contact's behalf
 
   Path 3 — Anonymous / unknown individual
@@ -130,7 +130,7 @@ class FeedbackType(str, Enum):
     APPLAUSE    → positive feedback recognising good performance.
                   Simplest lifecycle — acknowledged and closed.
                   Examples: bridge completed on schedule, contractor was respectful,
-                  PIU responded quickly to a concern, resettlement was well handled.
+                  GRM Unit responded quickly to a concern, resettlement was well handled.
     """
     GRIEVANCE   = "grievance"
     SUGGESTION  = "suggestion"
@@ -153,7 +153,7 @@ class FeedbackStatus(str, Enum):
     Not all statuses apply to all types — see lifecycle notes in module docstring.
     """
     SUBMITTED    = "submitted"    # just received, not yet acknowledged
-    ACKNOWLEDGED = "acknowledged" # PIU/GHC confirmed receipt
+    ACKNOWLEDGED = "acknowledged" # GRM Unit/GHC confirmed receipt
     IN_REVIEW    = "in_review"    # actively being investigated
     ESCALATED    = "escalated"    # moved to higher GRM level
     RESOLVED     = "resolved"     # resolution provided to submitter
@@ -176,11 +176,11 @@ class FeedbackStatus(str, Enum):
 
 class FeedbackPriority(str, Enum):
     """
-    PIU-assigned priority for triage. Drives acknowledgement and resolution timeframes.
+    GRM Unit-assigned priority for triage. Drives acknowledgement and resolution timeframes.
 
     CRITICAL → safety risk, legal obligation, or World Bank escalation risk.
                Acknowledge within 24 hours. Resolve within 7 days.
-    HIGH     → significant impact on PAPs or project progress.
+    HIGH     → significant impact on Consumers or project progress.
                Acknowledge within 48 hours. Resolve within 14 days.
     MEDIUM   → standard grievance or substantive suggestion.
                Acknowledge within 5 days. Resolve within 30 days.
@@ -209,8 +209,8 @@ class GRMLevel(str, Enum):
     Each escalation requires a documented reason.
     """
     WARD        = "ward"        # Level 1 — Ward/sub-project GHC
-    LGA_PIU     = "lga_piu"    # Level 2 — LGA GHC at PIU level
-    PCU         = "pcu"        # Level 3 — Programme Coordinating Unit
+    LGA_PIU     = "lga_piu"    # Level 2 — LGA GHC at GRM Unit level
+    PCU         = "pcu"        # Level 3 — Coordinating Unit
     TARURA_WBCU = "tarura_wbcu" # Level 4 — TARURA World Bank Coordinating Unit
     TANROADS    = "tanroads"    # Level 5 — For road/bridge-specific escalations
     WORLD_BANK  = "world_bank"  # Level 6 — Final escalation
@@ -234,38 +234,38 @@ class FeedbackChannel(str, Enum):
       FeedbackChannel  → the MEDIUM (how it arrived: SMS, WhatsApp, mobile app…)
       SubmissionMethod → the ACTOR  (who created the record: self, officer, AI)
 
-    This is different from the SEP procedural channels (which PIU/LGA departments
+    This is different from the SEP procedural channels (which GRM Unit/LGA departments
     are responsible for handling). FeedbackChannel is purely about the technical
     intake path for filtering and analytics.
 
     Two-way AI channels (SMS, WHATSAPP, PHONE_CALL):
-      The LLM conducts a structured multi-turn conversation with the PAP to
+      The LLM conducts a structured multi-turn conversation with the Consumer to
       collect all required grievance details. Once the LLM has enough information,
       it submits the Feedback record automatically. The full conversation is stored
       in ChannelSession. These channels can also be used officer-recorded (officer
       dials on behalf of a walk-in, or types the content of a letter).
 
     Self-service channels (MOBILE_APP, WEB_PORTAL):
-      PAP fills in a structured form directly. No LLM conversation needed.
+      Consumer fills in a structured form directly. No LLM conversation needed.
 
     Officer-recorded channels (IN_PERSON, PAPER_FORM, EMAIL, PUBLIC_MEETING,
-    NOTICE_BOX): always SubmissionMethod.OFFICER_RECORDED. The GHC or PIU
+    NOTICE_BOX): always SubmissionMethod.OFFICER_RECORDED. The GHC or GRM Unit
     officer digitises a walk-in, physical form, or other offline source.
     """
     # ── Two-way AI conversation channels ──────────────────────────────────────
-    SMS             = "sms"             # PAP sends SMS; LLM replies and collects details
-    WHATSAPP        = "whatsapp"        # PAP messages on WhatsApp; LLM replies
-    WHATSAPP_VOICE  = "whatsapp_voice"  # PAP sends a WhatsApp voice note; STT -> LLM pipeline
-    PHONE_CALL      = "phone_call"      # PAP calls; LLM/IVR guides them, or officer records
+    SMS             = "sms"             # Consumer sends SMS; LLM replies and collects details
+    WHATSAPP        = "whatsapp"        # Consumer messages on WhatsApp; LLM replies
+    WHATSAPP_VOICE  = "whatsapp_voice"  # Consumer sends a WhatsApp voice note; STT -> LLM pipeline
+    PHONE_CALL      = "phone_call"      # Consumer calls; LLM/IVR guides them, or officer records
 
     # ── Self-service digital channels ─────────────────────────────────────────
-    MOBILE_APP    = "mobile_app"    # PAP uses the Riviwa mobile app (text or mic input)
-    WEB_PORTAL    = "web_portal"    # PAP uses the web frontend (text or mic input)
+    MOBILE_APP    = "mobile_app"    # Consumer uses the Riviwa mobile app (text or mic input)
+    WEB_PORTAL    = "web_portal"    # Consumer uses the web frontend (text or mic input)
 
     # ── Officer-recorded / offline channels ───────────────────────────────────
-    IN_PERSON     = "in_person"     # PAP walked into a PIU/LGA office
+    IN_PERSON     = "in_person"     # Consumer walked into a GRM Unit/LGA office
     PAPER_FORM    = "paper_form"    # Physical grievance registration form (Annex 5/6)
-    EMAIL         = "email"         # PAP emailed the PIU/LGA
+    EMAIL         = "email"         # Consumer emailed the GRM Unit/LGA
     PUBLIC_MEETING = "public_meeting" # Raised during a SEP consultation activity
     NOTICE_BOX    = "notice_box"    # Dropped in a suggestion/complaint box
     OTHER         = "other"
@@ -302,15 +302,15 @@ class SubmissionMethod(str, Enum):
     """
     WHO created the Feedback record — distinct from the channel.
 
-    SELF_SERVICE     → PAP submitted directly (mobile_app, web_portal).
+    SELF_SERVICE     → Consumer submitted directly (mobile_app, web_portal).
                        submitted_by_user_id or submitted_by_stakeholder_id is set.
 
     AI_CONVERSATION  → LLM collected details through a two-way conversation
                        (sms, whatsapp, phone_call). channel_session_id is set.
                        The LLM auto-submitted once it had sufficient information.
 
-    OFFICER_RECORDED → A GHC officer or PIU staff member entered the record on
-                       behalf of the PAP (walk-in, paper form, telephone call
+    OFFICER_RECORDED → A GHC officer or GRM Unit staff member entered the record on
+                       behalf of the Consumer (walk-in, paper form, telephone call
                        manually transcribed). entered_by_user_id is set.
                        Used for in_person, paper_form, email, public_meeting,
                        notice_box, and officer-assisted sms/call/whatsapp.
@@ -324,7 +324,7 @@ class SessionStatus(str, Enum):
     """Lifecycle of a two-way channel conversation session."""
     ACTIVE      = "active"      # Conversation in progress
     COMPLETED   = "completed"   # LLM submitted the Feedback record successfully
-    ABANDONED   = "abandoned"   # PAP stopped responding
+    ABANDONED   = "abandoned"   # Consumer stopped responding
     TIMED_OUT   = "timed_out"   # No activity for > SESSION_TIMEOUT_MINUTES
     FAILED      = "failed"      # Technical failure (gateway error, LLM error)
 
@@ -450,7 +450,7 @@ class Feedback(SQLModel, table=True):
     When is_anonymous=True ALL identity fields are null. This is enforced at:
       1. DB CHECK constraint ck_anonymous_no_identity (database-level hard block)
       2. API serializer _feedback_out() (never returns identity in responses)
-      3. Every submission path (feedback.py, pap.py, channels.py) before INSERT
+      3. Every submission path (feedback.py, consumer.py, channels.py) before INSERT
     """
     __tablename__ = "feedbacks"
     __table_args__ = (
@@ -522,7 +522,7 @@ class Feedback(SQLModel, table=True):
     )
     # Dynamic category — FK to FeedbackCategoryDef (nullable for backward compat).
     # When set, this is the authoritative category for analytics and filtering.
-    # Assigned either by the submitter (from active category list), PIU staff,
+    # Assigned either by the submitter (from active category list), GRM Unit staff,
     # or the ML layer post-submission.
     category_def_id: Optional[uuid.UUID] = Field(
         sa_column=Column(
@@ -533,7 +533,7 @@ class Feedback(SQLModel, table=True):
         description=(
             "FK to FeedbackCategoryDef. Takes precedence over the legacy "
             "'category' enum field for analytics and filtering. "
-            "Set by submitter, PIU staff, or ML classifier."
+            "Set by submitter, GRM Unit staff, or ML classifier."
         ),
     )
     # ML classification metadata — set when ML assigns or suggests the category
@@ -552,7 +552,7 @@ class Feedback(SQLModel, table=True):
     priority: FeedbackPriority = Field(
         default=FeedbackPriority.MEDIUM,
         sa_column=Column(SAEnum(FeedbackPriority, name="feedback_priority"), nullable=False, index=True),
-        description="Set by PIU on acknowledgement. Drives response timeframe.",
+        description="Set by GRM Unit on acknowledgement. Drives response timeframe.",
     )
 
     # ── GRM context ────────────────────────────────────────────────────────────
@@ -596,7 +596,7 @@ class Feedback(SQLModel, table=True):
     )
     assigned_to_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True, index=True,
-        description="auth_service User.id of the PIU staff member assigned to this.",
+        description="auth_service User.id of the GRM Unit staff member assigned to this.",
     )
 
     # ── Submission channel ─────────────────────────────────────────────────────
@@ -610,9 +610,9 @@ class Feedback(SQLModel, table=True):
             SAEnum(SubmissionMethod, name="submission_method"), nullable=False, index=True
         ),
         description=(
-            "self_service = PAP submitted directly (mobile_app, web_portal). "
+            "self_service = Consumer submitted directly (mobile_app, web_portal). "
             "ai_conversation = LLM collected via two-way chat (sms, whatsapp, phone_call). "
-            "officer_recorded = GHC officer entered on behalf of PAP (walk-in, paper form). "
+            "officer_recorded = GHC officer entered on behalf of Consumer (walk-in, paper form). "
             "Enables filtering: 'All officer-recorded grievances this month'."
         ),
     )
@@ -697,7 +697,7 @@ class Feedback(SQLModel, table=True):
     )
 
     # ── Voice note (source-of-truth audio for any channel) ────────────────────
-    # When a PAP speaks into the mic (app/web/call) or an officer records a
+    # When a Consumer speaks into the mic (app/web/call) or an officer records a
     # walk-in conversation, the original audio is stored here permanently.
     # The transcription becomes the description if text was not separately typed.
     # This audio is the legal source-of-truth — it cannot be deleted.
@@ -716,7 +716,7 @@ class Feedback(SQLModel, table=True):
         sa_column=Column(Text, nullable=True),
         description=(
             "Full STT (speech-to-text) transcript of voice_note_url. "
-            "Used to populate description if PAP did not type text. "
+            "Used to populate description if Consumer did not type text. "
             "Preserved separately from description so edits are traceable."
         ),
     )
@@ -792,7 +792,7 @@ class Feedback(SQLModel, table=True):
     )
     target_resolution_date: Optional[datetime] = Field(
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True),
-        description="PIU-set target date for resolution. Drives SLA monitoring.",
+        description="GRM Unit-set target date for resolution. Drives SLA monitoring.",
     )
     implemented_at: Optional[datetime] = Field(
         default=None,
@@ -807,14 +807,14 @@ class Feedback(SQLModel, table=True):
     # ── Staff notes (internal, not visible to submitter) ──────────────────────
     internal_notes: Optional[str] = Field(
         default=None, sa_column=Column(Text, nullable=True),
-        description="Internal PIU notes — never shown to the submitter.",
+        description="Internal GRM Unit notes — never shown to the submitter.",
     )
 
     # ── Entry metadata ─────────────────────────────────────────────────────────
     # For in-person / paper submissions entered by staff on behalf of submitter
     entered_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True,
-        description="auth_service User.id of PIU staff who entered this on behalf of the submitter.",
+        description="auth_service User.id of GRM Unit staff who entered this on behalf of the submitter.",
     )
 
     created_at: datetime = Field(
@@ -908,7 +908,7 @@ class FeedbackAction(SQLModel, table=True):
     Immutable audit log entry for every action taken on a Feedback record.
 
     A FeedbackAction is created for every meaningful step:
-      · PIU acknowledges receipt → ACKNOWLEDGEMENT
+      · GRM Unit acknowledges receipt → ACKNOWLEDGEMENT
       · Fact-finding begins → INVESTIGATION
       · Site visit conducted → SITE_VISIT
       · Meeting with submitter → STAKEHOLDER_MEETING
@@ -950,7 +950,7 @@ class FeedbackAction(SQLModel, table=True):
     # Visibility — INTERNAL notes never shown to submitter
     is_internal: bool = Field(
         default=False, nullable=False,
-        description="True = internal PIU note, not visible to the submitter.",
+        description="True = internal GRM Unit note, not visible to the submitter.",
     )
 
     performed_by_user_id: Optional[uuid.UUID] = Field(
@@ -1110,7 +1110,7 @@ class FeedbackResolution(SQLModel, table=True):
     witness_name: Optional[str] = Field(default=None, max_length=200, nullable=True)
     resolved_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True,
-        description="auth_service User.id of the PIU staff who delivered the resolution.",
+        description="auth_service User.id of the GRM Unit staff who delivered the resolution.",
     )
     resolved_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
@@ -1204,8 +1204,8 @@ class GrievanceCommittee(SQLModel, table=True):
 
     The SEP mandates GHCs at:
       · Each Ward / sub-project area     (WARD)
-      · Each LGA PIU level               (LGA_PIU)
-      · PCU level (PO-RALG/TARURA WBCU)  (PCU)
+      · Each LGA GRM Unit level                (LGA_PIU)
+      · Coordinating Unit (PO-RALG/TARURA WBCU)  (PCU)
       · TANROADs                         (TANROADS)
 
     SCOPE LINKAGE
@@ -1265,8 +1265,8 @@ class GrievanceCommittee(SQLModel, table=True):
     # Format: {"stakeholder_ids": ["<uuid1>", "<uuid2>"]}
     # Enables queries:
     #   "Which committee handles the M18 flood community's grievances at ward level?"
-    #   "All grievances from Jangwani residents group at LGA PIU level"
-    # NOT FK constraints — soft links maintained by PIU staff at setup time.
+    #   "All grievances from Jangwani residents group at LGA GRM Unit level"
+    # NOT FK constraints — soft links maintained by GRM Unit staff at setup time.
     stakeholder_ids: Optional[Dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSONB, nullable=True),
@@ -1317,7 +1317,7 @@ class GrievanceCommitteeMember(SQLModel, table=True):
     Junction: auth_service User ↔ GrievanceCommittee, with their role.
 
     UNIQUE (committee_id, user_id) — one membership per person per committee.
-    A person can sit on multiple committees (e.g. Ward GHC and LGA PIU GHC).
+    A person can sit on multiple committees (e.g. Ward GHC and LGA GRM Unit GHC).
     """
     __tablename__ = "grm_committee_members"
     __table_args__ = (UniqueConstraint("committee_id", "user_id", name="uq_committee_member"),)
@@ -1360,7 +1360,7 @@ class CategorySource(str, Enum):
                These are the platform defaults that always exist.
                Cannot be deleted; can be deactivated per project.
 
-    MANUAL  → created explicitly by a PIU staff member or GHC member
+    MANUAL  → created explicitly by a GRM Unit staff member or GHC member
                via POST /api/v1/categories. Full CRUD available.
 
     ML      → auto-created by the AI classification layer after reading
@@ -1382,8 +1382,8 @@ class CategoryStatus(str, Enum):
     ACTIVE          → visible, can be assigned to feedback submissions.
     PENDING_REVIEW  → ML-suggested; awaiting human approval.
                       Not shown to submitters. Cannot be filtered on.
-                      PIU staff can approve → ACTIVE or reject → REJECTED.
-    INACTIVE        → deactivated by PIU (too granular, merged elsewhere).
+                      GRM Unit staff can approve → ACTIVE or reject → REJECTED.
+    INACTIVE        → deactivated by GRM Unit (too granular, merged elsewhere).
                       Existing feedback with this category is unaffected.
                       Cannot be assigned to new submissions.
     REJECTED        → ML suggestion was wrong; permanently dismissed.
@@ -1404,7 +1404,7 @@ class FeedbackCategoryDef(SQLModel, table=True):
 
     DESIGN GOALS
     ─────────────
-    1. GHC members and PIU staff can create project-specific categories
+    1. GHC members and GRM Unit staff can create project-specific categories
        that make sense for their particular context. "Msimbazi Flood Risk"
        is meaningful for that project but would not be in a global enum.
 
@@ -1416,7 +1416,7 @@ class FeedbackCategoryDef(SQLModel, table=True):
 
     3. Once categories exist, the analytics layer (GET /api/v1/categories/{id}/rate)
        can answer "how many grievances about compensation per week?" in real
-       time or over any date range — enabling PIU to spot emerging patterns
+       time or over any date range — enabling GRM Unit to spot emerging patterns
        before they escalate.
 
     SCOPE
@@ -1439,7 +1439,7 @@ class FeedbackCategoryDef(SQLModel, table=True):
 
     MERGE SUPPORT
     ──────────────
-    merged_into_id lets PIU staff consolidate overlapping categories.
+    merged_into_id lets GRM Unit staff consolidate overlapping categories.
     All existing feedback tagged with this category keeps its assignment
     (for historical reporting); new submissions cannot use a merged category.
 
@@ -1540,7 +1540,7 @@ class FeedbackCategoryDef(SQLModel, table=True):
     # ── Display ───────────────────────────────────────────────────────────────
     color_hex: Optional[str] = Field(
         default=None, max_length=7, nullable=True,
-        description="Hex color for UI display e.g. '#E24B4A'. Set by PIU staff.",
+        description="Hex color for UI display e.g. '#E24B4A'. Set by GRM Unit staff.",
     )
     icon:      Optional[str] = Field(
         default=None, max_length=50, nullable=True,
@@ -1588,7 +1588,7 @@ class FeedbackCategoryDef(SQLModel, table=True):
 
 class ChannelSession(SQLModel, table=True):
     """
-    A two-way conversation session between a PAP and the LLM on a digital channel.
+    A two-way conversation session between a Consumer and the LLM on a digital channel.
 
     Applies to channels: SMS, WHATSAPP, PHONE_CALL.
 
@@ -1640,8 +1640,8 @@ class ChannelSession(SQLModel, table=True):
     OFFICER-ASSISTED
     ─────────────────
     is_officer_assisted=True: a GHC officer opened this session on behalf of a
-      walk-in PAP. recorded_by_user_id is set. The LLM still guides the
-      structured collection but the officer types the PAP's words.
+      walk-in Consumer. recorded_by_user_id is set. The LLM still guides the
+      structured collection but the officer types the Consumer's words.
     """
     __tablename__ = "channel_sessions"
 
@@ -1732,7 +1732,7 @@ class ChannelSession(SQLModel, table=True):
     # ── Officer-assisted mode ─────────────────────────────────────────────────
     is_officer_assisted: bool = Field(
         default=False, nullable=False,
-        description="True when a GHC officer opened this session on behalf of a walk-in PAP.",
+        description="True when a GHC officer opened this session on behalf of a walk-in Consumer.",
     )
     recorded_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True,
@@ -1870,11 +1870,11 @@ class ChannelSession(SQLModel, table=True):
 
 
 class EscalationRequestStatus(str, Enum):
-    """Lifecycle of a PAP escalation request."""
-    PENDING   = "pending"    # PAP submitted, PIU has not yet reviewed
-    APPROVED  = "approved"   # PIU approved — escalation will proceed
-    REJECTED  = "rejected"   # PIU rejected — explained in reviewer_notes
-    ACTIONED  = "actioned"   # PIU escalated the grievance following approval
+    """Lifecycle of a Consumer escalation request."""
+    PENDING   = "pending"    # Consumer submitted, GRM Unit has not yet reviewed
+    APPROVED  = "approved"   # GRM Unit approved — escalation will proceed
+    REJECTED  = "rejected"   # GRM Unit rejected — explained in reviewer_notes
+    ACTIONED  = "actioned"   # GRM Unit escalated the grievance following approval
 
     @classmethod
     def _missing_(cls, value: object):
@@ -1889,23 +1889,23 @@ class EscalationRequestStatus(str, Enum):
 
 class EscalationRequest(SQLModel, table=True):
     """
-    A formal request by the PAP (Project Affected Person) to escalate
+    A formal request by the Consumer to escalate
     their grievance to the next GRM level.
 
     IMPORTANT DISTINCTION from FeedbackEscalation:
       FeedbackEscalation → staff-initiated, immediate, recorded in the GRM trail.
-      EscalationRequest  → PAP-initiated, goes to PIU inbox for review.
-                           PIU can approve (→ triggers actual escalation) or
+      EscalationRequest  → Consumer-initiated, goes to GRM Unit inbox for review.
+                           GRM Unit can approve (→ triggers actual escalation) or
                            reject (→ must explain why in reviewer_notes).
 
     This exists because:
-      1. The PAP may feel their case is not progressing fast enough.
-      2. The SEP requires PAPs to have a formal recourse channel.
+      1. The Consumer may feel their case is not progressing fast enough.
+      2. The SEP requires Consumers to have a formal recourse channel.
       3. It creates an audit trail separate from the escalation trail,
-         showing that the PAP exercised their right to challenge the process.
+         showing that the Consumer exercised their right to challenge the process.
 
     When status → APPROVED:
-      PIU calls POST /api/v1/feedback/{id}/escalate (staff endpoint)
+      GRM Unit calls POST /api/v1/feedback/{id}/escalate (staff endpoint)
       which creates the FeedbackEscalation and updates Feedback.current_level.
       Then sets EscalationRequest.status → ACTIONED.
 
@@ -1920,28 +1920,28 @@ class EscalationRequest(SQLModel, table=True):
         sa_column=Column(ForeignKey("feedbacks.id", ondelete="CASCADE"), nullable=False, index=True)
     )
 
-    # PAP identity
+    # Consumer identity
     requested_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True, index=True,
-        description="auth_service User.id of the PAP who submitted this request.",
+        description="auth_service User.id of the Consumer who submitted this request.",
     )
     requested_by_stakeholder_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True, index=True,
-        description="stakeholder_service Stakeholder.id — if PAP is a known stakeholder.",
+        description="stakeholder_service Stakeholder.id — if Consumer is a known stakeholder.",
     )
 
     # Request details
     reason: str = Field(
         sa_column=Column(Text, nullable=False),
         description=(
-            "Why the PAP wants escalation. Required. "
+            "Why the Consumer wants escalation. Required. "
             "e.g. 'No response received for 14 days despite follow-up', "
             "'Resolution offered is insufficient compensation'."
         ),
     )
     requested_level: Optional[str] = Field(
         default=None, max_length=30, nullable=True,
-        description="GRM level the PAP wants to escalate to (optional — PIU may override).",
+        description="GRM level the Consumer wants to escalate to (optional — GRM Unit may override).",
     )
 
     status: EscalationRequestStatus = Field(
@@ -1952,17 +1952,17 @@ class EscalationRequest(SQLModel, table=True):
         ),
     )
 
-    # PIU review
+    # GRM Unit review
     reviewed_by_user_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True,
-        description="PIU staff who reviewed this request.",
+        description="GRM Unit staff who reviewed this request.",
     )
     reviewed_at: Optional[datetime] = Field(
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     reviewer_notes: Optional[str] = Field(
         default=None, sa_column=Column(Text, nullable=True),
-        description="PIU explanation for approval or rejection (shown to PAP if rejected).",
+        description="GRM Unit explanation for approval or rejection (shown to Consumer if rejected).",
     )
 
     # Timestamps

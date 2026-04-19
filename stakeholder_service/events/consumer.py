@@ -197,8 +197,8 @@ async def _handle_user_registered(payload: dict, db: AsyncSession) -> None:
     already exists with the same email or phone number. If found, link them by
     setting contact.user_id = new user's id.
 
-    This handles the common case where a PIU officer manually registered a PAP
-    as a StakeholderContact before the PAP created their own platform account.
+    This handles the common case where a GRM Unit officer manually registered a Consumer
+    as a StakeholderContact before the Consumer created their own platform account.
     """
     user_id = payload.get("user_id")
     email   = payload.get("email")

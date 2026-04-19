@@ -22,7 +22,7 @@ Gallery retrieval
 Images are returned ordered by phase → display_order → captured_at so
 a "before → during → after" narrative is natural.
 
-Filtering by phase gives the PIU a concise view:
+Filtering by phase gives the GRM Unit a concise view:
   GET .../images?phase=before   →  baseline condition photos
   GET .../images?phase=after    →  completion evidence photos
 """

@@ -44,7 +44,7 @@ def _get_qdrant():
 class RAGService:
     """
     Manages project knowledge base in Qdrant.
-    Used to auto-identify which project a PAP is referring to.
+    Used to auto-identify which project a Consumer is referring to.
     """
 
     VECTOR_SIZE = 384  # all-MiniLM-L6-v2 output size
@@ -122,7 +122,7 @@ class RAGService:
         self, query: str, top_k: int = 3, score_threshold: float = 0.35
     ) -> List[Tuple[str, float, dict]]:
         """
-        Semantic search for the most relevant projects matching a PAP's location/description.
+        Semantic search for the most relevant projects matching a Consumer's location/description.
         Returns: list of (project_id_str, score, payload)
         """
         vector = self._embed(query)

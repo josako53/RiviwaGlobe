@@ -18,11 +18,11 @@ Design
     mpesa     — Vodacom M-Pesa Tanzania (direct integration)
 
   Payment types:
-    grievance_fee       — rare; some PAP registration charges
+    grievance_fee       — rare; some Consumer registration charges
     project_contribution — community contribution to a sub-project
     service_fee         — org service access fees
     subscription        — platform subscription (org monthly/annual)
-    refund              — outbound refund to PAP/org
+    refund              — outbound refund to Consumer/org
 ═══════════════════════════════════════════════════════════════════════════════
 """
 from __future__ import annotations
@@ -45,8 +45,8 @@ class PaymentProvider(str, Enum):
 
 class PaymentStatus(str, Enum):
     PENDING    = "pending"     # created, awaiting initiation
-    INITIATED  = "initiated"   # sent to provider, awaiting PAP action
-    PROCESSING = "processing"  # PAP actioned, provider processing
+    INITIATED  = "initiated"   # sent to provider, awaiting Consumer action
+    PROCESSING = "processing"  # Consumer actioned, provider processing
     PAID       = "paid"        # confirmed paid
     FAILED     = "failed"      # provider rejected
     EXPIRED    = "expired"     # timeout with no action
@@ -83,7 +83,7 @@ class Payment(SQLModel, table=True):
     A payment intent — what should be paid, by whom, for what.
 
     One Payment can have 1-N PaymentTransactions (e.g. first attempt fails,
-    PAP retries on a different channel — same Payment, new Transaction).
+    Consumer retries on a different channel — same Payment, new Transaction).
     Status transitions to PAID when any Transaction succeeds.
 
     Cross-service soft links (no FK constraints):

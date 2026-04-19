@@ -67,7 +67,7 @@ class StakeholderVolumeRow(BaseModel):
 class StakeholderImplementationRow(BaseModel):
     """
     Per-stakeholder: how many suggestions were actioned and the average
-    time (in hours) it took the PIU to implement (submitted → resolved_at).
+    time (in hours) it took the GRM Unit to implement (submitted → resolved_at).
     """
     model_config = ConfigDict(from_attributes=False)
     stakeholder_id:                str
@@ -95,7 +95,7 @@ class ImplementationBlock(BaseModel):
     Full implementation performance block for actioned suggestions.
 
     'implementation' measures the time between a suggestion being
-    submitted and the PIU marking it as ACTIONED (resolved_at).
+    submitted and the GRM Unit marking it as ACTIONED (resolved_at).
 
     by_stakeholder — which stakeholders' suggestions get implemented
                      fastest / slowest.

@@ -84,7 +84,7 @@ _LEVEL_ORDER = [
 async def _classify_via_ai_service(data: dict) -> dict | None:
     """
     Call ai_service POST /api/v1/ai/internal/classify to auto-detect
-    project_id and category for a PAP submission.
+    project_id and category for a Consumer submission.
 
     Returns the classification dict, or None if ai_service is unreachable.
     Never raises — caller must handle None gracefully.
@@ -259,18 +259,18 @@ class FeedbackService:
             distribution_id=f.distribution_id,
         )
 
-        # Notify PAP that submission was received
+        # Notify Consumer that submission was received
         if not f.is_anonymous:
             try:
                 project = await self.repo.get_project(f.project_id)
                 await self.producer.notifications.grm_feedback_submitted(
-                    feedback_id   = str(f.id),
-                    pap_user_id   = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
-                    pap_phone     = f.submitter_phone,
-                    feedback_ref  = f.unique_ref,
-                    project_name  = project.name if project else "the project",
-                    feedback_type = f.feedback_type.value,
-                    language      = "sw",
+                    feedback_id      = str(f.id),
+                    consumer_user_id = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
+                    consumer_phone   = f.submitter_phone,
+                    feedback_ref     = f.unique_ref,
+                    project_name     = project.name if project else "the project",
+                    feedback_type    = f.feedback_type.value,
+                    language         = "sw",
                 )
             except Exception as _exc:
                 log.warning("feedback.submit_notification_failed", error=str(_exc))
@@ -334,15 +334,15 @@ class FeedbackService:
         await self.db.commit()
         return {"total_rows": len(rows), "created": created, "skipped": skipped, "errors": errors}
 
-    async def submit_from_pap(
+    async def submit_from_consumer(
         self, data: dict, user_id: uuid.UUID, channel_override: str = "web_portal",
     ) -> Feedback:
         project_id = self._to_uuid(data.get("project_id"))
 
         # ── AI auto-classification: fill missing project_id and/or category ──
         # Only call AI when project_id is missing (need project identification)
-        # or category is missing AND project_id was not explicitly provided by PAP.
-        # Skip AI entirely when PAP already picked a project — avoids 15s timeout.
+        # or category is missing AND project_id was not explicitly provided by Consumer.
+        # Skip AI entirely when Consumer already picked a project — avoids 15s timeout.
         if not project_id or (not data.get("category") and not data.get("project_id")):
             ai_result = await _classify_via_ai_service(data)
             if ai_result:
@@ -418,21 +418,21 @@ class FeedbackService:
 
         await self.db.commit()
 
-        # Notify PAP (self-service portal submission)
+        # Notify Consumer (self-service portal submission)
         if not f.is_anonymous:
             try:
                 project = await self.repo.get_project(f.project_id)
                 await self.producer.notifications.grm_feedback_submitted(
-                    feedback_id   = str(f.id),
-                    pap_user_id   = str(user_id),
-                    pap_phone     = f.submitter_phone,
-                    feedback_ref  = f.unique_ref,
-                    project_name  = project.name if project else "the project",
-                    feedback_type = f.feedback_type.value,
-                    language      = "sw",
+                    feedback_id      = str(f.id),
+                    consumer_user_id = str(user_id),
+                    consumer_phone   = f.submitter_phone,
+                    feedback_ref     = f.unique_ref,
+                    project_name     = project.name if project else "the project",
+                    feedback_type    = f.feedback_type.value,
+                    language         = "sw",
                 )
             except Exception as _exc:
-                log.warning("feedback.pap_submit_notification_failed", error=str(_exc))
+                log.warning("feedback.consumer_submit_notification_failed", error=str(_exc))
 
         return f
 
@@ -483,19 +483,19 @@ class FeedbackService:
         await self.db.commit()
         await self.producer.feedback_acknowledged(f.id, f.project_id, f.priority.value)
 
-        # Notify PAP that their submission has been acknowledged
+        # Notify Consumer that their submission has been acknowledged
         if not f.is_anonymous:
             try:
                 project  = await self.repo.get_project(f.project_id)
                 trd      = f.target_resolution_date.strftime("%d %b %Y") if f.target_resolution_date else None
                 await self.producer.notifications.grm_feedback_acknowledged(
-                    feedback_id             = str(f.id),
-                    pap_user_id             = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
-                    pap_phone               = f.submitter_phone,
-                    feedback_ref            = f.unique_ref,
-                    project_name            = project.name if project else "the project",
-                    target_resolution_date  = trd,
-                    language                = "sw",
+                    feedback_id            = str(f.id),
+                    consumer_user_id       = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
+                    consumer_phone         = f.submitter_phone,
+                    feedback_ref           = f.unique_ref,
+                    project_name           = project.name if project else "the project",
+                    target_resolution_date = trd,
+                    language               = "sw",
                 )
             except Exception as _exc:
                 log.warning("feedback.acknowledge_notification_failed", error=str(_exc))
@@ -589,14 +589,14 @@ class FeedbackService:
         await self.db.commit()
         await self.producer.feedback_resolved(f.id, f.project_id)
 
-        # Notify PAP that their submission has been resolved
+        # Notify Consumer that their submission has been resolved
         if not f.is_anonymous:
             try:
                 project = await self.repo.get_project(f.project_id)
                 await self.producer.notifications.grm_feedback_resolved(
                     feedback_id        = str(f.id),
-                    pap_user_id        = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
-                    pap_phone          = f.submitter_phone,
+                    consumer_user_id   = str(f.submitted_by_user_id) if f.submitted_by_user_id else None,
+                    consumer_phone     = f.submitter_phone,
                     feedback_ref       = f.unique_ref,
                     project_name       = project.name if project else "the project",
                     resolution_summary = summary,
@@ -710,9 +710,9 @@ class FeedbackService:
         await self.get_or_404(feedback_id)
         return await self.repo.list_actions(feedback_id)
 
-    # ── PAP ───────────────────────────────────────────────────────────────────
+    # ── Consumer ──────────────────────────────────────────────────────────────
 
-    async def list_for_pap(
+    async def list_for_consumer(
         self,
         user_id:        uuid.UUID,
         stakeholder_id: Optional[uuid.UUID] = None,
@@ -722,7 +722,7 @@ class FeedbackService:
             user_id=user_id, stakeholder_id=stakeholder_id, **filters
         )
 
-    async def get_for_pap_or_404(
+    async def get_for_consumer_or_404(
         self,
         feedback_id:    uuid.UUID,
         user_id:        uuid.UUID,
@@ -739,10 +739,10 @@ class FeedbackService:
             raise FeedbackNotFoundError()
         return f
 
-    async def pap_add_comment(
+    async def consumer_add_comment(
         self, feedback_id: uuid.UUID, data: dict, user_id: uuid.UUID, stakeholder_id
     ) -> FeedbackAction:
-        f = await self.get_for_pap_or_404(feedback_id, user_id, stakeholder_id)
+        f = await self.get_for_consumer_or_404(feedback_id, user_id, stakeholder_id)
         if f.status in (FeedbackStatus.CLOSED, FeedbackStatus.DISMISSED):
             raise FeedbackClosedError()
         comment = data.get("comment", "").strip()
@@ -750,16 +750,16 @@ class FeedbackService:
             raise ValidationError(message="comment is required.")
         action = FeedbackAction(
             feedback_id=feedback_id, action_type=ActionType.NOTE,
-            description=f"PAP follow-up: {comment}", is_internal=False,
+            description=f"Consumer follow-up: {comment}", is_internal=False,
         )
         action = await self.repo.create_action(action)
         await self.db.commit()
         return action
 
-    async def pap_appeal(
+    async def consumer_appeal(
         self, feedback_id: uuid.UUID, data: dict, user_id: uuid.UUID, stakeholder_id
     ) -> tuple[Feedback, FeedbackAppeal]:
-        f = await self.get_for_pap_or_404(feedback_id, user_id, stakeholder_id)
+        f = await self.get_for_consumer_or_404(feedback_id, user_id, stakeholder_id)
         if f.status != FeedbackStatus.RESOLVED:
             raise ValidationError(f"Current status: {f.status.value}. Appeal only allowed after resolution.")
         if f.appeal:
@@ -781,7 +781,7 @@ class FeedbackService:
         next_level  = _LEVEL_ORDER[min(current_idx + 1, len(_LEVEL_ORDER) - 1)]
         esc = FeedbackEscalation(
             feedback_id=feedback_id, from_level=f.current_level,
-            to_level=next_level, reason=f"PAP appeal filed: {grounds}",
+            to_level=next_level, reason=f"Consumer appeal filed: {grounds}",
             escalated_by_user_id=None,
         )
         await self.repo.create_escalation(esc)
@@ -789,7 +789,7 @@ class FeedbackService:
         await self.repo.save(f)
         await self.repo.create_action(FeedbackAction(
             feedback_id=feedback_id, action_type=ActionType.NOTE,
-            description=f"PAP filed formal appeal. Grounds: {grounds}",
+            description=f"Consumer filed formal appeal. Grounds: {grounds}",
             is_internal=False,
         ))
         await self.db.commit()
@@ -801,7 +801,7 @@ class FeedbackService:
         self, feedback_id: uuid.UUID, data: dict,
         user_id: uuid.UUID, stakeholder_id: Optional[uuid.UUID]
     ) -> EscalationRequest:
-        f = await self.get_for_pap_or_404(feedback_id, user_id, stakeholder_id)
+        f = await self.get_for_consumer_or_404(feedback_id, user_id, stakeholder_id)
         if f.status in (FeedbackStatus.CLOSED, FeedbackStatus.DISMISSED, FeedbackStatus.RESOLVED):
             raise ValidationError("Cannot request escalation on a closed or resolved item.")
         if f.current_level == GRMLevel.WORLD_BANK:

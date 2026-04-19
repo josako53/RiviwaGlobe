@@ -15,7 +15,7 @@ def _svc(db): return ChannelService(db=db)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # AI-POWERED CHANNELS — No staff intervention required
-# PAP interacts directly with the Riviwa AI assistant via SMS/WhatsApp/Call.
+# Consumer interacts directly with the Riviwa AI assistant via SMS/WhatsApp/Call.
 # The LLM collects all feedback details through multi-turn conversation
 # and auto-submits when confidence >= 0.80.
 # ═════════════════════════════════════════════════════════════════════════════
@@ -27,14 +27,14 @@ def _svc(db): return ChannelService(db=db)
     summary="Start an AI-powered feedback conversation",
     description=(
         "Start a new AI conversation session via SMS, WhatsApp, or phone call. "
-        "The Riviwa AI assistant will guide the PAP through submitting a grievance, "
+        "The Riviwa AI assistant will guide the Consumer through submitting a grievance, "
         "suggestion, or applause — no staff intervention needed. "
         "The LLM automatically extracts feedback details and auto-submits when confident."
     ),
     tags=["AI Channels"],
 )
 async def ai_start_session(body: AIChannelSessionCreate, db: DbDep) -> AISessionResponse:
-    """No auth required — PAPs interact via phone number/WhatsApp ID."""
+    """No auth required — Consumers interact via phone number/WhatsApp ID."""
     session = await _svc(db).create_session(
         data=body.model_dump(exclude_none=True),
         created_by=uuid.UUID("00000000-0000-0000-0000-000000000000"),  # system user
@@ -55,7 +55,7 @@ async def ai_start_session(body: AIChannelSessionCreate, db: DbDep) -> AISession
     response_model=AISessionResponse,
     summary="Send a message in an AI conversation",
     description=(
-        "Send the PAP's message to the AI assistant. The LLM responds, extracts "
+        "Send the Consumer's message to the AI assistant. The LLM responds, extracts "
         "feedback details (type, description, location, etc.), and auto-submits "
         "the feedback when it has enough information (confidence >= 0.80). "
         "Supports Kiswahili and English — the AI detects and responds in the user's language."
@@ -105,7 +105,7 @@ async def ai_get_session(session_id: uuid.UUID, db: DbDep) -> dict:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# STAFF-MANAGED SESSIONS — Staff initiates/monitors on behalf of PAP
+# STAFF-MANAGED SESSIONS — Staff initiates/monitors on behalf of Consumer
 # ═════════════════════════════════════════════════════════════════════════════
 
 @router.post("/channel-sessions", status_code=status.HTTP_201_CREATED,
@@ -128,7 +128,7 @@ async def list_sessions(
 async def get_session(session_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
     return session_out(await _svc(db).get_or_404(session_id), include_turns=True)
 
-@router.post("/channel-sessions/{session_id}/message", summary="Add a PAP message turn and get the LLM reply", tags=["Staff Channel Management"])
+@router.post("/channel-sessions/{session_id}/message", summary="Add a Consumer message turn and get the LLM reply", tags=["Staff Channel Management"])
 async def send_message(session_id: uuid.UUID, body: AIChannelMessage, db: DbDep, _: StaffDep) -> dict:
     return await _svc(db).process_message(session_id, body.message)
 
@@ -145,13 +145,13 @@ async def abandon_session(session_id: uuid.UUID, body: AbandonSession, db: DbDep
 # ═════════════════════════════════════════════════════════════════════════════
 # WEBHOOKS — Inbound messages from SMS/WhatsApp gateways
 # These are the entry points for fully automated AI conversations.
-# When a PAP sends an SMS or WhatsApp message, the gateway forwards it here.
+# When a Consumer sends an SMS or WhatsApp message, the gateway forwards it here.
 # The system auto-creates a session (if none exists) and runs the LLM pipeline.
 # ═════════════════════════════════════════════════════════════════════════════
 
 @router.post("/webhooks/sms", status_code=status.HTTP_200_OK,
              summary="Inbound SMS webhook (Africa's Talking / Twilio)",
-             description="Fully automated: PAP sends SMS → AI responds → auto-submits feedback",
+             description="Fully automated: Consumer sends SMS → AI responds → auto-submits feedback",
              tags=["AI Webhooks"])
 async def inbound_sms(request: Request, db: DbDep) -> dict:
     form = await request.form()
@@ -163,7 +163,7 @@ async def inbound_sms(request: Request, db: DbDep) -> dict:
 @router.post("/webhooks/whatsapp", status_code=status.HTTP_200_OK,
              summary="Inbound WhatsApp webhook (Meta Cloud API)",
              description=(
-                 "Fully automated: PAP sends WhatsApp message → AI responds → auto-submits feedback. "
+                 "Fully automated: Consumer sends WhatsApp message → AI responds → auto-submits feedback. "
                  "Supports text messages, voice notes (STT → LLM), images, and documents."
              ),
              tags=["AI Webhooks"])

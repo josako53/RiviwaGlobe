@@ -7,15 +7,15 @@ services/voice_service.py — feedback_service
 ═══════════════════════════════════════════════════════════════════════════════
 Voice pipeline for Riviwa feedback:
 
-  INBOUND (PAP → Riviwa):
+  INBOUND (Consumer → Riviwa):
     1. Receive audio bytes (upload, webhook payload, stream)
     2. Store to object storage (MinIO/S3) → audio_url
     3. Transcribe via STT (Whisper / Google STT) → text + confidence
     4. Return VoiceTranscriptionResult for the caller to act on
 
-  OUTBOUND (Riviwa → PAP):
+  OUTBOUND (Riviwa → Consumer):
     5. Synthesise text → speech (TTS) for phone_call / mobile_app voice replies
-    6. Store TTS audio → return audio_url for streaming back to PAP
+    6. Store TTS audio → return audio_url for streaming back to Consumer
 
   SESSION COMPLETION:
     7. Assemble per-turn audio into full session transcript
@@ -24,7 +24,7 @@ Voice pipeline for Riviwa feedback:
 SUPPORTED CHANNELS:
   · PHONE_CALL        — full-session recording; officer or IVR driven
   · WHATSAPP_VOICE    — Meta sends OGG/OPUS audio file via webhook
-  · MOBILE_APP (mic)  — PAP holds mic button; per-turn audio upload
+  · MOBILE_APP (mic)  — Consumer holds mic button; per-turn audio upload
   · WEB_PORTAL (mic)  — same as mobile_app but from browser (WebM/OPUS)
   · IN_PERSON         — officer records walk-in consultation (any format)
 
@@ -361,7 +361,7 @@ class VoiceService:
         # Assemble text transcript (all turns, labelled)
         lines = []
         for t in all_turns:
-            role    = "PAP" if t["role"] == "user" else "Riviwa"
+            role    = "Consumer" if t["role"] == "user" else "Riviwa"
             content = t["content"]
             ts      = t.get("ts", "")[:19].replace("T", " ")
             lines.append(f"[{ts}] {role}: {content}")
@@ -414,7 +414,7 @@ class VoiceService:
 
         The channel handler in channels.py then treats the transcribed text
         exactly like an incoming text message — it feeds it into the LLM
-        conversation pipeline as if the PAP had typed it.
+        conversation pipeline as if the Consumer had typed it.
         """
         log.info(
             "voice.whatsapp_voice.received",

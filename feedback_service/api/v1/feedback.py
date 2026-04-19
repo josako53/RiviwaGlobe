@@ -185,7 +185,7 @@ async def dismiss_feedback(feedback_id: uuid.UUID, body: DismissFeedback, db: Db
     include_in_schema=False,
 )
 async def get_feedback_by_ref_internal(unique_ref: str, request: Request, db: DbDep, kafka: KafkaDep) -> dict:
-    """Internal: no JWT. Used by ai_service for PAP follow-up status queries."""
+    """Internal: no JWT. Used by ai_service for Consumer follow-up status queries."""
     from fastapi.responses import JSONResponse
     from core.config import settings
     from sqlmodel import select

@@ -206,7 +206,7 @@ async def _handle_concern_raised(payload: dict, db: AsyncSession) -> None:
     """
     When stakeholder_service publishes engagement.concern.raised or
     communication.concerns.pending, auto-create a SUGGESTION feedback so
-    PIU can track it without manually entering it.
+    the GRM Unit can track it without manually entering it.
     """
     from models.feedback import (
         Feedback, FeedbackType, FeedbackStatus, FeedbackPriority,

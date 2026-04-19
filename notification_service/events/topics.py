@@ -93,7 +93,7 @@ class NotificationTypes:
     GRM_SLA_BREACH_WARNING     = "grm.feedback.sla_breach_warning"
     GRM_COMMENT_ADDED          = "grm.feedback.comment_added"
 
-    # ── GRM — Escalation requests (PAP-initiated) ─────────────────────────────
+    # ── GRM — Escalation requests (Consumer-initiated) ────────────────────────
     GRM_ESCALATION_REQUEST_RECEIVED  = "grm.escalation_request.received"
     GRM_ESCALATION_REQUEST_APPROVED  = "grm.escalation_request.approved"
     GRM_ESCALATION_REQUEST_REJECTED  = "grm.escalation_request.rejected"

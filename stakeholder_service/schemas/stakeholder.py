@@ -37,8 +37,8 @@ class RegisterStakeholder(BaseModel):
     # ── Required ───────────────────────────────────────────────────────────────
     stakeholder_type: str = Field(
         ...,
-        description="pap | interested_party",
-        json_schema_extra={"enum": ["pap", "interested_party"]},
+        description="consumer | interested_party",
+        json_schema_extra={"enum": ["consumer", "interested_party"]},
     )
     entity_type: str = Field(
         ...,
@@ -136,12 +136,12 @@ class RegisterStakeholder(BaseModel):
     org_id: Optional[uuid.UUID] = Field(default=None, description="Riviwa organisation UUID")
 
     # ── Notes ──────────────────────────────────────────────────────────────────
-    notes: Optional[str] = Field(default=None, description="Internal PIU notes")
+    notes: Optional[str] = Field(default=None, description="Internal GRM Unit notes")
 
     model_config = {
         "json_schema_extra": {
             "example": {
-                "stakeholder_type": "pap",
+                "stakeholder_type": "consumer",
                 "entity_type": "individual",
                 "category": "individual",
                 "first_name": "Juma",
@@ -206,7 +206,7 @@ class RegisterStakeholderProject(BaseModel):
     """POST /api/v1/stakeholders/{id}/projects — Register stakeholder under a project."""
 
     project_id:        uuid.UUID      = Field(..., description="Project UUID to register under")
-    is_pap:            bool           = Field(default=False, description="Is this stakeholder a Project-Affected Person for this project?")
+    is_consumer:       bool           = Field(default=False, description="Is this stakeholder a Consumer (project-affected party) for this project?")
     affectedness:      Optional[str]  = Field(default=None, description="positively_affected | negatively_affected | both | unknown")
     impact_description: Optional[str] = Field(default=None, description="Description of how the project impacts this stakeholder")
 
@@ -214,7 +214,7 @@ class RegisterStakeholderProject(BaseModel):
         "json_schema_extra": {
             "example": {
                 "project_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                "is_pap": True,
+                "is_consumer": True,
                 "affectedness": "negatively_affected",
                 "impact_description": "Land acquisition for road widening affects 0.5 acres of farmland",
             }
@@ -248,7 +248,7 @@ class AddContact(BaseModel):
     # ── Permissions ────────────────────────────────────────────────────────────
     is_primary:                    bool = Field(default=False, description="Primary contact for the stakeholder")
     can_submit_feedback:           bool = Field(default=True,  description="Allowed to submit feedback on behalf of stakeholder")
-    can_receive_communications:    bool = Field(default=True,  description="Should receive communications from PIU")
+    can_receive_communications:    bool = Field(default=True,  description="Should receive communications from GRM Unit")
     can_distribute_communications: bool = Field(default=False, description="Can distribute communications to the wider group")
 
     # ── Notes ──────────────────────────────────────────────────────────────────

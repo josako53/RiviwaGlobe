@@ -26,7 +26,7 @@ def _svc(db, kafka): return StakeholderService(db=db, producer=kafka)
 
 def _s_out(s): return {"id":str(s.id),"stakeholder_type":s.stakeholder_type,"entity_type":s.entity_type,"category":s.category,"affectedness":s.affectedness,"importance_rating":s.importance_rating,"display_name":s.display_name,"org_name":s.org_name,"first_name":s.first_name,"last_name":s.last_name,"org_id":str(s.org_id) if s.org_id else None,"address_id":str(s.address_id) if s.address_id else None,"lga":s.lga,"ward":s.ward,"language_preference":s.language_preference,"preferred_channel":s.preferred_channel,"needs_translation":s.needs_translation,"needs_transport":s.needs_transport,"needs_childcare":s.needs_childcare,"is_vulnerable":s.is_vulnerable,"vulnerable_group_types":s.vulnerable_group_types,"participation_barriers":s.participation_barriers,"notes":s.notes,"created_at":s.created_at.isoformat()}
 def _c_brief(c): return {"id":str(c.id),"full_name":c.full_name,"title":c.title,"role_in_org":c.role_in_org,"email":c.email,"phone":c.phone,"preferred_channel":c.preferred_channel,"is_primary":c.is_primary,"can_submit_feedback":c.can_submit_feedback,"can_receive_communications":c.can_receive_communications,"can_distribute_communications":c.can_distribute_communications,"user_id":str(c.user_id) if c.user_id else None,"is_active":c.is_active}
-def _sp_out(sp): return {"id":str(sp.id),"stakeholder_id":str(sp.stakeholder_id),"project_id":str(sp.project_id),"is_pap":sp.is_pap,"affectedness":sp.affectedness,"impact_description":sp.impact_description,"consultation_count":sp.consultation_count,"registered_at":sp.registered_at.isoformat()}
+def _sp_out(sp): return {"id":str(sp.id),"stakeholder_id":str(sp.stakeholder_id),"project_id":str(sp.project_id),"is_consumer":sp.is_consumer,"affectedness":sp.affectedness,"impact_description":sp.impact_description,"consultation_count":sp.consultation_count,"registered_at":sp.registered_at.isoformat()}
 def _eng_out(e): return {"id":str(e.id),"contact_id":str(e.contact_id),"activity_id":str(e.activity_id),"attendance_status":e.attendance_status,"concerns_raised":e.concerns_raised,"response_given":e.response_given,"feedback_submitted":e.feedback_submitted,"feedback_ref_id":str(e.feedback_ref_id) if e.feedback_ref_id else None,"created_at":e.created_at.isoformat()}
 
 
@@ -38,7 +38,7 @@ async def register_stakeholder(body: RegisterStakeholder, request: Request, db: 
 @router.get("", summary="List stakeholders with optional filters")
 async def list_stakeholders(
     db: DbDep, kafka: KafkaDep, _: StaffDep,
-    stakeholder_type: Optional[str]            = Query(default=None, description="Filter by stakeholder type (pap / interested_party / implementing_agency / local_authority / civil_society / media / private_sector / government / international_org)"),
+    stakeholder_type: Optional[str]            = Query(default=None, description="Filter by stakeholder type (consumer / interested_party / implementing_agency / local_authority / civil_society / media / private_sector / government / international_org)"),
     category:         Optional[str]            = Query(default=None, description="Filter by stakeholder category"),
     lga:              Optional[str]            = Query(default=None, description="Filter by Local Government Authority (partial match)"),
     affectedness:     Optional[str]            = Query(default=None, description="Filter by affectedness level (directly_affected / indirectly_affected / not_affected)"),

@@ -22,9 +22,9 @@ class ConversationChannel(str, Enum):
 
 class ConversationStatus(str, Enum):
     ACTIVE     = "active"      # conversation in progress
-    CONFIRMING = "confirming"  # showing summary, awaiting PAP confirmation
+    CONFIRMING = "confirming"  # showing summary, awaiting Consumer confirmation
     SUBMITTED  = "submitted"   # all feedback submitted
-    FOLLOWUP   = "followup"    # PAP is checking status of existing feedback
+    FOLLOWUP   = "followup"    # Consumer is checking status of existing feedback
     ABANDONED  = "abandoned"
     TIMED_OUT  = "timed_out"
     FAILED     = "failed"
@@ -44,7 +44,7 @@ class ConversationStage(str, Enum):
 
 class AIConversation(SQLModel, table=True):
     """
-    One row per PAP conversation session.
+    One row per Consumer conversation session.
     Stores the full turn history and progressively extracted feedback fields.
     """
     __tablename__ = "ai_conversations"
@@ -55,7 +55,7 @@ class AIConversation(SQLModel, table=True):
     stage:      ConversationStage   = Field(default=ConversationStage.GREETING)
     language:   str = Field(default="sw", max_length=10)  # "sw" or "en"
 
-    # ── PAP identity ──────────────────────────────────────────────────────────
+    # ── Consumer identity ─────────────────────────────────────────────────────
     phone_number:  Optional[str]      = Field(default=None, max_length=30, index=True)
     whatsapp_id:   Optional[str]      = Field(default=None, max_length=100, index=True)
     web_token:     Optional[str]      = Field(default=None, max_length=200, index=True)
@@ -188,7 +188,7 @@ class StakeholderCache(SQLModel, table=True):
     phone:          Optional[str] = Field(default=None, max_length=30)
     email:          Optional[str] = Field(default=None, max_length=200)
     role:           Optional[str] = Field(default=None, max_length=100)
-    # True if this stakeholder is the project officer/PIU incharge
+    # True if this stakeholder is the project officer/GRM Unit incharge
     is_incharge:    bool = Field(default=False, index=True)
     lga:            Optional[str] = Field(default=None, max_length=100)
     synced_at:      datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

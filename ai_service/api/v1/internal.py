@@ -2,7 +2,7 @@
 api/v1/internal.py — Internal service-to-service endpoints for ai_service.
 
 These endpoints require X-Service-Key header only (no JWT).
-Used by feedback_service to classify PAP feedback before submission.
+Used by feedback_service to classify Consumer feedback before submission.
 """
 from __future__ import annotations
 from fastapi import APIRouter, Request, status
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/ai/internal", tags=["AI Internal"])
 )
 async def classify_feedback(request: Request) -> dict:
     """
-    Called by feedback_service during PAP submission when project_id or category is missing.
+    Called by feedback_service during Consumer submission when project_id or category is missing.
 
     Input JSON:
       {
@@ -77,13 +77,13 @@ async def classify_feedback(request: Request) -> dict:
 @router.post(
     "/candidate-projects",
     status_code=status.HTTP_200_OK,
-    summary="Return top candidate projects for a PAP's location (internal only)",
+    summary="Return top candidate projects for a Consumer's location (internal only)",
     include_in_schema=False,
 )
 async def candidate_projects(request: Request, db: DbDep) -> dict:
     """
     Called by feedback_service when AI classification returns no confident project match.
-    Returns the top N projects ranked by semantic similarity to the PAP's description + location.
+    Returns the top N projects ranked by semantic similarity to the Consumer's description + location.
     The frontend uses this list to show a project picker.
 
     Input JSON:

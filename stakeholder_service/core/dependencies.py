@@ -21,11 +21,11 @@ JWT VALIDATION
 
 ROLE GUARDS
 ──────────────────────────────────────────────────────────────────────────────
-  require_staff         → any authenticated user (PIU staff — any active JWT)
+  require_staff         → any authenticated user (GRM Unit staff — any active JWT)
   require_platform_role → user must have specific platform_role in JWT
     e.g. require_platform_role("admin") for admin-only endpoints
 
-  PIU field officers (no platform_role, just a JWT) can read and write most
+  GRM Unit field officers (no platform_role, just a JWT) can read and write most
   stakeholder/engagement data. Destructive operations require admin.
 ═══════════════════════════════════════════════════════════════════════════════
 """
@@ -139,7 +139,7 @@ async def require_staff(
     token: Annotated[TokenClaims, Depends(get_current_token)],
 ) -> TokenClaims:
     """
-    Any authenticated user — PIU field officers, admins, everyone with a JWT.
+    Any authenticated user — GRM Unit field officers, admins, everyone with a JWT.
     The minimum bar for any write operation.
     """
     return token

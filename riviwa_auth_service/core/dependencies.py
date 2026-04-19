@@ -268,7 +268,7 @@ async def require_active_user_or_channel(
     Like require_active_user but also allows CHANNEL_REGISTERED accounts.
 
     Used exclusively for POST /auth/channel/set-password — the endpoint
-    that upgrades a channel-registered PAP to a full ACTIVE account.
+    that upgrades a channel-registered Consumer to a full ACTIVE account.
     A CHANNEL_REGISTERED user has:
       · phone_verified = True  (proven by initiating the conversation)
       · hashed_password = None (not yet set)

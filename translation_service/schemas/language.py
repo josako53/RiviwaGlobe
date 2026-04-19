@@ -227,7 +227,7 @@ class InternalUserLanguageResponse(BaseModel):
 
 class InternalDetectAndUpdateRequest(BaseModel):
     """
-    Called by feedback_service or channel services when a PAP submits content.
+    Called by feedback_service or channel services when a Consumer submits content.
     Detects language from text, logs it, and optionally updates user preference.
     """
     text:              str

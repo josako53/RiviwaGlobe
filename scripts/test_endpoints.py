@@ -462,13 +462,13 @@ class RiviwaTestRunner:
         self._call("GET", f"/stakeholders/{self.stakeholder_id}/contacts",
                    label="[24] GET /stakeholders/{id}/contacts")
 
-        # Step 25 — link stakeholder to project (PAP registration)
+        # Step 25 — link stakeholder to project (Consumer registration)
         self._call("POST", f"/stakeholders/{self.stakeholder_id}/projects", {
             "project_id":        self.project_id,
-            "is_pap":            True,
+            "is_consumer":       True,
             "affectedness":      "negatively_affected",
             "impact_description": "Land acquisition for road widening affects 0.5 acres of farmland",
-        }, expected_status=201, label="[25] POST /stakeholders/{id}/projects (PAP link)")
+        }, expected_status=201, label="[25] POST /stakeholders/{id}/projects (Consumer link)")
 
         # Step 26 — stakeholder project list
         self._call("GET", f"/stakeholders/{self.stakeholder_id}/projects",
@@ -515,7 +515,7 @@ class RiviwaTestRunner:
             "contact_id":       self.contact_id,
             "attendance_status": "attended",
             "concerns_raised":  "Compensation amount is below market rate for agricultural land",
-            "response_given":   "PIU will commission an independent valuation within 30 days",
+            "response_given":   "GRM Unit will commission an independent valuation within 30 days",
             "feedback_submitted": False,
         }
         r = self._call("POST", f"/activities/{self.activity_id}/attendances",
@@ -535,7 +535,7 @@ class RiviwaTestRunner:
             "summary_of_responses": "Independent valuation to be commissioned within 30 days",
             "action_items": [
                 {"item": "Commission independent land valuation", "due_date": "2026-06-15",
-                 "responsible": "PIU Land Officer"}
+                 "responsible": "GRM Unit Land Officer"}
             ],
         }, label="[31] PATCH /activities/{id} (mark conducted)")
 
@@ -580,7 +580,7 @@ class RiviwaTestRunner:
             "channel":                      "in_person",
             "subject":                      "Compensation below market rate for acquired farmland",
             "description":                  (
-                "PAP Juma Bakari claims the TZS 2.5M offered for 0.5 acres of farmland "
+                "Consumer Juma Bakari claims the TZS 2.5M offered for 0.5 acres of farmland "
                 "in Kariakoo is well below the current market rate of TZS 8M per acre. "
                 "Land was acquired in April 2026 for road widening."
             ),
@@ -602,7 +602,7 @@ class RiviwaTestRunner:
             "submitted_by_contact_id":      self.contact_id,
             "stakeholder_engagement_id":    self.engagement_id,
             "officer_recorded":             True,
-            "internal_notes":               "PAP provided land title documents. Awaiting independent valuation.",
+            "internal_notes":               "Consumer provided land title documents. Awaiting independent valuation.",
         }, expected_status=201, label="[36] POST /feedback")
         if not r:
             return False
@@ -619,7 +619,7 @@ class RiviwaTestRunner:
 
         # Step 39 — acknowledge
         self._call("PATCH", f"/feedback/{self.feedback_id}/acknowledge", {
-            "acknowledgement_note": "Grievance received and logged. PIU will review within 10 working days.",
+            "acknowledgement_note": "Grievance received and logged. GRM Unit will review within 10 working days.",
         }, label="[39] PATCH /feedback/{id}/acknowledge")
 
         # Step 40 — assign (to self)
@@ -640,7 +640,7 @@ class RiviwaTestRunner:
             "resolution_type":    "compensation_adjusted",
             "resolution_summary": (
                 "Independent valuation commissioned. Compensation revised to TZS 4.2M "
-                "based on current Ilala district market rates. PAP accepted revised offer."
+                "based on current Ilala district market rates. Consumer accepted revised offer."
             ),
             "resolved_at":       "2026-06-10T09:00:00",
             "notify_submitter":  True,
@@ -648,7 +648,7 @@ class RiviwaTestRunner:
 
         # Step 43 — close
         self._call("PATCH", f"/feedback/{self.feedback_id}/close", {
-            "closing_note": "PAP confirmed acceptance of revised compensation. Case closed.",
+            "closing_note": "Consumer confirmed acceptance of revised compensation. Case closed.",
         }, label="[43] PATCH /feedback/{id}/close")
 
         # Step 44 — final detail with full history

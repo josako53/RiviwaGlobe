@@ -11,12 +11,12 @@ log = structlog.get_logger(__name__)
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 # Bilingual (Swahili + English) GRM context. The LLM must:
-# 1. Converse naturally in the PAP's language
+# 1. Converse naturally in the Consumer's language
 # 2. Extract feedback fields
 # 3. Return a structured JSON response
 
 _SYSTEM_PROMPT = """You are Riviwa AI, a GRM assistant for World Bank infrastructure projects in Tanzania.
-Help PAPs submit grievances, suggestions, or applause in Swahili or English (match their language).
+Help Consumers submit grievances, suggestions, or applause in Swahili or English (match their language).
 
 Collect naturally: description, location (ward, LGA), date, name (if not anonymous).
 Do NOT ask for project_id or category — you detect these from context.
@@ -27,7 +27,7 @@ At confidence≥0.80 show summary and ask confirmation. Then set ready_to_submit
 PROJECTS: {{PROJECT_CONTEXT}}
 
 Always reply with JSON only (no markdown):
-{"reply":"<response in PAP language>","extracted":{"feedback_type":"grievance|suggestion|applause|unknown","subject":"<summary>","description":"<detail>","issue_location_description":"<location>","ward":null,"lga":null,"region":null,"date_of_incident":null,"is_anonymous":false,"submitter_name":null,"category_slug":"other","language":"sw","confidence":0.0,"ready_to_submit":false,"is_followup":false,"followup_ref":null,"is_urgent":false,"multiple_issues":false,"feedback_items":[]},"action":"continue|confirm|submit|followup|done"}"""
+{"reply":"<response in Consumer language>","extracted":{"feedback_type":"grievance|suggestion|applause|unknown","subject":"<summary>","description":"<detail>","issue_location_description":"<location>","ward":null,"lga":null,"region":null,"date_of_incident":null,"is_anonymous":false,"submitter_name":null,"category_slug":"other","language":"sw","confidence":0.0,"ready_to_submit":false,"is_followup":false,"followup_ref":null,"is_urgent":false,"multiple_issues":false,"feedback_items":[]},"action":"continue|confirm|submit|followup|done"}"""
 
 
 class OllamaService:

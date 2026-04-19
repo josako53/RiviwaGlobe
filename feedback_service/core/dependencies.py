@@ -142,13 +142,13 @@ GRMOfficerDep      = Annotated[TokenClaims,      Depends(require_grm_officer)]
 GRMCoordinatorDep  = Annotated[TokenClaims,      Depends(require_grm_coordinator)]
 OptTokenDep        = Annotated[Optional[TokenClaims], Depends(get_optional_token)]
 
-# PAP portal — any authenticated user (PAP or staff)
-# PAPDep uses the same JWT as StaffDep but does not require a staff role.
-# The PAP portal uses ownership checks (submitted_by_user_id == token.sub)
-# to ensure PAPs only see their own data.
+# Consumer portal — any authenticated user (Consumer or staff)
+# ConsumerDep uses the same JWT as StaffDep but does not require a staff role.
+# The Consumer portal uses ownership checks (submitted_by_user_id == token.sub)
+# to ensure Consumers only see their own data.
 async def require_authenticated(token: TokenClaims = Depends(get_current_token)) -> TokenClaims:
-    """Require a valid JWT but no specific role. Used for PAP self-service endpoints."""
+    """Require a valid JWT but no specific role. Used for Consumer self-service endpoints."""
     return token
 
-PAPDep = Annotated[TokenClaims, Depends(require_authenticated)]
+ConsumerDep = Annotated[TokenClaims, Depends(require_authenticated)]
 CurrentUserDep = Annotated[TokenClaims, Depends(get_current_token)]

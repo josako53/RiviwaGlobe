@@ -1,17 +1,17 @@
 """
 api/v1/channel_auth.py
 ═══════════════════════════════════════════════════════════════════════════════
-Authentication flows for channel-registered PAPs.
+Authentication flows for channel-registered Consumers.
 
 Channel registration:
-  When a PAP first contacts via SMS, WhatsApp, or Call, their phone number
+  When a Consumer first contacts via SMS, WhatsApp, or Call, their phone number
   is already verified by the act of initiating the conversation.
   No OTP is needed, no password is set.
   A minimal User account (status=CHANNEL_REGISTERED) is auto-created
   and tokens are issued immediately so the feedback submission is linked.
 
 Upgrading to full account:
-  When a channel-registered PAP later opens the mobile app or web portal,
+  When a channel-registered Consumer later opens the mobile app or web portal,
   they go through a 2-step upgrade flow:
     Step 1  POST /auth/channel-login/request-otp
             → server sends OTP to their verified phone
@@ -24,7 +24,7 @@ Upgrading to full account:
 Routes
 ───────
   POST /auth/channel-register          Internal — called by feedback_service on first inbound message
-  POST /auth/channel-login/request-otp Step 1 — PAP wants app access, sends OTP to their phone
+  POST /auth/channel-login/request-otp Step 1 — Consumer wants app access, sends OTP to their phone
   POST /auth/channel-login/verify-otp  Step 2 — verify OTP → tokens (+ must_set_password flag)
 
 Security notes:
@@ -79,7 +79,7 @@ def _require_service_key(x_service_key: str = Header(..., alias="X-Service-Key")
 @router.post(
     "/channel-register",
     status_code=status.HTTP_200_OK,
-    summary="[Internal] Auto-register a PAP from an inbound channel message",
+    summary="[Internal] Auto-register a Consumer from an inbound channel message",
     dependencies=[Depends(_require_service_key)],
 )
 async def channel_register(
@@ -91,7 +91,7 @@ async def channel_register(
     Called by feedback_service when an inbound SMS/WhatsApp/Call message
     arrives from a phone number not yet in the system.
 
-    Because the PAP initiated the conversation, ownership of the phone
+    Because the Consumer initiated the conversation, ownership of the phone
     number is already proven — no OTP is needed.
 
     Behaviour:
@@ -131,7 +131,7 @@ async def channel_register(
 
     # ── New user — create channel-registered account ──────────────────────────
     # Auto-generate username from phone (masked for display)
-    base_username = "pap_" + re.sub(r"\D", "", phone_number)[-8:]
+    base_username = "consumer_" + re.sub(r"\D", "", phone_number)[-8:]
     username      = base_username
     suffix        = 1
     while await repo.get_by_username(username):
@@ -178,7 +178,7 @@ async def channel_login_request_otp(
     db:   AsyncSession = Depends(get_db),
 ) -> dict:
     """
-    A PAP who registered via SMS/WhatsApp now wants to log in through the
+    A Consumer who registered via SMS/WhatsApp now wants to log in through the
     mobile app or web portal.
 
     Sends a 6-digit OTP to their verified phone number.

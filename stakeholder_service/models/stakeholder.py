@@ -31,7 +31,7 @@ WHY NOT JUST USE auth_service ORGANISATION?
 
   Stakeholder (this service) = an entity IDENTIFIED BY PROJECT STAFF because
     it is affected by or interested in a specific project. It is registered
-    by the PIU, not by the entity itself. Most stakeholders will never have
+    by the GRM Unit, not by the entity itself. Most stakeholders will never have
     a Riviwa account.
 
   Some entities are BOTH — e.g. TANESCO is a Riviwa Organisation AND a
@@ -79,7 +79,7 @@ class StakeholderType(str, Enum):
     """
     Classification based on relationship to the project.
 
-    PAP (Project Affected Party):
+    CONSUMER (Project Affected Party):
       Directly or indirectly affected by project activities.
       Must be consulted, informed, and have grievance access.
       Examples: flood-prone community, utility firms, landowners.
@@ -89,7 +89,7 @@ class StakeholderType(str, Enum):
       Not necessarily directly affected.
       Examples: World Bank, ministries, MPs, NGOs, media.
     """
-    PAP              = "pap"
+    CONSUMER         = "consumer"
     INTERESTED_PARTY = "interested_party"
 
 
@@ -161,13 +161,13 @@ class ImportanceRating(str, Enum):
     """
     Importance / influence rating for prioritising engagement effort.
 
-    Determined by the PIU based on two axes from the SEP stakeholder analysis:
+    Determined by the GRM Unit based on two axes from the SEP stakeholder analysis:
       · Level of influence on the project outcome
       · Level of impact the project has on them
 
     HIGH    → High influence OR highly impacted (or both).
               Requires frequent, direct, and personalised engagement.
-              Examples: World Bank, flood-prone community PAPs, TANROADs,
+              Examples: World Bank, flood-prone community Consumers, TANROADs,
               relevant line ministries, LGAs directly implementing subprojects.
 
     MEDIUM  → Moderate influence AND moderate impact.
@@ -182,7 +182,7 @@ class ImportanceRating(str, Enum):
 
     Note: Rating can change over the project lifecycle — a LOW stakeholder
     during preparation may become HIGH during construction if they are near
-    an active work site. PIU should review ratings at each project stage.
+    an active work site. GRM Unit should review ratings at each project stage.
     """
     HIGH   = "high"
     MEDIUM = "medium"
@@ -208,7 +208,7 @@ class VulnerableGroupType(str, Enum):
 class PreferredChannel(str, Enum):
     """
     How this stakeholder prefers to be contacted.
-    Drives which communication strategy the PIU uses per the SEP.
+    Drives which communication strategy the GRM Unit uses per the SEP.
     """
     PUBLIC_MEETING  = "public_meeting"
     FOCUS_GROUP     = "focus_group"
@@ -288,7 +288,7 @@ class Stakeholder(SQLModel, table=True):
             index=True,
         ),
         description=(
-            "PIU-assigned importance rating: HIGH / MEDIUM / LOW. "
+            "GRM Unit-assigned importance rating: HIGH / MEDIUM / LOW. "
             "Drives engagement frequency and channel selection. "
             "Should be reviewed at each project stage as influence and impact can shift."
         ),
@@ -324,7 +324,7 @@ class Stakeholder(SQLModel, table=True):
     # service boundaries.
     #
     # Workflow:
-    #   1. PIU staff calls auth_service POST /api/v1/addresses with
+    #   1. GRM Unit staff calls auth_service POST /api/v1/addresses with
     #      entity_type="stakeholder", entity_id=<stakeholder_id>
     #   2. auth_service creates the Address row and returns address.id
     #   3. stakeholder_service stores that UUID here
@@ -419,7 +419,7 @@ class Stakeholder(SQLModel, table=True):
     registered_by_user_id: Optional[uuid.UUID] = Field(
         default=None,
         nullable=True,
-        description="auth_service User.id of the PIU staff member who registered this stakeholder.",
+        description="auth_service User.id of the GRM Unit staff member who registered this stakeholder.",
     )
 
     # ── Timestamps ────────────────────────────────────────────────────────────
@@ -522,13 +522,13 @@ class StakeholderProject(SQLModel, table=True):
     project_id: uuid.UUID = Field(nullable=False, index=True)
 
     # ── Project-specific classification ───────────────────────────────────────
-    is_pap: bool = Field(
+    is_consumer: bool = Field(
         default=False,
         nullable=False,
         description=(
-            "True when this stakeholder is a Project Affected Party (PAP) "
+            "True when this stakeholder is a Consumer (project-affected party) "
             "for this specific project. "
-            "An entity can be PAP on one project and only Interested Party on another."
+            "An entity can be a Consumer on one project and only Interested Party on another."
         ),
     )
     affectedness: Optional[AffectednessType] = Field(
@@ -541,7 +541,7 @@ class StakeholderProject(SQLModel, table=True):
         sa_column=Column(Text, nullable=True),
         description=(
             "Narrative description of how this stakeholder is affected by this "
-            "specific project. Required for PAPs."
+            "specific project. Required for Consumers."
         ),
     )
 
@@ -574,7 +574,7 @@ class StakeholderProject(SQLModel, table=True):
             f"<StakeholderProject "
             f"stakeholder={self.stakeholder_id} "
             f"project={self.project_id} "
-            f"pap={self.is_pap}>"
+            f"consumer={self.is_consumer}>"
         )
 
 
@@ -602,7 +602,7 @@ class StakeholderContact(SQLModel, table=True):
       · Log in and see all communications addressed to their stakeholder entity
       · Submit feedback/grievances via the API using their JWT
       · Mark communication distributions as complete
-    When null (most contacts), PIU staff manually logs their activities.
+    When null (most contacts), GRM Unit staff manually logs their activities.
 
     Relationship wiring:
       StakeholderContact.stakeholder   ←→  Stakeholder.contacts
@@ -690,6 +690,7 @@ class StakeholderContact(SQLModel, table=True):
             "When True, CommunicationDistribution records are expected after each outgoing comm."
         ),
     )
+
 
     # ── Status ────────────────────────────────────────────────────────────────
     is_active: bool = Field(
@@ -887,7 +888,7 @@ class StakeholderStageEngagement(SQLModel, table=True):
         description=(
             "Risks this stakeholder poses or faces in this stage. "
             "e.g. M18: 'Fear of not being compensated; risk of social opposition'. "
-            "Councillors: 'Fear of losing voters; conflict of interests on PAP compensation'."
+            "Councillors: 'Fear of losing voters; conflict of interests on Consumer compensation'."
         ),
     )
     engagement_approach: Optional[str] = Field(

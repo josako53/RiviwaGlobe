@@ -24,7 +24,7 @@ class FeedbackClient:
     async def submit_staff(self, data: dict) -> dict:
         """
         Submit feedback as staff (POST /api/v1/feedback).
-        Used for AI-collected feedback submitted on behalf of a PAP.
+        Used for AI-collected feedback submitted on behalf of a Consumer.
         """
         payload = self._build_staff_payload(data)
         try:
@@ -164,7 +164,7 @@ async def submit_multiple_feedback(
     client: FeedbackClient, feedback_items: List[dict], common_data: dict
 ) -> List[dict]:
     """
-    Submit multiple feedback records when a PAP raises multiple issues in one conversation.
+    Submit multiple feedback records when a Consumer raises multiple issues in one conversation.
     Returns list of {feedback_id, unique_ref, feedback_type}.
     """
     results = []

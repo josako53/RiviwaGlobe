@@ -102,10 +102,10 @@ class ReportRepository:
             )
         ) or 0
 
-    async def pap_count(self, project_id: uuid.UUID) -> int:
+    async def consumer_count(self, project_id: uuid.UUID) -> int:
         return await self.db.scalar(
             select(func.count(StakeholderProject.id)).where(
                 StakeholderProject.project_id == project_id,
-                StakeholderProject.is_pap.is_(True),
+                StakeholderProject.is_consumer.is_(True),
             )
         ) or 0

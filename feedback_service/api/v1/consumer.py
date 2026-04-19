@@ -4,14 +4,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, Query, status
-from core.dependencies import DbDep, KafkaDep, PAPDep, StaffDep
+from core.dependencies import DbDep, KafkaDep, ConsumerDep, StaffDep
 from models.feedback import FeedbackStatus, GRMLevel, EscalationRequestStatus
-from schemas.feedback import PAPSubmitFeedback
-from schemas.lifecycle import PAPEscalationRequest, PAPAppeal, PAPComment, ApproveEscalation, RejectEscalation
+from schemas.feedback import ConsumerSubmitFeedback
+from schemas.lifecycle import ConsumerEscalationRequest, ConsumerAppeal, ConsumerComment, ApproveEscalation, RejectEscalation
 from services.feedback_service import FeedbackService
 from api.v1.serialisers import feedback_out, escalation_request_out
 
-router = APIRouter(tags=["PAP Portal"])
+router = APIRouter(tags=["Consumer Portal"])
 def _svc(db, kafka=None): return FeedbackService(db=db, producer=kafka)
 
 def _status_label(status: FeedbackStatus) -> str:
@@ -35,7 +35,7 @@ def _tracking_view(f, now):
          "description": a.description,
          "response_method": a.response_method.value if a.response_method else None,
          "response_summary": a.response_summary,
-         "performed_at": a.performed_at.isoformat(), "performed_by": "PIU / GHC"}
+         "performed_at": a.performed_at.isoformat(), "performed_by": "GRM Unit / GHC"}
         for a in (f.actions or []) if not a.is_internal
     ]
     esc_trail = [
@@ -98,14 +98,14 @@ def _tracking_view(f, now):
 
 @router.get("/my/feedback", status_code=status.HTTP_200_OK, summary="List all my feedback submissions")
 async def my_feedback_list(
-    db: DbDep, kafka: KafkaDep, token: PAPDep,
+    db: DbDep, kafka: KafkaDep, token: ConsumerDep,
     feedback_type: Optional[str] = Query(default=None),
     status_: Optional[str] = Query(default=None, alias="status"),
     project_id: Optional[uuid.UUID] = Query(default=None),
     skip: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
     stakeholder_id = getattr(token, "stakeholder_id", None)
-    items = await _svc(db, kafka).list_for_pap(
+    items = await _svc(db, kafka).list_for_consumer(
         user_id=token.sub, stakeholder_id=stakeholder_id,
         feedback_type=feedback_type, status=status_, project_id=project_id,
         skip=skip, limit=limit,
@@ -126,9 +126,9 @@ async def my_feedback_list(
     }
 
 @router.get("/my/feedback/summary", status_code=status.HTTP_200_OK, summary="My feedback summary — counts for the dashboard widget")
-async def my_feedback_summary(db: DbDep, kafka: KafkaDep, token: PAPDep, project_id: Optional[uuid.UUID] = Query(default=None)) -> dict:
+async def my_feedback_summary(db: DbDep, kafka: KafkaDep, token: ConsumerDep, project_id: Optional[uuid.UUID] = Query(default=None)) -> dict:
     stakeholder_id = getattr(token, "stakeholder_id", None)
-    items = await _svc(db, kafka).list_for_pap(user_id=token.sub, stakeholder_id=stakeholder_id, project_id=project_id)
+    items = await _svc(db, kafka).list_for_consumer(user_id=token.sub, stakeholder_id=stakeholder_id, project_id=project_id)
     open_st = {FeedbackStatus.SUBMITTED, FeedbackStatus.ACKNOWLEDGED, FeedbackStatus.IN_REVIEW, FeedbackStatus.ESCALATED, FeedbackStatus.APPEALED}
     by_type: dict = {}
     by_status: dict = {}
@@ -147,10 +147,10 @@ async def my_feedback_summary(db: DbDep, kafka: KafkaDep, token: PAPDep, project
     }
 
 @router.get("/my/feedback/{feedback_id}", status_code=status.HTTP_200_OK, summary="Track a specific submission — full handling history")
-async def my_feedback_detail(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+async def my_feedback_detail(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep, token: ConsumerDep) -> dict:
     now = datetime.now(timezone.utc)
     stakeholder_id = getattr(token, "stakeholder_id", None)
-    f = await _svc(db, kafka).get_for_pap_or_404(feedback_id, token.sub, stakeholder_id)
+    f = await _svc(db, kafka).get_for_consumer_or_404(feedback_id, token.sub, stakeholder_id)
     return _tracking_view(f, now)
 
 @router.post(
@@ -158,7 +158,7 @@ async def my_feedback_detail(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep,
     status_code=status.HTTP_201_CREATED,
     summary="Submit a new grievance, suggestion, or applause",
     description=(
-        "PAP self-service submission. Channel is auto-set to web_portal.\n\n"
+        "Consumer self-service submission. Channel is auto-set to web_portal.\n\n"
         "**project_id** is optional — the AI auto-detects it from `issue_lga` + `description`. "
         "**category** is optional — the AI classifies it from the description.\n\n"
         "If the project cannot be identified automatically, HTTP 422 is returned with "
@@ -185,9 +185,9 @@ async def my_feedback_detail(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep,
         }
     },
 )
-async def pap_submit_feedback(body: PAPSubmitFeedback, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+async def consumer_submit_feedback(body: ConsumerSubmitFeedback, db: DbDep, kafka: KafkaDep, token: ConsumerDep) -> dict:
     data = body.model_dump(exclude_none=True)
-    f = await _svc(db, kafka).submit_from_pap(data, user_id=token.sub, channel_override="web_portal")
+    f = await _svc(db, kafka).submit_from_consumer(data, user_id=token.sub, channel_override="web_portal")
     return {
         "feedback_id":    str(f.id),
         "tracking_number": f.unique_ref,
@@ -198,25 +198,25 @@ async def pap_submit_feedback(body: PAPSubmitFeedback, db: DbDep, kafka: KafkaDe
         "message": (
             f"Your {f.feedback_type.value} has been submitted successfully. "
             f"Tracking number: {f.unique_ref}. "
-            "You will be notified when the PIU acknowledges receipt."
+            "You will be notified when the GRM Unit acknowledges receipt."
         ),
     }
 
-@router.post("/my/feedback/{feedback_id}/escalation-request", status_code=status.HTTP_201_CREATED, summary="Request PIU to escalate your grievance to a higher GRM level")
-async def request_escalation(feedback_id: uuid.UUID, body: PAPEscalationRequest, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+@router.post("/my/feedback/{feedback_id}/escalation-request", status_code=status.HTTP_201_CREATED, summary="Request GRM Unit to escalate your grievance to a higher GRM level")
+async def request_escalation(feedback_id: uuid.UUID, body: ConsumerEscalationRequest, db: DbDep, kafka: KafkaDep, token: ConsumerDep) -> dict:
     stakeholder_id = getattr(token, "stakeholder_id", None)
     er = await _svc(db, kafka).request_escalation(feedback_id, body.model_dump(exclude_none=True), user_id=token.sub, stakeholder_id=stakeholder_id)
     return {
         "id": str(er.id), "status": er.status.value,
         "message": ("Your escalation request has been submitted. "
-                    "PIU will review it and either approve (and escalate your case) "
+                    "The GRM Unit will review it and either approve (and escalate your case) "
                     "or explain why escalation is not applicable at this stage."),
     }
 
 @router.post("/my/feedback/{feedback_id}/appeal", status_code=status.HTTP_201_CREATED, summary="File a formal appeal against an unsatisfactory resolution")
-async def pap_appeal(feedback_id: uuid.UUID, body: PAPAppeal, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+async def consumer_appeal(feedback_id: uuid.UUID, body: ConsumerAppeal, db: DbDep, kafka: KafkaDep, token: ConsumerDep) -> dict:
     stakeholder_id = getattr(token, "stakeholder_id", None)
-    f, appeal = await _svc(db, kafka).pap_appeal(feedback_id, body.model_dump(exclude_none=True), user_id=token.sub, stakeholder_id=stakeholder_id)
+    f, appeal = await _svc(db, kafka).consumer_appeal(feedback_id, body.model_dump(exclude_none=True), user_id=token.sub, stakeholder_id=stakeholder_id)
     return {
         "appeal_id": str(appeal.id), "status": f.status.value,
         "now_at_level": f.current_level.value,
@@ -227,12 +227,12 @@ async def pap_appeal(feedback_id: uuid.UUID, body: PAPAppeal, db: DbDep, kafka: 
     }
 
 @router.post("/my/feedback/{feedback_id}/add-comment", status_code=status.HTTP_201_CREATED, summary="Add a follow-up comment to your submission")
-async def pap_add_comment(feedback_id: uuid.UUID, body: PAPComment, db: DbDep, kafka: KafkaDep, token: PAPDep) -> dict:
+async def consumer_add_comment(feedback_id: uuid.UUID, body: ConsumerComment, db: DbDep, kafka: KafkaDep, token: ConsumerDep) -> dict:
     stakeholder_id = getattr(token, "stakeholder_id", None)
-    action = await _svc(db, kafka).pap_add_comment(feedback_id, body.model_dump(exclude_none=True), user_id=token.sub, stakeholder_id=stakeholder_id)
-    return {"message": "Your comment has been added and is visible to PIU staff.", "action_id": str(action.id)}
+    action = await _svc(db, kafka).consumer_add_comment(feedback_id, body.model_dump(exclude_none=True), user_id=token.sub, stakeholder_id=stakeholder_id)
+    return {"message": "Your comment has been added and is visible to GRM Unit staff.", "action_id": str(action.id)}
 
-@router.get("/escalation-requests", status_code=status.HTTP_200_OK, summary="[Staff] List PAP escalation requests")
+@router.get("/escalation-requests", status_code=status.HTTP_200_OK, summary="[Staff] List Consumer escalation requests")
 async def list_escalation_requests(
     db: DbDep, kafka: KafkaDep, _: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
@@ -242,12 +242,12 @@ async def list_escalation_requests(
     items = await _svc(db, kafka).list_escalation_requests(status=status_, project_id=project_id, skip=skip, limit=limit)
     return {"items": [escalation_request_out(er) for er in items], "count": len(items)}
 
-@router.post("/escalation-requests/{request_id}/approve", status_code=status.HTTP_200_OK, summary="[Staff] Approve a PAP escalation request")
+@router.post("/escalation-requests/{request_id}/approve", status_code=status.HTTP_200_OK, summary="[Staff] Approve a Consumer escalation request")
 async def approve_escalation_request(request_id: uuid.UUID, body: ApproveEscalation, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
     er = await _svc(db, kafka).approve_escalation_request(request_id, body.model_dump(exclude_none=True), by=token.sub)
     return {"status": er.status.value, "message": "Escalation request approved.", "feedback_id": str(er.feedback_id)}
 
-@router.post("/escalation-requests/{request_id}/reject", status_code=status.HTTP_200_OK, summary="[Staff] Reject a PAP escalation request with explanation")
+@router.post("/escalation-requests/{request_id}/reject", status_code=status.HTTP_200_OK, summary="[Staff] Reject a Consumer escalation request with explanation")
 async def reject_escalation_request(request_id: uuid.UUID, body: RejectEscalation, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
     er = await _svc(db, kafka).reject_escalation_request(request_id, body.model_dump(exclude_none=True), by=token.sub)
-    return {"status": er.status.value, "message": "Escalation request rejected. The PAP has been notified."}
+    return {"status": er.status.value, "message": "Escalation request rejected. The Consumer has been notified."}

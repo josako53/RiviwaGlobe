@@ -22,7 +22,7 @@ USAGE in each source service:
   # Immediately dispatched
   await publisher.send(
       notification_type  = NotificationTypes.GRM_ACKNOWLEDGED,
-      recipient_user_id  = str(pap_user_id),
+      recipient_user_id  = str(consumer_user_id),
       recipient_phone    = "+255712345678",
       language           = "sw",
       variables          = {
@@ -309,19 +309,19 @@ class NotificationPublisher:
 
     async def grm_feedback_submitted(
         self,
-        feedback_id:      str,
-        pap_user_id:      Optional[str],
-        pap_phone:        Optional[str],
-        feedback_ref:     str,
-        project_name:     str,
-        feedback_type:    str,
-        language:         str = "sw",
+        feedback_id:       str,
+        consumer_user_id:  Optional[str],
+        consumer_phone:    Optional[str],
+        feedback_ref:      str,
+        project_name:      str,
+        feedback_type:     str,
+        language:          str = "sw",
     ) -> None:
-        """Notify PAP that their feedback was received."""
+        """Notify Consumer that their feedback was received."""
         await self.send(
             notification_type  = "grm.feedback.submitted",
-            recipient_user_id  = pap_user_id,
-            recipient_phone    = pap_phone,
+            recipient_user_id  = consumer_user_id,
+            recipient_phone    = consumer_phone,
             language           = language,
             variables          = {
                 "feedback_ref":   feedback_ref,
@@ -336,18 +336,18 @@ class NotificationPublisher:
 
     async def grm_feedback_acknowledged(
         self,
-        feedback_id:          str,
-        pap_user_id:          Optional[str],
-        pap_phone:            Optional[str],
-        feedback_ref:         str,
-        project_name:         str,
+        feedback_id:            str,
+        consumer_user_id:       Optional[str],
+        consumer_phone:         Optional[str],
+        feedback_ref:           str,
+        project_name:           str,
         target_resolution_date: Optional[str],
-        language:             str = "sw",
+        language:               str = "sw",
     ) -> None:
         await self.send(
             notification_type  = "grm.feedback.acknowledged",
-            recipient_user_id  = pap_user_id,
-            recipient_phone    = pap_phone,
+            recipient_user_id  = consumer_user_id,
+            recipient_phone    = consumer_phone,
             language           = language,
             variables          = {
                 "feedback_ref":           feedback_ref,
@@ -363,8 +363,8 @@ class NotificationPublisher:
     async def grm_feedback_resolved(
         self,
         feedback_id:        str,
-        pap_user_id:        Optional[str],
-        pap_phone:          Optional[str],
+        consumer_user_id:   Optional[str],
+        consumer_phone:     Optional[str],
         feedback_ref:       str,
         project_name:       str,
         resolution_summary: str,
@@ -372,8 +372,8 @@ class NotificationPublisher:
     ) -> None:
         await self.send(
             notification_type  = "grm.feedback.resolved",
-            recipient_user_id  = pap_user_id,
-            recipient_phone    = pap_phone,
+            recipient_user_id  = consumer_user_id,
+            recipient_phone    = consumer_phone,
             language           = language,
             variables          = {
                 "feedback_ref":       feedback_ref,
@@ -397,7 +397,7 @@ class NotificationPublisher:
         language:         str = "en",
     ) -> None:
         """
-        Alert PIU staff when a grievance is approaching or past its SLA.
+        Alert GRM Unit staff when a grievance is approaching or past its SLA.
         Scheduled by feedback_service's background job.
         """
         await self.send(

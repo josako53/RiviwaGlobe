@@ -12,16 +12,16 @@ ENDPOINTS:
     Upload a voice note for an existing (draft) feedback record.
     Audio is stored, transcribed, and written to the feedback's voice_note_*
     fields. If the feedback has no description yet, the transcript is used.
-    Usable by PAP (self-service) or officer (on behalf of PAP).
+    Usable by Consumer (self-service) or officer (on behalf of Consumer).
 
   POST /voice/sessions/{session_id}/audio-turn
     Submit a voice turn in an active ChannelSession (MOBILE_APP / WEB_PORTAL
     mic mode, or officer typing for PHONE_CALL). Audio is stored and transcribed.
     The transcript is added to the session as a user turn and fed into the LLM
-    pipeline exactly as if the PAP had typed it.
+    pipeline exactly as if the Consumer had typed it.
 
   POST /voice/sessions/{session_id}/tts
-    Request TTS synthesis of a text reply for playback to the PAP.
+    Request TTS synthesis of a text reply for playback to the Consumer.
     Used by the PHONE_CALL IVR integration and MOBILE_APP voice reply mode.
 
   POST /webhooks/whatsapp-voice  (registered in webhooks.py — documented here)
@@ -95,9 +95,9 @@ async def _get_session_or_404(session_id: uuid.UUID, db) -> ChannelSession:
 Upload an audio recording as the source-of-truth voice note for a feedback item.
 
 **When to use:**
-- PAP taps the mic button in the Riviwa mobile app or web portal and records their grievance
-- GHC officer records a walk-in PAP conversation during in-person intake (IN_PERSON channel)
-- PAP calls and the officer records the call on their device before transcribing
+- Consumer taps the mic button in the Riviwa mobile app or web portal and records their grievance
+- GHC officer records a walk-in Consumer conversation during in-person intake (IN_PERSON channel)
+- Consumer calls and the officer records the call on their device before transcribing
 
 **What happens:**
 1. Audio is stored permanently in object storage (legal source of truth)
@@ -185,8 +185,8 @@ async def attach_voice_note(
 Send a voice turn (audio recording) for an active ChannelSession.
 
 **Used for:**
-- PAP holds mic button in the Riviwa app or web portal during a live conversation
-- Officer records what the PAP is saying during an in-person or phone intake session
+- Consumer holds mic button in the Riviwa app or web portal during a live conversation
+- Officer records what the Consumer is saying during an in-person or phone intake session
 - Processing a standalone WhatsApp voice note that continues an existing session
 
 **What happens:**
@@ -204,7 +204,7 @@ async def submit_audio_turn(
     session_id: uuid.UUID,
     db:         DbDep,
     kafka:      KafkaDep,
-    audio:      UploadFile    = File(..., description="Audio recording of the PAP's turn"),
+    audio:      UploadFile    = File(..., description="Audio recording of the Consumer's turn"),
     language:   Optional[str] = Form(default=None, description="Override language detection. Default: session.language"),
     tts_reply:  bool          = Form(default=False, description="If True, synthesise TTS audio for the LLM reply"),
 ) -> dict:
@@ -310,14 +310,14 @@ async def submit_audio_turn(
     status_code=status.HTTP_200_OK,
     summary="Synthesise a TTS audio reply for a session turn",
     description="""
-Generate Text-to-Speech audio for a message to be played back to the PAP.
+Generate Text-to-Speech audio for a message to be played back to the Consumer.
 
 **Used for:**
 - PHONE_CALL: playing the LLM's text reply back through the IVR/telephony gateway
 - MOBILE_APP / WEB_PORTAL mic mode: playing the LLM's reply as audio in the app
 
 Returns the audio URL and duration. The caller is responsible for streaming
-the audio to the PAP via their respective gateway.
+the audio to the Consumer via their respective gateway.
 """,
 )
 async def synthesise_tts(
