@@ -77,6 +77,9 @@ redis[asyncio]==5.2.1
 # aiokafka — async Kafka producer (KafkaEventProducer singleton)
 aiokafka==0.12.0
 
+# aiobotocore — async S3/MinIO client used by ImageService (logo/favicon uploads)
+aiobotocore==2.21.1
+
 # cramjam — Rust-based compression library (replaces lz4)
 # Supports zstd, lz4, snappy, gzip, brotli — all statically linked.
 # No C build-deps needed in Docker; ships pre-built wheels for linux/mac/win.
