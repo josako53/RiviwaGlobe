@@ -30,7 +30,7 @@ async def create_committee(body: CreateCommittee, db: DbDep, _: StaffDep) -> dic
 async def list_committees(
     db: DbDep, _: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None, description="Filter by project"),
-    level: Optional[str] = Query(default=None, description="Filter by GRM level: ward, lga_piu, pcu, tarura_wbcu, tanroads"),
+    level: Optional[str] = Query(default=None, description="Filter by GRM level: ward, lga_grm_unit, coordinating_unit, tarura_wbcu, tanroads"),
     lga: Optional[str] = Query(default=None, description="Filter by LGA jurisdiction"),
     org_sub_project_id: Optional[uuid.UUID] = Query(default=None, description="Filter by sub-project"),
     stakeholder_id: Optional[uuid.UUID] = Query(default=None, description="Filter by covered stakeholder group"),

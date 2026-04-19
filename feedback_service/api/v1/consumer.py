@@ -64,7 +64,7 @@ def _tracking_view(f, now):
         for er in (f.escalation_requests or [])
     ]
     has_pending_er = any(er.status == EscalationRequestStatus.PENDING for er in (f.escalation_requests or []))
-    level_order = [GRMLevel.WARD, GRMLevel.LGA_PIU, GRMLevel.PCU, GRMLevel.TARURA_WBCU, GRMLevel.TANROADS, GRMLevel.WORLD_BANK]
+    level_order = [GRMLevel.WARD, GRMLevel.LGA_GRM_UNIT, GRMLevel.COORDINATING_UNIT, GRMLevel.TARURA_WBCU, GRMLevel.TANROADS, GRMLevel.WORLD_BANK]
     open_st = {FeedbackStatus.SUBMITTED, FeedbackStatus.ACKNOWLEDGED, FeedbackStatus.IN_REVIEW, FeedbackStatus.ESCALATED, FeedbackStatus.APPEALED}
     can_esc = (f.status not in (FeedbackStatus.CLOSED, FeedbackStatus.DISMISSED, FeedbackStatus.RESOLVED)
                and f.current_level != GRMLevel.WORLD_BANK and not has_pending_er)

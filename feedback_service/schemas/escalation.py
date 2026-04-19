@@ -59,7 +59,7 @@ class EscalationLevelCreate(BaseModel):
     # Backward compat
     grm_level_ref: Optional[str] = Field(
         default=None, max_length=30,
-        description="Legacy GRMLevel enum value. Set to 'ward', 'lga_piu', etc. for backward compat.",
+        description="Legacy GRMLevel enum value. Set to 'ward', 'lga_grm_unit', 'coordinating_unit', etc. for backward compat.",
     )
 
     model_config = {

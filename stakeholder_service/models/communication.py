@@ -138,7 +138,7 @@ class FocalPersonOrgType(str, Enum):
     LGA       = "lga"
     TANROADS  = "tanroads"
     PO_RALG   = "po_ralg"
-    PIU       = "piu"
+    GRM_UNIT  = "grm_unit"
     TARURA    = "tarura"
     OTHER     = "other"
 

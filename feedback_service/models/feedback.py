@@ -208,12 +208,12 @@ class GRMLevel(str, Enum):
     Grievances start at WARD and escalate upward only.
     Each escalation requires a documented reason.
     """
-    WARD        = "ward"        # Level 1 — Ward/sub-project GHC
-    LGA_PIU     = "lga_piu"    # Level 2 — LGA GHC at GRM Unit level
-    PCU         = "pcu"        # Level 3 — Coordinating Unit
-    TARURA_WBCU = "tarura_wbcu" # Level 4 — TARURA World Bank Coordinating Unit
-    TANROADS    = "tanroads"    # Level 5 — For road/bridge-specific escalations
-    WORLD_BANK  = "world_bank"  # Level 6 — Final escalation
+    WARD             = "ward"             # Level 1 — Ward/sub-project GHC
+    LGA_GRM_UNIT     = "lga_grm_unit"    # Level 2 — LGA GRM Handling Unit
+    COORDINATING_UNIT = "coordinating_unit" # Level 3 — Coordinating Unit
+    TARURA_WBCU      = "tarura_wbcu"     # Level 4 — TARURA World Bank Coordinating Unit
+    TANROADS         = "tanroads"         # Level 5 — For road/bridge-specific escalations
+    WORLD_BANK       = "world_bank"       # Level 6 — Final escalation
 
     @classmethod
     def _missing_(cls, value: object):
@@ -419,11 +419,11 @@ class ResponseMethod(str, Enum):
 
 class CommitteeLevel(str, Enum):
     """What GRM level this committee operates at."""
-    WARD        = "ward"
-    LGA_PIU     = "lga_piu"
-    PCU         = "pcu"
-    TARURA_WBCU = "tarura_wbcu"
-    TANROADS    = "tanroads"
+    WARD              = "ward"
+    LGA_GRM_UNIT      = "lga_grm_unit"
+    COORDINATING_UNIT = "coordinating_unit"
+    TARURA_WBCU       = "tarura_wbcu"
+    TANROADS          = "tanroads"
 
 
 class CommitteeRole(str, Enum):
@@ -882,8 +882,8 @@ class Feedback(SQLModel, table=True):
         """Returns the next level in the GRM hierarchy, or None if at the top."""
         order = [
             GRMLevel.WARD,
-            GRMLevel.LGA_PIU,
-            GRMLevel.PCU,
+            GRMLevel.LGA_GRM_UNIT,
+            GRMLevel.COORDINATING_UNIT,
             GRMLevel.TARURA_WBCU,
             GRMLevel.TANROADS,
             GRMLevel.WORLD_BANK,

@@ -32,12 +32,12 @@ class CreateCommittee(BaseModel):
         description=(
             "GRM escalation level this committee handles. "
             "ward = Level 1 (community). "
-            "lga_piu = Level 2 (LGA GRM Unit). "
-            "pcu = Level 3 (Coordinating Unit). "
+            "lga_grm_unit = Level 2 (LGA GRM Unit). "
+            "coordinating_unit = Level 3 (Coordinating Unit). "
             "tarura_wbcu = Level 4 (TARURA World Bank Unit). "
             "tanroads = Level 5 (road/bridge-specific)."
         ),
-        json_schema_extra={"enum": ["ward", "lga_piu", "pcu", "tarura_wbcu", "tanroads"]},
+        json_schema_extra={"enum": ["ward", "lga_grm_unit", "coordinating_unit", "tarura_wbcu", "tanroads"]},
     )
     project_id: Optional[uuid.UUID] = Field(
         default=None,

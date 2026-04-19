@@ -10,7 +10,7 @@ Dynamic, per-organisation GRM escalation hierarchy.
 Design rationale
 ────────────────
 The original system hardcoded the TARURA/TANROADS chain:
-  WARD → LGA_PIU → PCU → TARURA_WBCU → TANROADS → WORLD_BANK
+  WARD → LGA_GRM_UNIT → COORDINATING_UNIT → TARURA_WBCU → TANROADS → WORLD_BANK
 
 This is retained as a seeded system template (is_system_template=True) but
 each organisation can now define its own hierarchy.  Examples:
@@ -46,7 +46,7 @@ Auto-escalation
 Backward compatibility
 ───────────────────────
   grm_level_ref maps an EscalationLevel to the legacy GRMLevel enum value
-  ("ward", "lga_piu", etc.).  The Feedback model still stores current_level
+  ("ward", "lga_grm_unit", etc.).  The Feedback model still stores current_level
   (GRMLevel) alongside current_level_id (EscalationLevel UUID) so that
   existing analytics queries and Spark jobs remain valid.
 ═══════════════════════════════════════════════════════════════════════════════
@@ -93,16 +93,16 @@ SYSTEM_TEMPLATE_SEED = {
             "sla_overrides": SYSTEM_DEFAULT_SLA_OVERRIDES,
         },
         {
-            "level_order": 2, "name": "LGA GRM Unit", "code": "lga_piu",
+            "level_order": 2, "name": "LGA GRM Unit", "code": "lga_grm_unit",
             "description": "Local Government Authority — GRM Unit.",
-            "grm_level_ref": "lga_piu", "is_final": False,
+            "grm_level_ref": "lga_grm_unit", "is_final": False,
             "auto_escalate_on_breach": False,
             "sla_overrides": SYSTEM_DEFAULT_SLA_OVERRIDES,
         },
         {
-            "level_order": 3, "name": "Coordinating Unit", "code": "pcu",
-            "description": "Coordinating Unit — PO-RALG / central coordination level.",
-            "grm_level_ref": "pcu", "is_final": False,
+            "level_order": 3, "name": "Coordinating Unit", "code": "coordinating_unit",
+            "description": "Coordinating Unit — central coordination level.",
+            "grm_level_ref": "coordinating_unit", "is_final": False,
             "auto_escalate_on_breach": False,
             "sla_overrides": SYSTEM_DEFAULT_SLA_OVERRIDES,
         },
@@ -331,7 +331,7 @@ class EscalationLevel(SQLModel, table=True):
     grm_level_ref: Optional[str] = Field(
         default=None, max_length=30, nullable=True, index=True,
         description=(
-            "Maps to the legacy GRMLevel enum value (e.g. 'ward', 'lga_piu', 'world_bank'). "
+            "Maps to the legacy GRMLevel enum value (e.g. 'ward', 'lga_grm_unit', 'coordinating_unit', 'world_bank'). "
             "NULL for org-specific levels with no legacy equivalent. "
             "Used to keep Feedback.current_level (GRMLevel) in sync for analytics."
         ),

@@ -76,7 +76,7 @@ def _safe_category(val: str | None) -> FeedbackCategory:
         return FeedbackCategory.OTHER
 
 _LEVEL_ORDER = [
-    GRMLevel.WARD, GRMLevel.LGA_PIU, GRMLevel.PCU,
+    GRMLevel.WARD, GRMLevel.LGA_GRM_UNIT, GRMLevel.COORDINATING_UNIT,
     GRMLevel.TARURA_WBCU, GRMLevel.TANROADS, GRMLevel.WORLD_BANK,
 ]
 

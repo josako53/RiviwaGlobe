@@ -35,13 +35,13 @@ class AssignFeedback(BaseModel):
 class EscalateFeedback(BaseModel):
     """Escalate a grievance to the next GRM level."""
     model_config = ConfigDict(json_schema_extra={"example": {
-        "to_level": "lga_piu",
-        "reason": "Ward-level GHC unable to resolve within 30 days. Consumer requires LGA intervention.",
+        "to_level": "lga_grm_unit",
+        "reason": "Ward-level GHC unable to resolve within 30 days. Consumer requires LGA GRM Unit intervention.",
     }})
     to_level: str = Field(
         ...,
-        description="Target GRM level: ward, lga_piu, pcu, tarura_wbcu, tanroads, world_bank",
-        json_schema_extra={"enum": ["ward", "lga_piu", "pcu", "tarura_wbcu", "tanroads", "world_bank"]},
+        description="Target GRM level: ward, lga_grm_unit, coordinating_unit, tarura_wbcu, tanroads, world_bank",
+        json_schema_extra={"enum": ["ward", "lga_grm_unit", "coordinating_unit", "tarura_wbcu", "tanroads", "world_bank"]},
     )
     reason: str = Field(..., min_length=10, description="Documented reason for escalation (required for audit)")
     escalated_to_committee_id: Optional[uuid.UUID] = Field(default=None, description="GHC at the target level")
@@ -112,7 +112,7 @@ class ConsumerEscalationRequest(BaseModel):
     """Consumer requests escalation of their grievance."""
     model_config = ConfigDict(json_schema_extra={"example": {
         "reason": "No response after 30 days despite multiple follow-ups",
-        "requested_level": "lga_piu",
+        "requested_level": "lga_grm_unit",
     }})
     reason: str = Field(..., min_length=10, description="Why you want your case escalated")
     requested_level: Optional[str] = Field(default=None, description="Requested GRM level (optional — GRM Unit decides)")
