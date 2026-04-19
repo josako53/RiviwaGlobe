@@ -560,9 +560,34 @@ class Feedback(SQLModel, table=True):
         default=GRMLevel.WARD,
         sa_column=Column(SAEnum(GRMLevel, name="grm_level"), nullable=False, index=True),
         description=(
-            "Current GRM escalation level. Starts at WARD. "
-            "Updated on each escalation. All types start at WARD — "
-            "SUGGESTION and APPLAUSE rarely escalate but the field is always present."
+            "Legacy GRM level enum. Kept for backward compatibility with analytics "
+            "and Spark jobs. Updated in sync with current_level_id when grm_level_ref "
+            "is set on the dynamic level. New logic should prefer current_level_id."
+        ),
+    )
+    # ── Dynamic escalation path references ────────────────────────────────────
+    # These fields power the new per-org configurable hierarchy.
+    # They exist alongside the legacy current_level / GRMLevel fields so that
+    # all existing analytics queries and Spark streaming jobs remain valid.
+    escalation_path_id: Optional[uuid.UUID] = Field(
+        default=None,
+        nullable=True,
+        index=True,
+        description=(
+            "EscalationPath.id resolved at submission time. "
+            "NULL for legacy rows created before dynamic escalation was introduced."
+        ),
+    )
+    current_level_id: Optional[uuid.UUID] = Field(
+        sa_column=Column(
+            ForeignKey("escalation_levels.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+        description=(
+            "Current EscalationLevel.id in the dynamic path. "
+            "Updated on each escalation alongside current_level (backward compat). "
+            "NULL for legacy rows or when no dynamic path is configured."
         ),
     )
     assigned_committee_id: Optional[uuid.UUID] = Field(
@@ -978,6 +1003,19 @@ class FeedbackEscalation(SQLModel, table=True):
     )
     to_level: GRMLevel = Field(
         sa_column=Column(SAEnum(GRMLevel, name="grm_to_level"), nullable=False, index=True)
+    )
+    # Dynamic path references — set alongside from/to_level for new escalations
+    from_level_id: Optional[uuid.UUID] = Field(
+        sa_column=Column(
+            ForeignKey("escalation_levels.id", ondelete="SET NULL"), nullable=True
+        ),
+        description="EscalationLevel.id escalated FROM. NULL for legacy rows.",
+    )
+    to_level_id: Optional[uuid.UUID] = Field(
+        sa_column=Column(
+            ForeignKey("escalation_levels.id", ondelete="SET NULL"), nullable=True, index=True
+        ),
+        description="EscalationLevel.id escalated TO. NULL for legacy rows.",
     )
     reason: str = Field(
         sa_column=Column(Text, nullable=False),

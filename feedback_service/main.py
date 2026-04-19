@@ -14,8 +14,10 @@ from api.v1.router import api_v1_router
 from core.config import settings
 from core.exceptions import AppError
 from db.init_db import init_db
+from db.session import get_async_session
 from events.producer import get_producer, close_producer
 from events.consumer import start_consumer, stop_consumer
+from services.escalation_service import EscalationService
 
 log = structlog.get_logger(__name__)
 
@@ -25,6 +27,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info("feedback.startup.db")
     await init_db()
     log.info("feedback.startup.db_ready")
+    try:
+        async for db in get_async_session():
+            await EscalationService(db).seed_system_template()
+        log.info("feedback.startup.escalation_template_seeded")
+    except Exception as exc:
+        log.error("feedback.startup.escalation_seed_failed", error=str(exc))
     try:
         await get_producer()
         log.info("feedback.startup.kafka_producer_ready")

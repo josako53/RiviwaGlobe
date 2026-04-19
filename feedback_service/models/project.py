@@ -88,6 +88,21 @@ class ProjectCache(SQLModel, table=True):
     accepts_suggestions: bool = Field(default=True,  nullable=False)
     accepts_applause:    bool = Field(default=True,   nullable=False)
 
+    # ── Dynamic escalation path ────────────────────────────────────────────────
+    # When set, feedback submitted to this project uses this specific escalation
+    # hierarchy instead of the org default or system template.
+    # Soft link — no FK constraint (escalation_paths lives in the same DB but
+    # we keep this nullable/unvalidated so it can be set before the path exists).
+    escalation_path_id: Optional[uuid.UUID] = Field(
+        default=None,
+        nullable=True,
+        index=True,
+        description=(
+            "EscalationPath.id to use for this project. "
+            "NULL = fall back to org default path or system template."
+        ),
+    )
+
     synced_at:    datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False))
     published_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     created_at:   datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False))
