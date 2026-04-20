@@ -28,6 +28,7 @@ from core.config import settings
 from db.session import AsyncSessionLocal
 from events.topics import (
     KafkaTopics,
+    OrgEvents,
     OrgProjectEvents,
     OrgProjectStageEvents,
     OrgServiceEvents,
@@ -63,6 +64,7 @@ def _project_fields(payload: dict, status: ProjectStatus, now: datetime) -> dict
         "accepts_applause":    payload.get("accepts_applause", True),
         "cover_image_url":     payload.get("cover_image_url"),
         "org_logo_url":        payload.get("org_logo_url"),
+        "org_display_name":    payload.get("org_display_name"),  # from auth_service org relationship
         "synced_at":           now,
     }
 
@@ -268,26 +270,35 @@ async def _handle_concern_raised(payload: dict, db: AsyncSession) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Org logo sync handler
+# Org identity sync handler (display_name + logo_url)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _handle_org_logo_updated(payload: dict, db: AsyncSession) -> None:
+async def _handle_org_meta_updated(payload: dict, db: AsyncSession) -> None:
     """
-    When an organisation uploads a new logo, update org_logo_url on every
-    ProjectCache row that belongs to that organisation.
-    Called when org.events carries a logo_url field.
+    Sync org identity fields (display_name, logo_url) onto every ProjectCache row
+    for that organisation.  Called for both org.created and org.updated events.
     """
-    org_id   = payload.get("org_id")
-    logo_url = payload.get("logo_url")
-    if not org_id or not logo_url:
+    org_id = payload.get("org_id")
+    if not org_id:
         return
+
+    update_vals: dict = {"synced_at": datetime.now(timezone.utc)}
+    if payload.get("logo_url"):
+        update_vals["org_logo_url"] = payload["logo_url"]
+    if payload.get("display_name"):
+        update_vals["org_display_name"] = payload["display_name"]
+
+    if len(update_vals) == 1:
+        # Only synced_at — nothing useful to sync
+        return
+
     await db.execute(
         update(ProjectCache)
         .where(ProjectCache.organisation_id == uuid.UUID(org_id))
-        .values(org_logo_url=logo_url, synced_at=datetime.now(timezone.utc))
+        .values(**update_vals)
     )
     await db.commit()
-    log.info("feedback.org_logo.synced", org_id=org_id, logo_url=logo_url)
+    log.info("feedback.org_meta.synced", org_id=org_id, fields=list(update_vals.keys()))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -350,14 +361,9 @@ async def _dispatch(event_type: str, payload: dict, db: AsyncSession) -> None:
             log.debug("feedback.consumer.user_profile_update_ignored",
                       user_id=payload.get("user_id"))
 
-        # ── Org events — sync logo_url to all project caches for this org ──────
-        elif event_type == OrgEvents.UPDATED:
-            # Only act on this event if it carries a logo_url change.
-            # Full org profile changes are not cached in feedback_service.
-            if payload.get("logo_url"):
-                await _handle_org_logo_updated(payload, db)
-            else:
-                log.debug("feedback.consumer.org_updated_no_logo", org_id=payload.get("org_id"))
+        # ── Org events — sync display_name + logo_url to all project caches ────
+        elif event_type in (OrgEvents.CREATED, OrgEvents.UPDATED):
+            await _handle_org_meta_updated(payload, db)
 
         elif event_type in (
             OrgServiceEvents.PUBLISHED, OrgServiceEvents.UPDATED,

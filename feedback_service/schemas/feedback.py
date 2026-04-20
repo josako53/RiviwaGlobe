@@ -100,6 +100,16 @@ class ConsumerSubmitFeedback(BaseModel):
         description="OrgDepartment UUID — which department this feedback is directed at (e.g. HR, Finance).",
     )
 
+    # ── Service / product links ───────────────────────────────────────────────
+    service_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="OrgService UUID — which service (service_type=SERVICE/PROGRAM) this feedback is about.",
+    )
+    product_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="OrgService UUID (service_type=PRODUCT) — which product this feedback is about.",
+    )
+
     # ── Date and media ────────────────────────────────────────────────────────
     date_of_incident: Optional[str] = Field(default=None, description="When the issue happened (YYYY-MM-DD)")
     media_urls: Optional[List[str]] = Field(default=None, description="Photo/video URLs")
@@ -209,7 +219,15 @@ class StaffSubmitFeedback(BaseModel):
         default=None,
         description="OrgDepartment UUID — which department this feedback is directed at (e.g. HR, Finance, Customer Care).",
     )
-    service_location_id: Optional[uuid.UUID] = Field(default=None)
+    service_location_id: Optional[uuid.UUID] = Field(default=None, description="OrgServiceLocation UUID — specific deployment site")
+    service_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="OrgService UUID — which service (service_type=SERVICE/PROGRAM) this feedback is about.",
+    )
+    product_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="OrgService UUID (service_type=PRODUCT) — which product this feedback is about.",
+    )
     stakeholder_engagement_id: Optional[uuid.UUID] = Field(default=None, description="From public meeting (Annex 5)")
     distribution_id: Optional[uuid.UUID] = Field(default=None)
 

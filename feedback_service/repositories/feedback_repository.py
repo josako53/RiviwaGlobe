@@ -115,6 +115,10 @@ class FeedbackRepository:
         channel:                     Optional[str]       = None,
         submitted_by_stakeholder_id: Optional[uuid.UUID] = None,
         assigned_committee_id:       Optional[uuid.UUID] = None,
+        category_def_id:             Optional[uuid.UUID] = None,
+        department_id:               Optional[uuid.UUID] = None,
+        service_id:                  Optional[uuid.UUID] = None,
+        product_id:                  Optional[uuid.UUID] = None,
         skip:  int = 0,
         limit: int = 50,
     ) -> list[Feedback]:
@@ -140,6 +144,10 @@ class FeedbackRepository:
         if channel:                     q = q.where(Feedback.channel                      == channel)
         if submitted_by_stakeholder_id: q = q.where(Feedback.submitted_by_stakeholder_id == submitted_by_stakeholder_id)
         if assigned_committee_id:       q = q.where(Feedback.assigned_committee_id        == assigned_committee_id)
+        if category_def_id:             q = q.where(Feedback.category_def_id             == category_def_id)
+        if department_id:               q = q.where(Feedback.department_id               == department_id)
+        if service_id:                  q = q.where(Feedback.service_id                  == service_id)
+        if product_id:                  q = q.where(Feedback.product_id                  == product_id)
         q = q.offset(skip).limit(limit).order_by(Feedback.submitted_at.desc())
         result = await self.db.execute(q)
         return list(result.scalars().all())

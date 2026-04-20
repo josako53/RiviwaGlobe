@@ -394,6 +394,10 @@ class EventPublisher:
             payload={
                 "org_id":         str(org.id),
                 "changed_fields": changed_fields,
+                # Include current profile so consumers can sync names/logo
+                "display_name":   org.display_name,
+                "legal_name":     org.legal_name,
+                "logo_url":       getattr(org, "logo_url", None),
             },
         )
 
@@ -826,6 +830,8 @@ class EventPublisher:
             # ── Media — received by consumers to sync ProjectCache ──────────
             "cover_image_url":     getattr(project, "cover_image_url", None),
             "org_logo_url":        None,  # populated by org.events logo upload
+            # ── Org identity — consumers can cache org name without extra calls
+            "org_display_name":    getattr(project, "organisation", None) and getattr(project.organisation, "display_name", None),
         }
 
     def _stage_payload(self, stage, project, status_override: str | None = None) -> dict:

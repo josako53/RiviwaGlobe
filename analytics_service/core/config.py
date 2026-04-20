@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         default="change-me-in-production",
         description="Shared secret for internal service calls. Must match AUTH_SERVICE INTERNAL_SERVICE_KEY.",
     )
+    AUTH_SERVICE_URL: str = Field(
+        default="http://riviwa_auth_service:8000",
+        description="Base URL of auth_service for internal org context lookups.",
+    )
 
     # ── Redis ─────────────────────────────────────────────────────────────────
     REDIS_URL: str = Field(default="redis://redis:6379/4")

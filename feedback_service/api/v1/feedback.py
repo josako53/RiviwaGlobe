@@ -103,6 +103,10 @@ async def list_feedback(
     channel: Optional[str] = Query(default=None),
     submitted_by_stakeholder_id: Optional[uuid.UUID] = Query(default=None),
     assigned_committee_id: Optional[uuid.UUID] = Query(default=None),
+    category_def_id: Optional[uuid.UUID] = Query(default=None, description="Filter by dynamic category ID"),
+    department_id: Optional[uuid.UUID] = Query(default=None, description="Filter by department"),
+    service_id: Optional[uuid.UUID] = Query(default=None, description="Filter by service"),
+    product_id: Optional[uuid.UUID] = Query(default=None, description="Filter by product"),
     skip: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
     # Platform admins see all orgs; org staff see only their org's feedback
@@ -114,7 +118,10 @@ async def list_feedback(
         priority=priority, current_level=current_level, category=category, lga=lga,
         is_anonymous=is_anonymous, submission_method=submission_method, channel=channel,
         submitted_by_stakeholder_id=submitted_by_stakeholder_id,
-        assigned_committee_id=assigned_committee_id, skip=skip, limit=limit,
+        assigned_committee_id=assigned_committee_id,
+        category_def_id=category_def_id, department_id=department_id,
+        service_id=service_id, product_id=product_id,
+        skip=skip, limit=limit,
     )
     return {"items": [feedback_out(f) for f in items], "count": len(items)}
 

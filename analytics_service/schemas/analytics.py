@@ -48,6 +48,9 @@ class UnreadFeedbackItem(BaseModel):
     channel: Optional[str] = None
     issue_lga: Optional[str] = None
     submitter_name: Optional[str] = None
+    service_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    category_def_id: Optional[UUID] = None
 
 
 class UnreadFeedbackResponse(BaseModel):
@@ -67,6 +70,9 @@ class OverdueFeedbackItem(BaseModel):
     days_overdue: Optional[float] = None
     assigned_to_user_id: Optional[UUID] = None
     committee_id: Optional[UUID] = None
+    service_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    category_def_id: Optional[UUID] = None
 
 
 class OverdueFeedbackResponse(BaseModel):
@@ -127,6 +133,10 @@ class UnresolvedGrievanceItem(BaseModel):
     committee_id: Optional[UUID] = None
     issue_lga: Optional[str] = None
     issue_ward: Optional[str] = None
+    department_id: Optional[UUID] = None
+    service_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    category_def_id: Optional[UUID] = None
 
 
 class UnresolvedGrievancesResponse(BaseModel):
@@ -336,20 +346,396 @@ class LoginNotReadResponse(BaseModel):
 
 class AIInsightRequest(BaseModel):
     question: str = Field(..., min_length=5, max_length=1000)
-    project_id: UUID
+    project_id: Optional[UUID] = None
+    org_id: Optional[UUID] = None
     context_type: str = Field(
         default="general",
         description=(
-            "One of: general, grievances, suggestions, sla, committees, "
-            "hotspots, staff, unresolved"
+            "Project scope: general, grievances, suggestions, sla, committees, hotspots, staff, unresolved, inquiries. "
+            "Org scope: org_general, org_grievances, org_suggestions, org_applause, org_inquiries. "
+            "Platform scope: platform_general, platform_grievances, platform_suggestions, platform_applause, platform_inquiries."
         ),
     )
+    scope: str = Field(default="project", description="project | org | platform")
 
 
 class AIInsightResponse(BaseModel):
     answer: str
     context_used: Dict[str, Any] = Field(default_factory=dict)
-    model: str
+    model: str = ""
+
+
+# ── Breakdown: By Service / Product / Category Def ────────────────────────────
+
+class FeedbackBreakdownItem(BaseModel):
+    """One row in a service/product/category breakdown — counts per dimension value."""
+    service_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    category_def_id: Optional[UUID] = None
+    category_name: Optional[str] = None
+    category_slug: Optional[str] = None
+    total: int = 0
+    grievances: int = 0
+    suggestions: int = 0
+    applause: int = 0
+    inquiries: int = 0
+    resolved: int = 0
+    avg_resolution_hours: Optional[float] = None
+
+
+class FeedbackBreakdownResponse(BaseModel):
+    total_items: int = 0
+    items: List[FeedbackBreakdownItem] = Field(default_factory=list)
+
+
+# ── Organisation-level Analytics ──────────────────────────────────────────────
+
+class OrgSummaryResponse(BaseModel):
+    """High-level counts across all projects in the org."""
+    org_id: Optional[UUID] = None
+    total_feedback: int = 0
+    total_grievances: int = 0
+    total_suggestions: int = 0
+    total_applause: int = 0
+    total_inquiries: int = 0
+    # By status
+    submitted: int = 0
+    acknowledged: int = 0
+    in_review: int = 0
+    escalated: int = 0
+    resolved: int = 0
+    closed: int = 0
+    dismissed: int = 0
+    # By priority (grievances)
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    # Resolution stats
+    avg_resolution_hours: Optional[float] = None
+    avg_days_unresolved: Optional[float] = None
+    total_projects: int = 0
+
+
+class OrgByProjectItem(BaseModel):
+    project_id: UUID
+    project_name: Optional[str] = None
+    total: int = 0
+    grievances: int = 0
+    suggestions: int = 0
+    applause: int = 0
+    inquiries: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+    avg_resolution_hours: Optional[float] = None
+
+
+class OrgByProjectResponse(BaseModel):
+    total_items: int = 0
+    items: List[OrgByProjectItem] = Field(default_factory=list)
+
+
+class OrgByPeriodItem(BaseModel):
+    period: str                        # e.g. "2026-04-01" / "2026-W14" / "2026-04"
+    total: int = 0
+    grievances: int = 0
+    suggestions: int = 0
+    applause: int = 0
+    inquiries: int = 0
+
+
+class OrgByPeriodResponse(BaseModel):
+    granularity: str                   # day | week | month
+    total_items: int = 0
+    items: List[OrgByPeriodItem] = Field(default_factory=list)
+
+
+class OrgByChannelItem(BaseModel):
+    channel: str
+    total: int = 0
+    grievances: int = 0
+    suggestions: int = 0
+    applause: int = 0
+    inquiries: int = 0
+
+
+class OrgByChannelResponse(BaseModel):
+    total_items: int = 0
+    items: List[OrgByChannelItem] = Field(default_factory=list)
+
+
+class OrgDimensionBreakdownItem(BaseModel):
+    """Generic breakdown row for department/service/product (UUID dimension)."""
+    dimension_id: Optional[UUID] = None
+    total: int = 0
+    grievances: int = 0
+    suggestions: int = 0
+    applause: int = 0
+    inquiries: int = 0
+    resolved: int = 0
+    avg_resolution_hours: Optional[float] = None
+
+
+class OrgDimensionBreakdownResponse(BaseModel):
+    dimension: str                     # "department_id" | "service_id" | "product_id"
+    total_items: int = 0
+    items: List[OrgDimensionBreakdownItem] = Field(default_factory=list)
+
+
+class OrgByLocationItem(BaseModel):
+    lga: Optional[str] = None
+    ward: Optional[str] = None
+    total: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+
+
+class OrgByLocationResponse(BaseModel):
+    total_items: int = 0
+    items: List[OrgByLocationItem] = Field(default_factory=list)
+
+
+# ── Org Grievance ─────────────────────────────────────────────────────────────
+
+class OrgGrievanceSummaryResponse(BaseModel):
+    total_grievances: int = 0
+    unresolved: int = 0
+    escalated: int = 0
+    dismissed: int = 0
+    resolved: int = 0
+    closed: int = 0
+    avg_resolution_hours: Optional[float] = None
+    avg_days_unresolved: Optional[float] = None
+    # Priority breakdown
+    critical_unresolved: int = 0
+    high_unresolved: int = 0
+    medium_unresolved: int = 0
+    low_unresolved: int = 0
+
+
+class OrgGrievanceByLevelItem(BaseModel):
+    level: str
+    total: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+
+
+class OrgGrievanceByLevelResponse(BaseModel):
+    total_items: int = 0
+    items: List[OrgGrievanceByLevelItem] = Field(default_factory=list)
+
+
+class OrgSLAByPriority(BaseModel):
+    priority: str
+    total: int = 0
+    ack_met: int = 0
+    ack_breached: int = 0
+    res_met: int = 0
+    res_breached: int = 0
+    compliance_rate: Optional[float] = None
+
+
+class OrgGrievanceSLAResponse(BaseModel):
+    by_priority: List[OrgSLAByPriority] = Field(default_factory=list)
+    total_breached: int = 0
+    overall_compliance_rate: Optional[float] = None
+
+
+# ── Org Suggestions ───────────────────────────────────────────────────────────
+
+class OrgSuggestionSummaryResponse(BaseModel):
+    total_suggestions: int = 0
+    actioned: int = 0
+    noted: int = 0
+    pending: int = 0          # submitted + acknowledged
+    dismissed: int = 0
+    actioned_rate: Optional[float] = None
+    avg_hours_to_implement: Optional[float] = None
+
+
+class OrgSuggestionByProjectItem(BaseModel):
+    project_id: UUID
+    project_name: Optional[str] = None
+    total: int = 0
+    actioned: int = 0
+    pending: int = 0
+    implementation_rate: Optional[float] = None
+    avg_hours_to_implement: Optional[float] = None
+
+
+class OrgSuggestionByProjectResponse(BaseModel):
+    total_items: int = 0
+    items: List[OrgSuggestionByProjectItem] = Field(default_factory=list)
+
+
+# ── Org Applause ──────────────────────────────────────────────────────────────
+
+class OrgApplauseCategoryItem(BaseModel):
+    category: Optional[str] = None
+    category_def_id: Optional[UUID] = None
+    category_name: Optional[str] = None
+    count: int = 0
+
+
+class OrgApplauseByProjectItem(BaseModel):
+    project_id: UUID
+    project_name: Optional[str] = None
+    count: int = 0
+
+
+class OrgAppIauseSummaryResponse(BaseModel):
+    total_applause: int = 0
+    this_month: int = 0
+    last_month: int = 0
+    mom_change: Optional[float] = None     # month-on-month % change
+    top_categories: List[OrgApplauseCategoryItem] = Field(default_factory=list)
+    by_project: List[OrgApplauseByProjectItem] = Field(default_factory=list)
+    context_used: Dict[str, Any] = Field(default_factory=dict)
+    model: str = ""
+
+
+# ── Platform-level Analytics ──────────────────────────────────────────────────
+
+class PlatformSummaryResponse(BaseModel):
+    """Aggregated counts across ALL organisations and ALL projects."""
+    total_orgs: int = 0
+    total_projects: int = 0
+    total_feedback: int = 0
+    total_grievances: int = 0
+    total_suggestions: int = 0
+    total_applause: int = 0
+    total_inquiries: int = 0
+    submitted: int = 0
+    acknowledged: int = 0
+    in_review: int = 0
+    escalated: int = 0
+    resolved: int = 0
+    closed: int = 0
+    dismissed: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    avg_resolution_hours: Optional[float] = None
+    avg_days_unresolved: Optional[float] = None
+
+
+class PlatformByOrgItem(BaseModel):
+    organisation_id: UUID
+    org_name: Optional[str] = None
+    total_projects: int = 0
+    total: int = 0
+    grievances: int = 0
+    suggestions: int = 0
+    applause: int = 0
+    inquiries: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+    avg_resolution_hours: Optional[float] = None
+
+
+class PlatformByOrgResponse(BaseModel):
+    total_items: int = 0
+    items: List[PlatformByOrgItem] = Field(default_factory=list)
+
+
+class OrgApplauseByOrgItem(BaseModel):
+    organisation_id: UUID
+    count: int = 0
+
+
+class PlatformApplauseSummaryResponse(BaseModel):
+    total_applause: int = 0
+    this_month: int = 0
+    last_month: int = 0
+    mom_change: Optional[float] = None
+    top_categories: List[OrgApplauseCategoryItem] = Field(default_factory=list)
+    by_org: List[OrgApplauseByOrgItem] = Field(default_factory=list)
+    context_used: Dict[str, Any] = Field(default_factory=dict)
+    model: str = ""
+
+
+# ── Inquiry Analytics ──────────────────────────────────────────────────────────
+
+class InquirySummaryResponse(BaseModel):
+    """Summary of inquiries at project, org, or platform level."""
+    total_inquiries: int = 0
+    open_inquiries: int = 0          # status NOT IN resolved/closed/dismissed
+    resolved: int = 0
+    closed: int = 0
+    dismissed: int = 0
+    avg_response_hours: Optional[float] = None   # avg hours from submitted to resolved
+    avg_days_open: Optional[float] = None        # avg days currently open (unresolved)
+    critical_open: int = 0
+    high_open: int = 0
+    medium_open: int = 0
+    low_open: int = 0
+
+
+class InquiryUnreadItem(BaseModel):
+    feedback_id: UUID
+    unique_ref: Optional[str] = None
+    priority: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    days_waiting: Optional[float] = None
+    channel: Optional[str] = None
+    issue_lga: Optional[str] = None
+    department_id: Optional[UUID] = None
+    service_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    category_def_id: Optional[UUID] = None
+
+
+class InquiryUnreadResponse(BaseModel):
+    total: int = 0
+    items: List[InquiryUnreadItem] = Field(default_factory=list)
+
+
+class InquiryOverdueItem(BaseModel):
+    feedback_id: UUID
+    unique_ref: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    target_resolution_date: Optional[datetime] = None
+    days_overdue: Optional[float] = None
+    assigned_to_user_id: Optional[UUID] = None
+    department_id: Optional[UUID] = None
+    service_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    category_def_id: Optional[UUID] = None
+
+
+class InquiryOverdueResponse(BaseModel):
+    total: int = 0
+    items: List[InquiryOverdueItem] = Field(default_factory=list)
+
+
+class InquiryByChannelItem(BaseModel):
+    channel: str
+    total: int = 0
+    open_count: int = 0
+    resolved: int = 0
+
+
+class InquiryByChannelResponse(BaseModel):
+    total_items: int = 0
+    items: List[InquiryByChannelItem] = Field(default_factory=list)
+
+
+class InquiryByCategoryItem(BaseModel):
+    category_def_id: Optional[UUID] = None
+    category_name: Optional[str] = None
+    category_slug: Optional[str] = None
+    total: int = 0
+    open_count: int = 0
+    resolved: int = 0
+    avg_response_hours: Optional[float] = None
+
+
+class InquiryByCategoryResponse(BaseModel):
+    total_items: int = 0
+    items: List[InquiryByCategoryItem] = Field(default_factory=list)
 
 
 # ── Internal: SLA upsert ──────────────────────────────────────────────────────
@@ -378,3 +764,4 @@ class StaffLoginCreate(BaseModel):
     login_at: datetime
     ip_address: Optional[str] = None
     platform: Optional[str] = None
+

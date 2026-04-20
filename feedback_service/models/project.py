@@ -78,8 +78,10 @@ class ProjectCache(SQLModel, table=True):
     end_date:     Optional[date] = Field(default=None, sa_column=Column(Date, nullable=True))
 
     # ── Media ─────────────────────────────────────────────────────────────────
-    cover_image_url: Optional[str] = Field(default=None, max_length=500, nullable=True)
-    org_logo_url:    Optional[str] = Field(default=None, max_length=500, nullable=True)
+    cover_image_url:  Optional[str] = Field(default=None, max_length=500, nullable=True)
+    org_logo_url:     Optional[str] = Field(default=None, max_length=500, nullable=True)
+    # Synced from org.created / org.updated events so analytics can resolve names
+    org_display_name: Optional[str] = Field(default=None, max_length=255, nullable=True)
 
     # ── Feedback acceptance gates ─────────────────────────────────────────────
     # These mirror the flags on ProjectCache in stakeholder_service.

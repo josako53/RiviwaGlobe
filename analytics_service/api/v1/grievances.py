@@ -35,16 +35,20 @@ _RES_HOURS  = {"critical": 72,  "high": 168, "medium": 336, "low": 720}
 
 @router.get("/unresolved", response_model=UnresolvedGrievancesResponse)
 async def get_unresolved_grievances(
-    project_id: UUID          = Query(...),
-    min_days:   Optional[float] = Query(None, description="Minimum days unresolved"),
-    priority:   Optional[str]  = Query(None),
-    status:     Optional[str]  = Query(None, description="Specific status to filter by"),
+    project_id:      UUID           = Query(...),
+    min_days:        Optional[float] = Query(None, description="Minimum days unresolved"),
+    priority:        Optional[str]  = Query(None),
+    status:          Optional[str]  = Query(None, description="Specific status to filter by"),
+    department_id:   Optional[UUID] = Query(None, description="Filter by department UUID"),
+    service_id:      Optional[UUID] = Query(None, description="Filter by service UUID"),
+    product_id:      Optional[UUID] = Query(None, description="Filter by product UUID"),
+    category_def_id: Optional[UUID] = Query(None, description="Filter by dynamic category UUID"),
     _token: StaffDep = None,
     fb_db:  FeedbackDbDep = None,
 ) -> UnresolvedGrievancesResponse:
     """
     All grievances not yet resolved (status NOT IN resolved/closed/dismissed).
-    Filterable by minimum days unresolved, priority, and status.
+    Filterable by min_days, priority, status, department_id, service_id, product_id, category_def_id.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
     rows = await repo.get_unresolved_grievances(
@@ -52,6 +56,10 @@ async def get_unresolved_grievances(
         min_days=min_days,
         priority=priority,
         status=status,
+        department_id=department_id,
+        service_id=service_id,
+        product_id=product_id,
+        category_def_id=category_def_id,
     )
 
     items = [
@@ -67,6 +75,10 @@ async def get_unresolved_grievances(
             committee_id        = r.get("committee_id"),
             issue_lga           = r.get("issue_lga"),
             issue_ward          = r.get("issue_ward"),
+            department_id       = r.get("department_id"),
+            service_id          = r.get("service_id"),
+            product_id          = r.get("product_id"),
+            category_def_id     = r.get("category_def_id"),
         )
         for r in rows
     ]

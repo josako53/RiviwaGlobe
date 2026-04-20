@@ -131,10 +131,15 @@ class FeedbackType(str, Enum):
                   Simplest lifecycle — acknowledged and closed.
                   Examples: bridge completed on schedule, contractor was respectful,
                   GRM Unit responded quickly to a concern, resettlement was well handled.
+
+    INQUIRY     → question or request for information. No GRM escalation.
+                  Examples: how does the compensation process work?, what is the
+                  status of my land valuation?, who do I contact about X?
     """
     GRIEVANCE   = "grievance"
     SUGGESTION  = "suggestion"
     APPLAUSE    = "applause"
+    INQUIRY     = "inquiry"
 
     @classmethod
     def _missing_(cls, value: object):
@@ -380,6 +385,13 @@ class FeedbackCategory(str, Enum):
     COMMUNITY_IMPACT = "community_impact"
     RESPONSIVENESS   = "responsiveness"
 
+    # Primarily INQUIRY
+    INFORMATION_REQUEST = "information_request"
+    PROCEDURE_INQUIRY   = "procedure_inquiry"
+    STATUS_UPDATE       = "status_update"
+    DOCUMENT_REQUEST    = "document_request"
+    GENERAL_INQUIRY     = "general_inquiry"
+
     @classmethod
     def _missing_(cls, value: object):
         if not isinstance(value, str):
@@ -517,6 +529,26 @@ class Feedback(SQLModel, table=True):
         description=(
             "auth_service OrgServiceLocation.id — which specific deployment "
             "site this feedback is about. Null for project-level feedback."
+        ),
+    )
+
+    # Which org service this feedback is about (soft link to auth_service OrgService)
+    service_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description=(
+            "auth_service OrgService.id — soft link to the specific service "
+            "(service_type=SERVICE or PROGRAM) this feedback relates to. "
+            "No DB-level FK (cross-database reference). Null = not service-specific."
+        ),
+    )
+
+    # Which product this feedback is about (soft link to auth_service OrgService where service_type=PRODUCT)
+    product_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description=(
+            "auth_service OrgService.id (service_type=PRODUCT) — soft link to "
+            "the specific product this feedback relates to. "
+            "No DB-level FK (cross-database reference). Null = not product-specific."
         ),
     )
 
@@ -1487,7 +1519,7 @@ class FeedbackCategoryDef(SQLModel, table=True):
     # ── Applicable feedback types ──────────────────────────────────────────────
     # JSONB array: ["grievance", "suggestion", "applause"] or subset
     applicable_types: Dict[str, Any] = Field(
-        default={"types": ["grievance", "suggestion", "applause"]},
+        default={"types": ["grievance", "suggestion", "applause", "inquiry"]},
         sa_column=Column(JSONB, nullable=False),
         description=(
             "Which feedback types this category applies to. "

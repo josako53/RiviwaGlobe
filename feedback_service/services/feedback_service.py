@@ -59,6 +59,7 @@ _PREFIX = {
     FeedbackType.GRIEVANCE:  "GRV",
     FeedbackType.SUGGESTION: "SGG",
     FeedbackType.APPLAUSE:   "APP",
+    FeedbackType.INQUIRY:    "INQ",
 }
 
 
@@ -204,6 +205,8 @@ class FeedbackService:
             subproject_id                = self._to_uuid(data.get("subproject_id")),
             department_id                = self._to_uuid(data.get("department_id")),
             service_location_id          = self._to_uuid(data.get("service_location_id")),
+            service_id                   = self._to_uuid(data.get("service_id")),
+            product_id                   = self._to_uuid(data.get("product_id")),
             feedback_type                = feedback_type,
             category                     = _safe_category(data.get("category")),
             status                       = FeedbackStatus.SUBMITTED,

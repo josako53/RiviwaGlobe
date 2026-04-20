@@ -5,6 +5,7 @@ All endpoints require Bearer JWT authentication and a project_id query param.
 from __future__ import annotations
 
 import statistics
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -14,6 +15,8 @@ from fastapi import APIRouter, Query
 from core.dependencies import FeedbackDbDep, StaffDep
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
+    FeedbackBreakdownItem,
+    FeedbackBreakdownResponse,
     NotProcessedFeedbackResponse,
     OverdueFeedbackItem,
     OverdueFeedbackResponse,
@@ -80,30 +83,42 @@ async def get_time_to_open(
 
 @router.get("/unread", response_model=UnreadFeedbackResponse)
 async def get_unread_feedback(
-    project_id:    UUID           = Query(...),
-    priority:      Optional[str]  = Query(None, description="Filter by priority"),
-    feedback_type: Optional[str]  = Query(None, description="grievance | suggestion | applause"),
+    project_id:      UUID           = Query(...),
+    priority:        Optional[str]  = Query(None, description="Filter by priority"),
+    feedback_type:   Optional[str]  = Query(None, description="grievance | suggestion | applause"),
+    department_id:   Optional[UUID] = Query(None, description="Filter by department UUID"),
+    service_id:      Optional[UUID] = Query(None, description="Filter by service UUID"),
+    product_id:      Optional[UUID] = Query(None, description="Filter by product UUID"),
+    category_def_id: Optional[UUID] = Query(None, description="Filter by dynamic category UUID"),
     _token: StaffDep = None,
     fb_db:  FeedbackDbDep = None,
 ) -> UnreadFeedbackResponse:
     """
     All feedbacks with status='submitted' (unread/unacknowledged).
-    Optionally filter by priority and feedback_type.
+    Optionally filter by priority, feedback_type, department_id, service_id, product_id, category_def_id.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
-    rows = await repo.get_unread_all(project_id, priority=priority, feedback_type=feedback_type)
+    rows = await repo.get_unread_all(
+        project_id, priority=priority, feedback_type=feedback_type,
+        department_id=department_id, service_id=service_id,
+        product_id=product_id, category_def_id=category_def_id,
+    )
 
     items = [
         UnreadFeedbackItem(
-            feedback_id   = r["feedback_id"],
-            unique_ref    = r.get("unique_ref"),
-            feedback_type = r.get("feedback_type"),
-            priority      = r.get("priority"),
-            submitted_at  = r.get("submitted_at"),
-            days_waiting  = float(r["days_waiting"]) if r.get("days_waiting") is not None else None,
-            channel       = r.get("channel"),
-            issue_lga     = r.get("issue_lga"),
-            submitter_name= r.get("submitter_name"),
+            feedback_id     = r["feedback_id"],
+            unique_ref      = r.get("unique_ref"),
+            feedback_type   = r.get("feedback_type"),
+            priority        = r.get("priority"),
+            submitted_at    = r.get("submitted_at"),
+            days_waiting    = float(r["days_waiting"]) if r.get("days_waiting") is not None else None,
+            channel         = r.get("channel"),
+            issue_lga       = r.get("issue_lga"),
+            submitter_name  = r.get("submitter_name"),
+            department_id   = r.get("department_id"),
+            service_id      = r.get("service_id"),
+            product_id      = r.get("product_id"),
+            category_def_id = r.get("category_def_id"),
         )
         for r in rows
     ]
@@ -114,8 +129,12 @@ async def get_unread_feedback(
 
 @router.get("/overdue", response_model=OverdueFeedbackResponse)
 async def get_overdue_feedback(
-    project_id:    UUID          = Query(...),
-    feedback_type: Optional[str] = Query(None),
+    project_id:      UUID          = Query(...),
+    feedback_type:   Optional[str] = Query(None),
+    department_id:   Optional[UUID] = Query(None, description="Filter by department UUID"),
+    service_id:      Optional[UUID] = Query(None, description="Filter by service UUID"),
+    product_id:      Optional[UUID] = Query(None, description="Filter by product UUID"),
+    category_def_id: Optional[UUID] = Query(None, description="Filter by dynamic category UUID"),
     _token: StaffDep = None,
     fb_db:  FeedbackDbDep = None,
 ) -> OverdueFeedbackResponse:
@@ -124,7 +143,11 @@ async def get_overdue_feedback(
     target_resolution_date < now().
     """
     repo = FeedbackAnalyticsRepository(fb_db)
-    rows = await repo.get_overdue(project_id, feedback_type=feedback_type)
+    rows = await repo.get_overdue(
+        project_id, feedback_type=feedback_type,
+        department_id=department_id, service_id=service_id,
+        product_id=product_id, category_def_id=category_def_id,
+    )
 
     items = [
         OverdueFeedbackItem(
@@ -137,6 +160,10 @@ async def get_overdue_feedback(
             days_overdue           = float(r["days_overdue"]) if r.get("days_overdue") is not None else None,
             assigned_to_user_id    = r.get("assigned_to_user_id"),
             committee_id           = r.get("committee_id"),
+            department_id          = r.get("department_id"),
+            service_id             = r.get("service_id"),
+            product_id             = r.get("product_id"),
+            category_def_id        = r.get("category_def_id"),
         )
         for r in rows
     ]
@@ -229,3 +256,111 @@ async def get_resolved_today(
         for r in rows
     ]
     return ResolvedTodayResponse(total=len(items), items=items)
+
+
+# ── GET /analytics/feedback/by-service ───────────────────────────────────────
+
+@router.get("/by-service", response_model=FeedbackBreakdownResponse)
+async def get_feedback_by_service(
+    project_id:    UUID          = Query(..., description="Project UUID"),
+    feedback_type: Optional[str] = Query(None, description="grievance | suggestion | applause"),
+    date_from:     Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> FeedbackBreakdownResponse:
+    """
+    Feedback counts grouped by service_id.
+    Only includes feedback where service_id is set.
+    Returns: service_id, total, grievances, suggestions, applause, resolved, avg_resolution_hours.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_breakdown_by_service(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+    items = [
+        FeedbackBreakdownItem(
+            service_id           = r.get("service_id"),
+            total                = int(r.get("total", 0)),
+            grievances           = int(r.get("grievances", 0)),
+            suggestions          = int(r.get("suggestions", 0)),
+            applause             = int(r.get("applause", 0)),
+            resolved             = int(r.get("resolved", 0)),
+            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+        )
+        for r in rows
+    ]
+    return FeedbackBreakdownResponse(total_items=len(items), items=items)
+
+
+# ── GET /analytics/feedback/by-product ───────────────────────────────────────
+
+@router.get("/by-product", response_model=FeedbackBreakdownResponse)
+async def get_feedback_by_product(
+    project_id:    UUID          = Query(..., description="Project UUID"),
+    feedback_type: Optional[str] = Query(None, description="grievance | suggestion | applause"),
+    date_from:     Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> FeedbackBreakdownResponse:
+    """
+    Feedback counts grouped by product_id.
+    Only includes feedback where product_id is set.
+    Returns: product_id, total, grievances, suggestions, applause, resolved, avg_resolution_hours.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_breakdown_by_product(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+    items = [
+        FeedbackBreakdownItem(
+            product_id           = r.get("product_id"),
+            total                = int(r.get("total", 0)),
+            grievances           = int(r.get("grievances", 0)),
+            suggestions          = int(r.get("suggestions", 0)),
+            applause             = int(r.get("applause", 0)),
+            resolved             = int(r.get("resolved", 0)),
+            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+        )
+        for r in rows
+    ]
+    return FeedbackBreakdownResponse(total_items=len(items), items=items)
+
+
+# ── GET /analytics/feedback/by-category ──────────────────────────────────────
+
+@router.get("/by-category", response_model=FeedbackBreakdownResponse)
+async def get_feedback_by_category(
+    project_id:    UUID          = Query(..., description="Project UUID"),
+    feedback_type: Optional[str] = Query(None, description="grievance | suggestion | applause"),
+    date_from:     Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> FeedbackBreakdownResponse:
+    """
+    Feedback counts grouped by dynamic category (category_def_id).
+    Includes all feedback — rows with NULL category_def_id appear as category_name='uncategorised'.
+    Returns: category_def_id, category_name, category_slug, total, grievances,
+             suggestions, applause, resolved, avg_resolution_hours.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_breakdown_by_category_def(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+    items = [
+        FeedbackBreakdownItem(
+            category_def_id      = r.get("category_def_id"),
+            category_name        = r.get("category_name") or "uncategorised",
+            category_slug        = r.get("category_slug"),
+            total                = int(r.get("total", 0)),
+            grievances           = int(r.get("grievances", 0)),
+            suggestions          = int(r.get("suggestions", 0)),
+            applause             = int(r.get("applause", 0)),
+            resolved             = int(r.get("resolved", 0)),
+            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+        )
+        for r in rows
+    ]
+    return FeedbackBreakdownResponse(total_items=len(items), items=items)
