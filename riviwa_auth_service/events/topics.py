@@ -170,3 +170,13 @@ class AddressEvents:
     CREATED = "address.created"
     UPDATED = "address.updated"
     DELETED = "address.deleted"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OrgDepartment event types  (topic: riviwa.organisation.events)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class OrgDepartmentEvents:
+    CREATED     = "org_department.created"
+    UPDATED     = "org_department.updated"
+    DEACTIVATED = "org_department.deactivated"

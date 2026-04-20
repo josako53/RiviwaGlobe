@@ -94,6 +94,12 @@ class ConsumerSubmitFeedback(BaseModel):
     # ── Sub-project link ──────────────────────────────────────────────────────
     subproject_id: Optional[uuid.UUID] = Field(default=None, description="Sub-project (work package) UUID")
 
+    # ── Department link ───────────────────────────────────────────────────────
+    department_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="OrgDepartment UUID — which department this feedback is directed at (e.g. HR, Finance).",
+    )
+
     # ── Date and media ────────────────────────────────────────────────────────
     date_of_incident: Optional[str] = Field(default=None, description="When the issue happened (YYYY-MM-DD)")
     media_urls: Optional[List[str]] = Field(default=None, description="Photo/video URLs")
@@ -199,6 +205,10 @@ class StaffSubmitFeedback(BaseModel):
 
     # ── SECTION G — Cross-references ──────────────────────────────────────────
     subproject_id: Optional[uuid.UUID] = Field(default=None, description="Sub-project (work package) this feedback relates to")
+    department_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="OrgDepartment UUID — which department this feedback is directed at (e.g. HR, Finance, Customer Care).",
+    )
     service_location_id: Optional[uuid.UUID] = Field(default=None)
     stakeholder_engagement_id: Optional[uuid.UUID] = Field(default=None, description="From public meeting (Annex 5)")
     distribution_id: Optional[uuid.UUID] = Field(default=None)

@@ -118,6 +118,7 @@ if TYPE_CHECKING:
         OrgService,
     )
     from models.org_project import OrgProject
+    from models.department import OrgDepartment
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -363,6 +364,11 @@ class Organisation(SQLModel, table=True):
             "cascade": "all, delete-orphan",
             "foreign_keys": "[OrgProject.organisation_id]",
         },
+    )
+    # OrgDepartment: one org → many departments (HR, Finance, Customer Care …)
+    departments: "OrgDepartment" = Relationship(
+        back_populates="org",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
 
     # ── Helpers ───────────────────────────────────────────────────────────────

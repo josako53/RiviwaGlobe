@@ -197,6 +197,7 @@ if TYPE_CHECKING:
     from models.organisation import Organisation
     from models.user import User
     from models.org_project import OrgProject
+    from models.department import OrgDepartment
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -594,6 +595,8 @@ class OrgBranch(SQLModel, table=True):
     service_locations: "OrgServiceLocation" = Relationship(
         back_populates="branch"
     )
+    # Departments scoped to this specific branch
+    departments: "OrgDepartment" = Relationship(back_populates="branch")
 
     def is_active(self) -> bool:
         return self.status == BranchStatus.ACTIVE

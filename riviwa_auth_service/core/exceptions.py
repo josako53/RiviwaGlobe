@@ -329,6 +329,12 @@ class InviteNotFoundError(AppError):
     message     = "Invitation not found or no longer valid."
 
 
+class DepartmentNotFoundError(AppError):
+    status_code = status.HTTP_404_NOT_FOUND
+    error_code  = "DEPARTMENT_NOT_FOUND"
+    message     = "Department not found."
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 409 Conflict
 # ─────────────────────────────────────────────────────────────────────────────
@@ -394,6 +400,12 @@ class IDAlreadyUsedError(AppError):
     status_code = status.HTTP_409_CONFLICT
     error_code  = "ID_ALREADY_USED"
     message     = "This government ID is already associated with another account."
+
+
+class DepartmentNameConflictError(AppError):
+    status_code = status.HTTP_409_CONFLICT
+    error_code  = "DEPARTMENT_NAME_CONFLICT"
+    message     = "A department with this name already exists in this organisation."
 
 
 # ─────────────────────────────────────────────────────────────────────────────

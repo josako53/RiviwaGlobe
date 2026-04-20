@@ -104,7 +104,7 @@ from typing import Any, Optional
 import structlog
 
 from core.config import settings
-from events.topics import AddressEvents, AuthEvents, FraudEvents, KafkaTopics, OrgEvents, OrgServiceEvents, OrgProjectEvents, OrgProjectStageEvents, UserEvents
+from events.topics import AddressEvents, AuthEvents, FraudEvents, KafkaTopics, OrgDepartmentEvents, OrgEvents, OrgServiceEvents, OrgProjectEvents, OrgProjectStageEvents, UserEvents
 from models.organisation import Organisation, OrganisationMember
 from models.user import User
 from workers.kafka_producer import KafkaEventProducer
@@ -999,4 +999,42 @@ class EventPublisher:
                 "entity_type": entity_type,
                 "entity_id":   str(entity_id),
             },
+        )
+
+    # ── Department events ─────────────────────────────────────────────────────
+
+    def _dept_payload(self, dept) -> dict:
+        return {
+            "department_id": str(dept.id),
+            "org_id":        str(dept.org_id),
+            "branch_id":     str(dept.branch_id) if dept.branch_id else None,
+            "name":          dept.name,
+            "code":          dept.code,
+            "is_active":     dept.is_active,
+        }
+
+    async def org_department_created(self, dept) -> None:
+        await self._publish(
+            topic=KafkaTopics.ORG_EVENTS,
+            event_type=OrgDepartmentEvents.CREATED,
+            key=str(dept.org_id),
+            payload=self._dept_payload(dept),
+        )
+
+    async def org_department_updated(self, dept, changed_fields: list[str]) -> None:
+        payload = self._dept_payload(dept)
+        payload["changed_fields"] = changed_fields
+        await self._publish(
+            topic=KafkaTopics.ORG_EVENTS,
+            event_type=OrgDepartmentEvents.UPDATED,
+            key=str(dept.org_id),
+            payload=payload,
+        )
+
+    async def org_department_deactivated(self, dept) -> None:
+        await self._publish(
+            topic=KafkaTopics.ORG_EVENTS,
+            event_type=OrgDepartmentEvents.DEACTIVATED,
+            key=str(dept.org_id),
+            payload=self._dept_payload(dept),
         )

@@ -501,6 +501,16 @@ class Feedback(SQLModel, table=True):
         ),
     )
 
+    # Department this feedback is directed at or handled by
+    department_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description=(
+            "auth_service OrgDepartment.id — soft link to the department responsible "
+            "for or targeted by this feedback (e.g. HR, Finance, Customer Care). "
+            "No DB-level FK (cross-database reference). Null = not department-specific."
+        ),
+    )
+
     # Optional: which specific service location the feedback is about
     service_location_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True, index=True,

@@ -202,6 +202,7 @@ class FeedbackService:
             project_id                   = project_id,
             stage_id                     = active_stage.id if active_stage else None,
             subproject_id                = self._to_uuid(data.get("subproject_id")),
+            department_id                = self._to_uuid(data.get("department_id")),
             service_location_id          = self._to_uuid(data.get("service_location_id")),
             feedback_type                = feedback_type,
             category                     = _safe_category(data.get("category")),
