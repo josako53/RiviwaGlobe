@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from db.session import get_db
+from db.session import get_async_session as get_db
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/internal", tags=["Internal — Service-to-Service"])

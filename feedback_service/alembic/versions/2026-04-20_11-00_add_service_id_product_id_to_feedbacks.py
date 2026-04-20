@@ -1,6 +1,6 @@
 """add_service_id_product_id_to_feedbacks
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: f4a5b6c7d8e9
 Revises:     f3a4b5c6d7e8
 Create Date: 2026-04-20 11:00:00
 
@@ -15,7 +15,7 @@ Enables filtering: GET /feedback?service_id=...&product_id=...&category_def_id=.
 from alembic import op
 import sqlalchemy as sa
 
-revision      = "a1b2c3d4e5f6"
+revision      = "f4a5b6c7d8e9"
 down_revision = "f3a4b5c6d7e8"
 branch_labels = None
 depends_on    = None

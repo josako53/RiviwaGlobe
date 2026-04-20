@@ -1179,7 +1179,6 @@ class FeedbackAnalyticsRepository:
         sql = f"""
             SELECT
                 f.priority::text                                                            AS priority,
-                COUNT(*)                                                                    AS total,
                 f.acknowledged_at,
                 f.resolved_at,
                 f.submitted_at
