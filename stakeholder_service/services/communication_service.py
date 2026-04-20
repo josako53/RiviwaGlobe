@@ -45,7 +45,7 @@ class CommunicationService:
     async def log_communication(
         self, data: dict, sent_by: uuid.UUID
     ) -> CommunicationRecord:
-        project_id = uuid.UUID(data["project_id"])
+        project_id = uuid.UUID(str(data["project_id"]))
         if not await self.repo.get_project_cache(project_id):
             raise ProjectNotFoundError()
 
@@ -56,11 +56,11 @@ class CommunicationService:
             purpose                = CommPurpose(data["purpose"]),
             subject                = data["subject"],
             sent_by_user_id        = sent_by,
-            stakeholder_id         = uuid.UUID(data["stakeholder_id"]) if data.get("stakeholder_id") else None,
-            contact_id             = uuid.UUID(data["contact_id"]) if data.get("contact_id") else None,
+            stakeholder_id         = uuid.UUID(str(data["stakeholder_id"])) if data.get("stakeholder_id") else None,
+            contact_id             = uuid.UUID(str(data["contact_id"])) if data.get("contact_id") else None,
             content_summary        = data.get("content_summary"),
             document_urls          = data.get("document_urls"),
-            in_response_to_id      = uuid.UUID(data["in_response_to_id"]) if data.get("in_response_to_id") else None,
+            in_response_to_id      = uuid.UUID(str(data["in_response_to_id"])) if data.get("in_response_to_id") else None,
             distribution_required  = data.get("distribution_required", False),
             distribution_deadline  = datetime.fromisoformat(data["distribution_deadline"]) if data.get("distribution_deadline") else None,
             notes                  = data.get("notes"),
@@ -103,7 +103,7 @@ class CommunicationService:
         c = await self.get_communication_or_404(comm_id)
         d = await self.repo.create_distribution(
             communication_id      = comm_id,
-            contact_id            = uuid.UUID(data["contact_id"]),
+            contact_id            = uuid.UUID(str(data["contact_id"])),
             distribution_method   = DistributionMethod(data["distribution_method"]),
             logged_by_user_id     = logged_by,
             distributed_to_count  = data.get("distributed_to_count"),
@@ -131,7 +131,7 @@ class CommunicationService:
                 setattr(d, field, data[field])
 
         if "feedback_ref_id" in data and data["feedback_ref_id"]:
-            d.feedback_ref_id = uuid.UUID(data["feedback_ref_id"])
+            d.feedback_ref_id = uuid.UUID(str(data["feedback_ref_id"]))
 
         if data.get("acknowledge"):
             d.acknowledged_at         = datetime.now(timezone.utc)
@@ -144,7 +144,7 @@ class CommunicationService:
     # ── Focal persons ─────────────────────────────────────────────────────────
 
     async def create_focal_person(self, data: dict) -> FocalPerson:
-        project_id = uuid.UUID(data["project_id"])
+        project_id = uuid.UUID(str(data["project_id"]))
         if not await self.repo.get_project_cache(project_id):
             raise ProjectNotFoundError()
 
@@ -157,7 +157,7 @@ class CommunicationService:
             phone             = data.get("phone"),
             email             = data.get("email"),
             address           = data.get("address"),
-            user_id           = uuid.UUID(data["user_id"]) if data.get("user_id") else None,
+            user_id           = uuid.UUID(str(data["user_id"])) if data.get("user_id") else None,
             lga               = data.get("lga"),
             subproject        = data.get("subproject"),
             notes             = data.get("notes"),
@@ -190,7 +190,7 @@ class CommunicationService:
             if field in data and data[field] is not None:
                 setattr(fp, field, data[field])
         if "user_id" in data:
-            fp.user_id = uuid.UUID(data["user_id"]) if data["user_id"] else None
+            fp.user_id = uuid.UUID(str(data["user_id"])) if data["user_id"] else None
         await self.repo.save_focal_person(fp)
         await self.db.commit()
         return fp

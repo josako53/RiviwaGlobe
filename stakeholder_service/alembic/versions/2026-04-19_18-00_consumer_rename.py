@@ -31,11 +31,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ── 1. Rename enum value "pap" → "consumer" ───────────────────────────────
+    # ── 1. Rename enum value "PAP" → "consumer" ───────────────────────────────
     # PostgreSQL supports ALTER TYPE … RENAME VALUE since v10.
-    # This is safe to run on an existing DB — existing rows keep their value
-    # automatically updated by the engine.
-    op.execute("ALTER TYPE stakeholder_type RENAME VALUE 'pap' TO 'consumer'")
+    # DB stores uppercase labels (PAP, INTERESTED_PARTY, etc.)
+    op.execute("ALTER TYPE stakeholder_type RENAME VALUE 'PAP' TO 'consumer'")
 
     # ── 2. Rename column is_pap → is_consumer on stakeholder_projects ─────────
     op.alter_column(
@@ -46,13 +45,13 @@ def upgrade() -> None:
         existing_nullable=False,
     )
 
-    # ── 3. Rename focal_person_org_type enum value "piu" → "grm_unit" ─────────
-    op.execute("ALTER TYPE focal_person_org_type RENAME VALUE 'piu' TO 'grm_unit'")
+    # ── 3. Rename focal_person_org_type enum value "PIU" → "grm_unit" ─────────
+    op.execute("ALTER TYPE focal_person_org_type RENAME VALUE 'PIU' TO 'grm_unit'")
 
 
 def downgrade() -> None:
     # Reverse focal_person_org_type rename
-    op.execute("ALTER TYPE focal_person_org_type RENAME VALUE 'grm_unit' TO 'piu'")
+    op.execute("ALTER TYPE focal_person_org_type RENAME VALUE 'grm_unit' TO 'PIU'")
 
     # Reverse column rename
     op.alter_column(
@@ -64,4 +63,4 @@ def downgrade() -> None:
     )
 
     # Reverse enum value rename
-    op.execute("ALTER TYPE stakeholder_type RENAME VALUE 'consumer' TO 'pap'")
+    op.execute("ALTER TYPE stakeholder_type RENAME VALUE 'consumer' TO 'PAP'")

@@ -15,6 +15,14 @@ terminology and replace with generic equivalents:
     "lga_piu"  → "lga_grm_unit"
     "pcu"      → "coordinating_unit"
 
+  grm_from_level enum (FeedbackEscalation.from_level):
+    "lga_piu"  → "lga_grm_unit"
+    "pcu"      → "coordinating_unit"
+
+  grm_to_level enum (FeedbackEscalation.to_level):
+    "lga_piu"  → "lga_grm_unit"
+    "pcu"      → "coordinating_unit"
+
 Rationale:
   Riviwa is not limited to infrastructure projects. The "PIU" and "PCU" labels
   are specific to World Bank project structures. Any organisation (businesses,
@@ -35,20 +43,36 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ── grm_level enum ────────────────────────────────────────────────────────
-    op.execute("ALTER TYPE grm_level RENAME VALUE 'lga_piu' TO 'lga_grm_unit'")
-    op.execute("ALTER TYPE grm_level RENAME VALUE 'pcu' TO 'coordinating_unit'")
+    # ── grm_level enum (Feedback.current_level) ──────────────────────────────
+    op.execute("ALTER TYPE grm_level RENAME VALUE 'LGA_PIU' TO 'lga_grm_unit'")
+    op.execute("ALTER TYPE grm_level RENAME VALUE 'PCU' TO 'coordinating_unit'")
 
     # ── committee_level enum ──────────────────────────────────────────────────
-    op.execute("ALTER TYPE committee_level RENAME VALUE 'lga_piu' TO 'lga_grm_unit'")
-    op.execute("ALTER TYPE committee_level RENAME VALUE 'pcu' TO 'coordinating_unit'")
+    op.execute("ALTER TYPE committee_level RENAME VALUE 'LGA_PIU' TO 'lga_grm_unit'")
+    op.execute("ALTER TYPE committee_level RENAME VALUE 'PCU' TO 'coordinating_unit'")
+
+    # ── grm_from_level enum (FeedbackEscalation.from_level) ──────────────────
+    op.execute("ALTER TYPE grm_from_level RENAME VALUE 'LGA_PIU' TO 'lga_grm_unit'")
+    op.execute("ALTER TYPE grm_from_level RENAME VALUE 'PCU' TO 'coordinating_unit'")
+
+    # ── grm_to_level enum (FeedbackEscalation.to_level) ──────────────────────
+    op.execute("ALTER TYPE grm_to_level RENAME VALUE 'LGA_PIU' TO 'lga_grm_unit'")
+    op.execute("ALTER TYPE grm_to_level RENAME VALUE 'PCU' TO 'coordinating_unit'")
 
 
 def downgrade() -> None:
+    # ── grm_to_level enum ─────────────────────────────────────────────────────
+    op.execute("ALTER TYPE grm_to_level RENAME VALUE 'coordinating_unit' TO 'PCU'")
+    op.execute("ALTER TYPE grm_to_level RENAME VALUE 'lga_grm_unit' TO 'LGA_PIU'")
+
+    # ── grm_from_level enum ───────────────────────────────────────────────────
+    op.execute("ALTER TYPE grm_from_level RENAME VALUE 'coordinating_unit' TO 'PCU'")
+    op.execute("ALTER TYPE grm_from_level RENAME VALUE 'lga_grm_unit' TO 'LGA_PIU'")
+
     # ── committee_level enum ──────────────────────────────────────────────────
-    op.execute("ALTER TYPE committee_level RENAME VALUE 'coordinating_unit' TO 'pcu'")
-    op.execute("ALTER TYPE committee_level RENAME VALUE 'lga_grm_unit' TO 'lga_piu'")
+    op.execute("ALTER TYPE committee_level RENAME VALUE 'coordinating_unit' TO 'PCU'")
+    op.execute("ALTER TYPE committee_level RENAME VALUE 'lga_grm_unit' TO 'LGA_PIU'")
 
     # ── grm_level enum ────────────────────────────────────────────────────────
-    op.execute("ALTER TYPE grm_level RENAME VALUE 'coordinating_unit' TO 'pcu'")
-    op.execute("ALTER TYPE grm_level RENAME VALUE 'lga_grm_unit' TO 'lga_piu'")
+    op.execute("ALTER TYPE grm_level RENAME VALUE 'coordinating_unit' TO 'PCU'")
+    op.execute("ALTER TYPE grm_level RENAME VALUE 'lga_grm_unit' TO 'LGA_PIU'")

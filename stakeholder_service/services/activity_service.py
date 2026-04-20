@@ -36,7 +36,7 @@ class ActivityService:
     # ── Create ────────────────────────────────────────────────────────────────
 
     async def create(self, data: dict, conducted_by: uuid.UUID) -> EngagementActivity:
-        project_id = uuid.UUID(data["project_id"])
+        project_id = uuid.UUID(str(data["project_id"]))
         if not await self.stk_repo.get_project_cache(project_id):
             raise ProjectNotFoundError()
 
@@ -60,8 +60,8 @@ class ActivityService:
             expected_count       = data.get("expected_count"),
             languages_used       = data.get("languages_used"),
             # Previously missing fields — now passed through
-            stage_id             = uuid.UUID(data["stage_id"]) if data.get("stage_id") else None,
-            subproject_id        = uuid.UUID(data["subproject_id"]) if data.get("subproject_id") else None,
+            stage_id             = uuid.UUID(str(data["stage_id"])) if data.get("stage_id") else None,
+            subproject_id        = uuid.UUID(str(data["subproject_id"])) if data.get("subproject_id") else None,
             duration_hours       = data.get("duration_hours"),
             female_count         = data.get("female_count"),
             vulnerable_count     = data.get("vulnerable_count"),
@@ -152,7 +152,7 @@ class ActivityService:
         self, activity_id: uuid.UUID, data: dict, logged_by: uuid.UUID
     ) -> StakeholderEngagement:
         a          = await self.get_or_404(activity_id)
-        contact_id = uuid.UUID(data["contact_id"])
+        contact_id = uuid.UUID(str(data["contact_id"]))
         contact    = await self.stk_repo.get_contact_by_id(contact_id)
         if not contact:
             raise ContactNotFoundError()

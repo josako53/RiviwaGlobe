@@ -51,13 +51,15 @@ Backward compatibility
   existing analytics queries and Spark jobs remain valid.
 ═══════════════════════════════════════════════════════════════════════════════
 """
-from __future__ import annotations
+# NOTE: do NOT add `from __future__ import annotations` here.
+# It stringifies all annotations at import time, which breaks SQLModel's
+# List["Model"] relationship resolution (same issue as models/feedback.py).
 
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Boolean, text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Boolean, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -154,10 +156,14 @@ class EscalationPath(SQLModel, table=True):
     """
     __tablename__ = "escalation_paths"
     __table_args__ = (
-        # Only one default path per org
-        UniqueConstraint("org_id", "is_default",
-                         name="uq_escalation_path_org_default",
-                         postgresql_where=text("is_default = true")),
+        # Partial unique index: at most one default path per org.
+        # Use Index (not UniqueConstraint) because partial indexes require postgresql_where.
+        Index(
+            "uq_escalation_path_org_default",
+            "org_id", "is_default",
+            unique=True,
+            postgresql_where=text("is_default = true"),
+        ),
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, nullable=False)

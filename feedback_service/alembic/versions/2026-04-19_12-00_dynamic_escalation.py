@@ -37,7 +37,7 @@ def upgrade() -> None:
     op.create_table(
         "escalation_paths",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("org_id", UUID(as_uuid=True), nullable=True, index=True),
+        sa.Column("org_id", UUID(as_uuid=True), nullable=True),
         sa.Column(
             "project_id", UUID(as_uuid=True),
             sa.ForeignKey("fb_projects.id", ondelete="SET NULL"),

@@ -157,7 +157,7 @@ class StakeholderService:
             org_name               = data.get("org_name"),
             first_name             = data.get("first_name"),
             last_name              = data.get("last_name"),
-            org_id                 = uuid.UUID(data["org_id"]) if data.get("org_id") else None,
+            org_id                 = uuid.UUID(str(data["org_id"])) if data.get("org_id") else None,
             address_id             = address_id,
             lga                    = data.get("lga"),
             ward                   = data.get("ward"),
@@ -301,7 +301,7 @@ class StakeholderService:
         self, stakeholder_id: uuid.UUID, data: dict, registered_by: uuid.UUID
     ) -> StakeholderProject:
         await self.get_or_404(stakeholder_id)
-        project_id = uuid.UUID(data["project_id"])
+        project_id = uuid.UUID(str(data["project_id"]))
 
         if not await self.repo.get_project_cache(project_id):
             raise ProjectNotFoundError()
@@ -342,7 +342,7 @@ class StakeholderService:
             stakeholder_id                = stakeholder_id,
             full_name                     = data["full_name"],
             preferred_channel             = PreferredChannel(data.get("preferred_channel", "phone_call")),
-            user_id                       = uuid.UUID(data["user_id"]) if data.get("user_id") else None,
+            user_id                       = uuid.UUID(str(data["user_id"])) if data.get("user_id") else None,
             title                         = data.get("title"),
             role_in_org                   = data.get("role_in_org"),
             email                         = data.get("email"),

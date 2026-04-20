@@ -5,11 +5,13 @@
 """
 models/project.py - Local read-only caches of OrgProject and OrgProjectStage from auth_service.
 """
-from __future__ import annotations
+# NOTE: do NOT add `from __future__ import annotations` here.
+# It stringifies all annotations at import time, which breaks SQLModel's
+# List["Model"] relationship resolution.
 import uuid
 from datetime import datetime, date
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional
 from sqlalchemy import Column, Date, DateTime, Enum as SAEnum, ForeignKey, Text, UniqueConstraint, text
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -62,13 +64,13 @@ class ProjectCache(SQLModel, table=True):
     created_at:   datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False))
     updated_at:   datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"), nullable=False))
 
-    stages:               ProjectStageCache   = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan", "order_by": "ProjectStageCache.stage_order"})
+    stages:               List["ProjectStageCache"]   = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan", "order_by": "ProjectStageCache.stage_order"})
     # stakeholder_projects intentionally omitted — StakeholderProject.project_id has no FK
     # to this table (stakeholders may be registered before the project syncs from Kafka).
     # Queries use explicit WHERE clauses instead of this relationship.
     # activities intentionally omitted — EngagementActivity.project_id has no FK.
-    communications:       CommunicationRecord = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan"})
-    focal_persons:        FocalPerson         = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    communications:       List["CommunicationRecord"] = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    focal_persons:        List["FocalPerson"]         = Relationship(back_populates="project",       sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
     def is_active(self) -> bool: return self.status == ProjectStatus.ACTIVE
     def is_accepting_stakeholders(self) -> bool: return self.status in (ProjectStatus.PLANNING, ProjectStatus.ACTIVE)
@@ -100,8 +102,8 @@ class ProjectStageCache(SQLModel, table=True):
     created_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False))
     updated_at: datetime = Field(sa_column=Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"), nullable=False))
 
-    project:          ProjectCache                  = Relationship(back_populates="stages")
-    stage_engagements: StakeholderStageEngagement       = Relationship(back_populates="stage", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    project:           "ProjectCache"                         = Relationship(back_populates="stages")
+    stage_engagements: List["StakeholderStageEngagement"]    = Relationship(back_populates="stage", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
     def is_active(self) -> bool: return self.status == StageStatus.ACTIVE
     def __repr__(self) -> str: return f"<ProjectStageCache {self.name!r} order={self.stage_order} [{self.status}]>"

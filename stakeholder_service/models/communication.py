@@ -55,12 +55,13 @@ FOCAL PERSON (SEP Table 9)
   not stakeholder representatives.
 ═══════════════════════════════════════════════════════════════════════════════
 """
-from __future__ import annotations
-
+# NOTE: do NOT add `from __future__ import annotations` here.
+# It stringifies all annotations at import time, which breaks SQLModel's
+# List["Model"] relationship resolution.
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -288,11 +289,11 @@ class CommunicationRecord(SQLModel, table=True):
     )
 
     # ── Relationships ──────────────────────────────────────────────────────────
-    project: ProjectCache = Relationship(back_populates="communications")
-    contact: StakeholderContact = Relationship(
+    project: "ProjectCache" = Relationship(back_populates="communications")
+    contact: "StakeholderContact" = Relationship(
         back_populates=None,   # StakeholderContact does not back-populate comms (too many)
     )
-    distributions: CommunicationDistribution = Relationship(
+    distributions: List["CommunicationDistribution"] = Relationship(
         back_populates="communication",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
@@ -432,8 +433,8 @@ class CommunicationDistribution(SQLModel, table=True):
     )
 
     # ── Relationships ──────────────────────────────────────────────────────────
-    communication: CommunicationRecord = Relationship(back_populates="distributions")
-    contact: StakeholderContact         = Relationship(back_populates="distributions")
+    communication: "CommunicationRecord" = Relationship(back_populates="distributions")
+    contact: "StakeholderContact"         = Relationship(back_populates="distributions")
 
     def is_confirmed(self) -> bool:
         return self.acknowledged_at is not None
@@ -540,7 +541,7 @@ class FocalPerson(SQLModel, table=True):
     )
 
     # ── Relationships ──────────────────────────────────────────────────────────
-    project: ProjectCache = Relationship(back_populates="focal_persons")
+    project: "ProjectCache" = Relationship(back_populates="focal_persons")
 
     def __repr__(self) -> str:
         return (

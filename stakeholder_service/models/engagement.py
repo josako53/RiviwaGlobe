@@ -40,12 +40,13 @@ RELATIONSHIP WIRING
   StakeholderEngagement.contact    ←→  StakeholderContact.engagements
 ═══════════════════════════════════════════════════════════════════════════════
 """
-from __future__ import annotations
-
+# NOTE: do NOT add `from __future__ import annotations` here.
+# It stringifies all annotations at import time, which breaks SQLModel's
+# List["Model"] relationship resolution.
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -283,12 +284,12 @@ class EngagementActivity(SQLModel, table=True):
     # project relationship intentionally omitted — project_id has no FK to the projects
     # table. Queries use explicit WHERE clauses on project_id instead.
 
-    attendances: StakeholderEngagement = Relationship(
+    attendances: List["StakeholderEngagement"] = Relationship(
         back_populates="activity",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
 
-    media: ActivityMedia = Relationship(
+    media: List["ActivityMedia"] = Relationship(
         back_populates="activity",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
@@ -423,8 +424,8 @@ class StakeholderEngagement(SQLModel, table=True):
     )
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    activity: EngagementActivity = Relationship(back_populates="attendances")
-    contact:  StakeholderContact = Relationship(back_populates="engagements")
+    activity: "EngagementActivity" = Relationship(back_populates="attendances")
+    contact:  "StakeholderContact" = Relationship(back_populates="engagements")
 
     def __repr__(self) -> str:
         return (
@@ -552,7 +553,7 @@ class ActivityMedia(SQLModel, table=True):
     )
 
     # ── Relationship ──────────────────────────────────────────────────────────
-    activity: EngagementActivity = Relationship(back_populates="media")
+    activity: "EngagementActivity" = Relationship(back_populates="media")
 
     def is_visible(self) -> bool:
         return self.deleted_at is None

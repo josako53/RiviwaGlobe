@@ -55,8 +55,9 @@ RELATIONSHIPS (all within this service)
   StakeholderContact.distributions  → CommunicationDistribution (what they forwarded)
 ═══════════════════════════════════════════════════════════════════════════════
 """
-from __future__ import annotations
-
+# NOTE: do NOT add `from __future__ import annotations` here.
+# It stringifies all annotations at import time, which breaks SQLModel's
+# List["Model"] relationship resolution.
 import uuid
 from datetime import datetime
 from enum import Enum
@@ -441,15 +442,15 @@ class Stakeholder(SQLModel, table=True):
     )
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    contacts: StakeholderContact = Relationship(
+    contacts: List["StakeholderContact"] = Relationship(
         back_populates="stakeholder",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    stakeholder_projects: StakeholderProject = Relationship(
+    stakeholder_projects: List["StakeholderProject"] = Relationship(
         back_populates="stakeholder",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    stage_engagements: StakeholderStageEngagement = Relationship(
+    stage_engagements: List["StakeholderStageEngagement"] = Relationship(
         back_populates="stakeholder",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
@@ -719,11 +720,11 @@ class StakeholderContact(SQLModel, table=True):
     # ── Relationships ─────────────────────────────────────────────────────────
     stakeholder: Stakeholder = Relationship(back_populates="contacts")
 
-    engagements: StakeholderEngagement = Relationship(
+    engagements: List["StakeholderEngagement"] = Relationship(
         back_populates="contact",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
-    distributions: CommunicationDistribution = Relationship(
+    distributions: List["CommunicationDistribution"] = Relationship(
         back_populates="contact",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
     )
