@@ -2079,6 +2079,846 @@ class FeedbackAnalyticsRepository:
         rows = await self._fetchall(sql, params)
         return rows[0] if rows else {}
 
+    # ── Grievance Dashboard: Project scope ───────────────────────────────────
+
+    def _proj_grievance_filters(
+        self,
+        params: Dict[str, Any],
+        department_id: Optional[uuid.UUID],
+        status: Optional[str],
+        priority: Optional[str],
+        date_from: Optional[date],
+        date_to: Optional[date],
+    ) -> str:
+        clauses = []
+        if department_id:
+            clauses.append("f.department_id = :department_id")
+            params["department_id"] = str(department_id)
+        if status:
+            clauses.append("f.status::text = :status")
+            params["status"] = status.upper()
+        if priority:
+            clauses.append("f.priority::text = :priority")
+            params["priority"] = priority.upper()
+        if date_from:
+            clauses.append("f.submitted_at >= :date_from")
+            params["date_from"] = datetime(date_from.year, date_from.month, date_from.day, tzinfo=timezone.utc)
+        if date_to:
+            clauses.append("f.submitted_at < :date_to")
+            params["date_to"] = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59, tzinfo=timezone.utc)
+        return (" AND " + " AND ".join(clauses)) if clauses else ""
+
+    async def get_project_grievance_dashboard_summary(
+        self,
+        project_id: uuid.UUID,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"project_id": str(project_id)}
+        extra = self._proj_grievance_filters(params, department_id, status, priority, date_from, date_to)
+        sql = f"""
+            SELECT
+                COUNT(*)                                                                    AS total_grievances,
+                COUNT(*) FILTER (WHERE f.status::text = 'RESOLVED')                        AS resolved,
+                COUNT(*) FILTER (WHERE f.status::text = 'CLOSED')                          AS closed,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text = 'ESCALATED')                       AS escalated,
+                COUNT(*) FILTER (WHERE f.status::text = 'DISMISSED')                       AS dismissed,
+                COUNT(*) FILTER (WHERE f.acknowledged_at IS NOT NULL)                      AS acknowledged_count,
+                COUNT(*) FILTER (
+                    WHERE f.resolved_at IS NOT NULL
+                      AND f.target_resolution_date IS NOT NULL
+                      AND f.resolved_at <= f.target_resolution_date
+                )                                                                           AS resolved_on_time,
+                COUNT(*) FILTER (
+                    WHERE f.resolved_at IS NOT NULL
+                      AND f.target_resolution_date IS NOT NULL
+                      AND f.resolved_at > f.target_resolution_date
+                )                                                                           AS resolved_late,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_resolution_hours,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                    THEN EXTRACT(EPOCH FROM (NOW() - f.submitted_at)) / 86400.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_days_unresolved
+            FROM feedbacks f
+            WHERE f.project_id = :project_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+        """
+        rows = await self._fetchall(sql, params)
+        return rows[0] if rows else {}
+
+    async def get_project_grievance_by_priority(
+        self,
+        project_id: uuid.UUID,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"project_id": str(project_id)}
+        extra = self._proj_grievance_filters(params, department_id, status, None, date_from, date_to)
+        sql = f"""
+            SELECT
+                f.priority::text                                                            AS priority,
+                COUNT(*)                                                                    AS total,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved
+            FROM feedbacks f
+            WHERE f.project_id = :project_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            GROUP BY f.priority
+            ORDER BY f.priority
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_project_grievance_by_dept(
+        self,
+        project_id: uuid.UUID,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"project_id": str(project_id)}
+        extra = self._proj_grievance_filters(params, None, status, priority, date_from, date_to)
+        sql = f"""
+            SELECT
+                f.department_id,
+                COUNT(*)                                                                    AS total,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
+            FROM feedbacks f
+            WHERE f.project_id = :project_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            GROUP BY f.department_id
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_project_grievance_by_stage(
+        self,
+        project_id: uuid.UUID,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"project_id": str(project_id)}
+        extra = self._proj_grievance_filters(params, None, status, priority, date_from, date_to)
+        sql = f"""
+            SELECT
+                s.id                                                                        AS stage_id,
+                s.name                                                                      AS stage_name,
+                s.stage_order,
+                COUNT(f.id)                                                                 AS total,
+                COUNT(f.id) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(f.id) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))         AS resolved
+            FROM fb_project_stages s
+            LEFT JOIN feedbacks f ON f.stage_id = s.id
+              AND f.feedback_type::text = 'GRIEVANCE' {extra}
+            WHERE s.project_id = :project_id
+            GROUP BY s.id, s.name, s.stage_order
+            ORDER BY s.stage_order
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_project_grievance_overdue(
+        self,
+        project_id: uuid.UUID,
+        department_id: Optional[uuid.UUID] = None,
+        priority: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"project_id": str(project_id), "limit": limit}
+        extra_clauses = []
+        if department_id:
+            extra_clauses.append("f.department_id = :department_id")
+            params["department_id"] = str(department_id)
+        if priority:
+            extra_clauses.append("f.priority::text = :priority")
+            params["priority"] = priority.upper()
+        extra = (" AND " + " AND ".join(extra_clauses)) if extra_clauses else ""
+        sql = f"""
+            SELECT
+                f.id                                                AS feedback_id,
+                f.unique_ref,
+                f.priority::text,
+                f.status::text,
+                f.submitted_at,
+                f.target_resolution_date,
+                EXTRACT(EPOCH FROM (NOW() - f.target_resolution_date)) / 86400.0
+                                                                    AS days_overdue,
+                f.department_id,
+                f.assigned_to_user_id,
+                f.assigned_committee_id                             AS committee_id,
+                f.issue_lga
+            FROM feedbacks f
+            WHERE f.project_id = :project_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+              AND f.target_resolution_date IS NOT NULL
+              AND f.target_resolution_date < NOW()
+              {extra}
+            ORDER BY f.target_resolution_date ASC
+            LIMIT :limit
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_project_grievance_list(
+        self,
+        project_id: uuid.UUID,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"project_id": str(project_id)}
+        extra = self._proj_grievance_filters(params, department_id, status, priority, date_from, date_to)
+        count_sql = f"""
+            SELECT COUNT(*) AS total
+            FROM feedbacks f
+            WHERE f.project_id = :project_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+        """
+        count_rows = await self._fetchall(count_sql, params)
+        total = int(count_rows[0]["total"]) if count_rows else 0
+
+        offset = (page - 1) * page_size
+        params["page_size"] = page_size
+        params["offset"] = offset
+        sql = f"""
+            SELECT
+                f.id                                                AS feedback_id,
+                f.unique_ref,
+                f.priority::text,
+                f.status::text,
+                f.category::text,
+                f.submitted_at,
+                f.resolved_at,
+                f.acknowledged_at,
+                f.target_resolution_date,
+                EXTRACT(EPOCH FROM (NOW() - f.submitted_at)) / 86400.0
+                                                                    AS days_unresolved,
+                f.department_id,
+                f.service_id,
+                f.product_id,
+                f.category_def_id,
+                f.issue_lga,
+                f.issue_ward,
+                f.assigned_to_user_id,
+                f.assigned_committee_id                             AS committee_id,
+                f.stage_id,
+                f.project_id
+            FROM feedbacks f
+            WHERE f.project_id = :project_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            ORDER BY f.submitted_at DESC
+            LIMIT :page_size OFFSET :offset
+        """
+        items = await self._fetchall(sql, params)
+        return {"total": total, "items": items}
+
+    # ── Grievance Dashboard: Org scope ────────────────────────────────────────
+
+    def _org_grievance_filters(
+        self,
+        params: Dict[str, Any],
+        department_id: Optional[uuid.UUID],
+        status: Optional[str],
+        priority: Optional[str],
+        date_from: Optional[date],
+        date_to: Optional[date],
+        project_id: Optional[uuid.UUID] = None,
+    ) -> str:
+        clauses = []
+        if project_id:
+            clauses.append("f.project_id = :filter_project_id")
+            params["filter_project_id"] = str(project_id)
+        if department_id:
+            clauses.append("f.department_id = :department_id")
+            params["department_id"] = str(department_id)
+        if status:
+            clauses.append("f.status::text = :status")
+            params["status"] = status.upper()
+        if priority:
+            clauses.append("f.priority::text = :priority")
+            params["priority"] = priority.upper()
+        if date_from:
+            clauses.append("f.submitted_at >= :date_from")
+            params["date_from"] = datetime(date_from.year, date_from.month, date_from.day, tzinfo=timezone.utc)
+        if date_to:
+            clauses.append("f.submitted_at < :date_to")
+            params["date_to"] = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59, tzinfo=timezone.utc)
+        return (" AND " + " AND ".join(clauses)) if clauses else ""
+
+    async def get_org_grievance_dashboard_summary(
+        self,
+        org_id: uuid.UUID,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"org_id": str(org_id)}
+        extra = self._org_grievance_filters(params, department_id, status, priority, date_from, date_to, project_id)
+        sql = f"""
+            SELECT
+                COUNT(*)                                                                    AS total_grievances,
+                COUNT(*) FILTER (WHERE f.status::text = 'RESOLVED')                        AS resolved,
+                COUNT(*) FILTER (WHERE f.status::text = 'CLOSED')                          AS closed,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text = 'ESCALATED')                       AS escalated,
+                COUNT(*) FILTER (WHERE f.status::text = 'DISMISSED')                       AS dismissed,
+                COUNT(*) FILTER (WHERE f.acknowledged_at IS NOT NULL)                      AS acknowledged_count,
+                COUNT(*) FILTER (
+                    WHERE f.resolved_at IS NOT NULL
+                      AND f.target_resolution_date IS NOT NULL
+                      AND f.resolved_at <= f.target_resolution_date
+                )                                                                           AS resolved_on_time,
+                COUNT(*) FILTER (
+                    WHERE f.resolved_at IS NOT NULL
+                      AND f.target_resolution_date IS NOT NULL
+                      AND f.resolved_at > f.target_resolution_date
+                )                                                                           AS resolved_late,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_resolution_hours,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                    THEN EXTRACT(EPOCH FROM (NOW() - f.submitted_at)) / 86400.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_days_unresolved
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+        """
+        rows = await self._fetchall(sql, params)
+        return rows[0] if rows else {}
+
+    async def get_org_grievance_by_priority(
+        self,
+        org_id: uuid.UUID,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"org_id": str(org_id)}
+        extra = self._org_grievance_filters(params, department_id, status, None, date_from, date_to, project_id)
+        sql = f"""
+            SELECT
+                f.priority::text                                                            AS priority,
+                COUNT(*)                                                                    AS total,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            GROUP BY f.priority
+            ORDER BY f.priority
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_org_grievance_by_dept(
+        self,
+        org_id: uuid.UUID,
+        project_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"org_id": str(org_id)}
+        extra = self._org_grievance_filters(params, None, status, priority, date_from, date_to, project_id)
+        sql = f"""
+            SELECT
+                f.department_id,
+                COUNT(*)                                                                    AS total,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            GROUP BY f.department_id
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_org_grievance_by_project(
+        self,
+        org_id: uuid.UUID,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"org_id": str(org_id)}
+        extra = self._org_grievance_filters(params, department_id, status, priority, date_from, date_to)
+        sql = f"""
+            SELECT
+                p.id                                                                        AS project_id,
+                p.name                                                                      AS project_name,
+                COUNT(f.id)                                                                 AS total,
+                COUNT(f.id) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(f.id) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))         AS resolved
+            FROM fb_projects p
+            LEFT JOIN feedbacks f ON f.project_id = p.id
+              AND f.feedback_type::text = 'GRIEVANCE' {extra}
+            WHERE p.organisation_id = :org_id
+            GROUP BY p.id, p.name
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_org_grievance_overdue(
+        self,
+        org_id: uuid.UUID,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        priority: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"org_id": str(org_id), "limit": limit}
+        extra_clauses = []
+        if project_id:
+            extra_clauses.append("f.project_id = :filter_project_id")
+            params["filter_project_id"] = str(project_id)
+        if department_id:
+            extra_clauses.append("f.department_id = :department_id")
+            params["department_id"] = str(department_id)
+        if priority:
+            extra_clauses.append("f.priority::text = :priority")
+            params["priority"] = priority.upper()
+        extra = (" AND " + " AND ".join(extra_clauses)) if extra_clauses else ""
+        sql = f"""
+            SELECT
+                f.id                                                AS feedback_id,
+                f.unique_ref,
+                f.priority::text,
+                f.status::text,
+                f.submitted_at,
+                f.target_resolution_date,
+                EXTRACT(EPOCH FROM (NOW() - f.target_resolution_date)) / 86400.0
+                                                                    AS days_overdue,
+                f.department_id,
+                f.assigned_to_user_id,
+                f.assigned_committee_id                             AS committee_id,
+                f.issue_lga
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+              AND f.target_resolution_date IS NOT NULL
+              AND f.target_resolution_date < NOW()
+              {extra}
+            ORDER BY f.target_resolution_date ASC
+            LIMIT :limit
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_org_grievance_list(
+        self,
+        org_id: uuid.UUID,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"org_id": str(org_id)}
+        extra = self._org_grievance_filters(params, department_id, status, priority, date_from, date_to, project_id)
+        count_sql = f"""
+            SELECT COUNT(*) AS total
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+        """
+        count_rows = await self._fetchall(count_sql, params)
+        total = int(count_rows[0]["total"]) if count_rows else 0
+
+        offset = (page - 1) * page_size
+        params["page_size"] = page_size
+        params["offset"] = offset
+        sql = f"""
+            SELECT
+                f.id                                                AS feedback_id,
+                f.unique_ref,
+                f.priority::text,
+                f.status::text,
+                f.category::text,
+                f.submitted_at,
+                f.resolved_at,
+                f.acknowledged_at,
+                f.target_resolution_date,
+                EXTRACT(EPOCH FROM (NOW() - f.submitted_at)) / 86400.0
+                                                                    AS days_unresolved,
+                f.department_id,
+                f.service_id,
+                f.product_id,
+                f.category_def_id,
+                f.issue_lga,
+                f.issue_ward,
+                f.assigned_to_user_id,
+                f.assigned_committee_id                             AS committee_id,
+                f.stage_id,
+                f.project_id
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            ORDER BY f.submitted_at DESC
+            LIMIT :page_size OFFSET :offset
+        """
+        items = await self._fetchall(sql, params)
+        return {"total": total, "items": items}
+
+    # ── Grievance Dashboard: Platform scope ───────────────────────────────────
+
+    def _platform_grievance_filters(
+        self,
+        params: Dict[str, Any],
+        org_id: Optional[uuid.UUID],
+        project_id: Optional[uuid.UUID],
+        department_id: Optional[uuid.UUID],
+        status: Optional[str],
+        priority: Optional[str],
+        date_from: Optional[date],
+        date_to: Optional[date],
+    ) -> str:
+        clauses = []
+        if org_id:
+            clauses.append("p.organisation_id = :filter_org_id")
+            params["filter_org_id"] = str(org_id)
+        if project_id:
+            clauses.append("f.project_id = :filter_project_id")
+            params["filter_project_id"] = str(project_id)
+        if department_id:
+            clauses.append("f.department_id = :department_id")
+            params["department_id"] = str(department_id)
+        if status:
+            clauses.append("f.status::text = :status")
+            params["status"] = status.upper()
+        if priority:
+            clauses.append("f.priority::text = :priority")
+            params["priority"] = priority.upper()
+        if date_from:
+            clauses.append("f.submitted_at >= :date_from")
+            params["date_from"] = datetime(date_from.year, date_from.month, date_from.day, tzinfo=timezone.utc)
+        if date_to:
+            clauses.append("f.submitted_at < :date_to")
+            params["date_to"] = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59, tzinfo=timezone.utc)
+        return (" AND " + " AND ".join(clauses)) if clauses else ""
+
+    async def get_platform_grievance_dashboard_summary(
+        self,
+        org_id: Optional[uuid.UUID] = None,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        extra = self._platform_grievance_filters(params, org_id, project_id, department_id, status, priority, date_from, date_to)
+        sql = f"""
+            SELECT
+                COUNT(*)                                                                    AS total_grievances,
+                COUNT(*) FILTER (WHERE f.status::text = 'RESOLVED')                        AS resolved,
+                COUNT(*) FILTER (WHERE f.status::text = 'CLOSED')                          AS closed,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text = 'ESCALATED')                       AS escalated,
+                COUNT(*) FILTER (WHERE f.status::text = 'DISMISSED')                       AS dismissed,
+                COUNT(*) FILTER (WHERE f.acknowledged_at IS NOT NULL)                      AS acknowledged_count,
+                COUNT(*) FILTER (
+                    WHERE f.resolved_at IS NOT NULL
+                      AND f.target_resolution_date IS NOT NULL
+                      AND f.resolved_at <= f.target_resolution_date
+                )                                                                           AS resolved_on_time,
+                COUNT(*) FILTER (
+                    WHERE f.resolved_at IS NOT NULL
+                      AND f.target_resolution_date IS NOT NULL
+                      AND f.resolved_at > f.target_resolution_date
+                )                                                                           AS resolved_late,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_resolution_hours,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                    THEN EXTRACT(EPOCH FROM (NOW() - f.submitted_at)) / 86400.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_days_unresolved
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+        """
+        rows = await self._fetchall(sql, params)
+        return rows[0] if rows else {}
+
+    async def get_platform_grievance_by_priority(
+        self,
+        org_id: Optional[uuid.UUID] = None,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {}
+        extra = self._platform_grievance_filters(params, org_id, project_id, department_id, status, None, date_from, date_to)
+        sql = f"""
+            SELECT
+                f.priority::text                                                            AS priority,
+                COUNT(*)                                                                    AS total,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            GROUP BY f.priority
+            ORDER BY f.priority
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_platform_grievance_by_dept(
+        self,
+        org_id: Optional[uuid.UUID] = None,
+        project_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {}
+        extra = self._platform_grievance_filters(params, org_id, project_id, None, status, priority, date_from, date_to)
+        sql = f"""
+            SELECT
+                f.department_id,
+                COUNT(*)                                                                    AS total,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            GROUP BY f.department_id
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_platform_grievance_by_org(
+        self,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {}
+        extra = self._platform_grievance_filters(params, None, project_id, department_id, status, priority, date_from, date_to)
+        sql = f"""
+            SELECT
+                p.organisation_id,
+                MAX(p.org_display_name)                                                     AS org_name,
+                COUNT(f.id)                                                                 AS total,
+                COUNT(f.id) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                           AS unresolved,
+                COUNT(f.id) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))         AS resolved
+            FROM fb_projects p
+            LEFT JOIN feedbacks f ON f.project_id = p.id
+              AND f.feedback_type::text = 'GRIEVANCE' {extra}
+            GROUP BY p.organisation_id
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_platform_grievance_overdue(
+        self,
+        org_id: Optional[uuid.UUID] = None,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        priority: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"limit": limit}
+        extra_clauses = []
+        if org_id:
+            extra_clauses.append("p.organisation_id = :filter_org_id")
+            params["filter_org_id"] = str(org_id)
+        if project_id:
+            extra_clauses.append("f.project_id = :filter_project_id")
+            params["filter_project_id"] = str(project_id)
+        if department_id:
+            extra_clauses.append("f.department_id = :department_id")
+            params["department_id"] = str(department_id)
+        if priority:
+            extra_clauses.append("f.priority::text = :priority")
+            params["priority"] = priority.upper()
+        extra = (" AND " + " AND ".join(extra_clauses)) if extra_clauses else ""
+        sql = f"""
+            SELECT
+                f.id                                                AS feedback_id,
+                f.unique_ref,
+                f.priority::text,
+                f.status::text,
+                f.submitted_at,
+                f.target_resolution_date,
+                EXTRACT(EPOCH FROM (NOW() - f.target_resolution_date)) / 86400.0
+                                                                    AS days_overdue,
+                f.department_id,
+                f.assigned_to_user_id,
+                f.assigned_committee_id                             AS committee_id,
+                f.issue_lga
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE f.feedback_type::text = 'GRIEVANCE'
+              AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+              AND f.target_resolution_date IS NOT NULL
+              AND f.target_resolution_date < NOW()
+              {extra}
+            ORDER BY f.target_resolution_date ASC
+            LIMIT :limit
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_platform_grievance_list(
+        self,
+        org_id: Optional[uuid.UUID] = None,
+        project_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        status: Optional[str] = None,
+        priority: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        extra = self._platform_grievance_filters(params, org_id, project_id, department_id, status, priority, date_from, date_to)
+        count_sql = f"""
+            SELECT COUNT(*) AS total
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+        """
+        count_rows = await self._fetchall(count_sql, params)
+        total = int(count_rows[0]["total"]) if count_rows else 0
+
+        offset = (page - 1) * page_size
+        params["page_size"] = page_size
+        params["offset"] = offset
+        sql = f"""
+            SELECT
+                f.id                                                AS feedback_id,
+                f.unique_ref,
+                f.priority::text,
+                f.status::text,
+                f.category::text,
+                f.submitted_at,
+                f.resolved_at,
+                f.acknowledged_at,
+                f.target_resolution_date,
+                EXTRACT(EPOCH FROM (NOW() - f.submitted_at)) / 86400.0
+                                                                    AS days_unresolved,
+                f.department_id,
+                f.service_id,
+                f.product_id,
+                f.category_def_id,
+                f.issue_lga,
+                f.issue_ward,
+                f.assigned_to_user_id,
+                f.assigned_committee_id                             AS committee_id,
+                f.stage_id,
+                f.project_id
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE f.feedback_type::text = 'GRIEVANCE'
+              {extra}
+            ORDER BY f.submitted_at DESC
+            LIMIT :page_size OFFSET :offset
+        """
+        items = await self._fetchall(sql, params)
+        return {"total": total, "items": items}
+
     # ── Internal helper ───────────────────────────────────────────────────────
 
     def _org_date_clauses(

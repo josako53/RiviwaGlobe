@@ -183,6 +183,15 @@ class SubProjectResponse(BaseModel):
     created_at:           datetime
     updated_at:           datetime
 
+    @field_validator("in_charges", "children", mode="before")
+    @classmethod
+    def _coerce_to_list(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        return [v]
+
 
 SubProjectResponse.model_rebuild()
 
@@ -268,8 +277,12 @@ class StageResponse(BaseModel):
 
     @field_validator("in_charges", "sub_projects", mode="before")
     @classmethod
-    def _none_to_list(cls, v):
-        return v if v is not None else []
+    def _coerce_to_list(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        return [v]
     updated_at:          datetime
 
 
@@ -441,8 +454,12 @@ class ProjectDetailResponse(ProjectSummaryResponse):
 
     @field_validator("in_charges", "stages", mode="before")
     @classmethod
-    def _none_to_list(cls, v):
-        return v if v is not None else []
+    def _coerce_to_list(cls, v):
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return v
+        return [v]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

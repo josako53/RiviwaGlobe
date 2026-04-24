@@ -14,8 +14,16 @@ from core.dependencies import AnalyticsDbDep, FeedbackDbDep, StaffDep
 from repositories.analytics_repo import AnalyticsRepository
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
+    GrievanceDashboardOverdueItem,
+    GrievanceDashboardResponse,
+    GrievanceDeptBreakdownItem,
+    GrievanceListItem,
+    GrievancePriorityBreakdownItem,
+    GrievanceStageBreakdownItem,
+    GrievanceSummaryStats,
     HotspotAlertItem,
     HotspotResponse,
+    PaginatedGrievancesResponse,
     SLAByPriority,
     SLAOverdueItem,
     SLAStatusResponse,
@@ -222,6 +230,106 @@ async def get_sla_status(
         overdue_list            = overdue_items,
         total_breached          = total_breached,
         overall_compliance_rate = overall,
+    )
+
+
+# ── GET /analytics/grievances/dashboard ─────────────────────────────────────
+
+@router.get("/dashboard", response_model=GrievanceDashboardResponse)
+async def get_grievance_dashboard(
+    project_id:    UUID           = Query(..., description="Project UUID"),
+    department_id: Optional[UUID] = Query(None, description="Filter by department UUID"),
+    status:        Optional[str]  = Query(None, description="Filter by status (e.g. SUBMITTED, ACKNOWLEDGED, IN_REVIEW, ESCALATED, RESOLVED, CLOSED, DISMISSED)"),
+    priority:      Optional[str]  = Query(None, description="Filter by priority (CRITICAL, HIGH, MEDIUM, LOW)"),
+    date_from:     Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    page:          int            = Query(1,   ge=1),
+    page_size:     int            = Query(50,  ge=1, le=200),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> GrievanceDashboardResponse:
+    """
+    Comprehensive grievance dashboard for a project.
+    Returns:
+    - summary stats (totals, resolved on time %, resolved late %, acknowledged %)
+    - breakdown by priority (CRITICAL/HIGH/MEDIUM/LOW)
+    - breakdown by department
+    - breakdown by project stage (sub-project equivalent)
+    - overdue grievances list (top 100)
+    - paginated full grievance list
+    Filterable by department_id, status, priority, date_from, date_to.
+    """
+    from datetime import date as _date
+    d_from = _date.fromisoformat(date_from) if date_from else None
+    d_to   = _date.fromisoformat(date_to)   if date_to   else None
+
+    repo = FeedbackAnalyticsRepository(fb_db)
+
+    summary_row, priority_rows, dept_rows, stage_rows, overdue_rows, list_data = (
+        await repo.get_project_grievance_dashboard_summary(
+            project_id, department_id=department_id, status=status,
+            priority=priority, date_from=d_from, date_to=d_to,
+        ),
+        await repo.get_project_grievance_by_priority(
+            project_id, department_id=department_id, status=status,
+            date_from=d_from, date_to=d_to,
+        ),
+        await repo.get_project_grievance_by_dept(
+            project_id, status=status, priority=priority,
+            date_from=d_from, date_to=d_to,
+        ),
+        await repo.get_project_grievance_by_stage(
+            project_id, status=status, priority=priority,
+            date_from=d_from, date_to=d_to,
+        ),
+        await repo.get_project_grievance_overdue(
+            project_id, department_id=department_id, priority=priority,
+        ),
+        await repo.get_project_grievance_list(
+            project_id, department_id=department_id, status=status,
+            priority=priority, date_from=d_from, date_to=d_to,
+            page=page, page_size=page_size,
+        ),
+    )
+
+    total = int(summary_row.get("total_grievances") or 0)
+    resolved = int(summary_row.get("resolved") or 0)
+    closed = int(summary_row.get("closed") or 0)
+    resolved_total = resolved + closed
+    ack_count = int(summary_row.get("acknowledged_count") or 0)
+    res_on_time = int(summary_row.get("resolved_on_time") or 0)
+    res_late = int(summary_row.get("resolved_late") or 0)
+    res_with_deadline = res_on_time + res_late
+
+    summary = GrievanceSummaryStats(
+        total_grievances     = total,
+        resolved             = resolved,
+        closed               = closed,
+        unresolved           = int(summary_row.get("unresolved") or 0),
+        escalated            = int(summary_row.get("escalated") or 0),
+        dismissed            = int(summary_row.get("dismissed") or 0),
+        acknowledged_count   = ack_count,
+        acknowledged_pct     = round(ack_count / total * 100, 2) if total > 0 else None,
+        resolved_on_time     = res_on_time,
+        resolved_late        = res_late,
+        resolved_on_time_pct = round(res_on_time / res_with_deadline * 100, 2) if res_with_deadline > 0 else None,
+        resolved_late_pct    = round(res_late / res_with_deadline * 100, 2) if res_with_deadline > 0 else None,
+        avg_resolution_hours = summary_row.get("avg_resolution_hours"),
+        avg_days_unresolved  = summary_row.get("avg_days_unresolved"),
+    )
+
+    return GrievanceDashboardResponse(
+        summary      = summary,
+        by_priority  = [GrievancePriorityBreakdownItem(**r) for r in priority_rows],
+        by_department= [GrievanceDeptBreakdownItem(**r) for r in dept_rows],
+        by_stage     = [GrievanceStageBreakdownItem(**r) for r in stage_rows],
+        overdue      = [GrievanceDashboardOverdueItem(**r) for r in overdue_rows],
+        grievances   = PaginatedGrievancesResponse(
+            total     = list_data["total"],
+            page      = page,
+            page_size = page_size,
+            items     = [GrievanceListItem(**r) for r in list_data["items"]],
+        ),
     )
 
 

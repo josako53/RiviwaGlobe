@@ -368,13 +368,14 @@ class OrgProject(SQLModel, table=True):
     )
     in_charges: OrgProjectInCharge = Relationship(
         back_populates="project",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "uselist": True},
     )
     stages: OrgProjectStage = Relationship(
         back_populates="project",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
             "order_by": "OrgProjectStage.stage_order",
+            "uselist": True,
         },
     )
     progress_images: ProjectProgressImage = Relationship(
@@ -383,6 +384,7 @@ class OrgProject(SQLModel, table=True):
             "cascade": "all, delete-orphan",
             "order_by": "ProjectProgressImage.display_order, ProjectProgressImage.created_at",
             "primaryjoin": "ProjectProgressImage.project_id == OrgProject.id",
+            "uselist": True,
         },
     )
 
@@ -562,13 +564,14 @@ class OrgProjectStage(SQLModel, table=True):
 
     in_charges: OrgProjectStageInCharge = Relationship(
         back_populates="stage",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "uselist": True},
     )
     sub_projects: OrgSubProject = Relationship(
         back_populates="stage",
         sa_relationship_kwargs={
             "primaryjoin": "OrgSubProject.stage_id == OrgProjectStage.id",
             "cascade": "all, delete-orphan",
+            "uselist": True,
         },
     )
 
@@ -799,11 +802,12 @@ class OrgSubProject(SQLModel, table=True):
         back_populates="parent",
         sa_relationship_kwargs={
             "foreign_keys": "[OrgSubProject.parent_subproject_id]",
+            "uselist": True,
         },
     )
     in_charges: OrgSubProjectInCharge = Relationship(
         back_populates="subproject",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "uselist": True},
     )
     progress_images: ProjectProgressImage = Relationship(
         back_populates="subproject",
@@ -811,6 +815,7 @@ class OrgSubProject(SQLModel, table=True):
             "cascade": "all, delete-orphan",
             "order_by": "ProjectProgressImage.display_order, ProjectProgressImage.created_at",
             "primaryjoin": "ProjectProgressImage.subproject_id == OrgSubProject.id",
+            "uselist": True,
         },
     )
     # All addresses for this sub-project (entity_type="org_subproject")

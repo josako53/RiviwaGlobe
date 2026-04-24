@@ -77,7 +77,7 @@ async def get_org_ai_context(
         text("""
             SELECT question, answer, display_order
             FROM org_faqs
-            WHERE organisation_id = :org_id AND is_published = true
+            WHERE org_id = :org_id AND is_published = true
             ORDER BY display_order
         """),
         {"org_id": org_id_str},

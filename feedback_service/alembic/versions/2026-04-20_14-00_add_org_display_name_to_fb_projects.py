@@ -1,7 +1,7 @@
 """add_org_display_name_to_fb_projects
 
-Revision ID: c4d5e6f7a8b9
-Revises: b3c4d5e6f7a8
+Revision ID: b6c7d8e9f0a1
+Revises: a5b6c7d8e9f0
 Create Date: 2026-04-20 14:00:00.000000+00:00
 
 Adds org_display_name to fb_projects so analytics/AI can resolve org
@@ -13,8 +13,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "c4d5e6f7a8b9"
-down_revision = "b3c4d5e6f7a8"
+revision = "b6c7d8e9f0a1"
+down_revision = "a5b6c7d8e9f0"
 branch_labels = None
 depends_on = None
 

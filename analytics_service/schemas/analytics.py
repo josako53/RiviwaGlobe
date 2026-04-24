@@ -738,6 +738,139 @@ class InquiryByCategoryResponse(BaseModel):
     items: List[InquiryByCategoryItem] = Field(default_factory=list)
 
 
+# ── Grievance Dashboard ──────────────────────────────────────────────────────
+
+class GrievanceSummaryStats(BaseModel):
+    total_grievances: int = 0
+    resolved: int = 0
+    closed: int = 0
+    unresolved: int = 0
+    escalated: int = 0
+    dismissed: int = 0
+    acknowledged_count: int = 0
+    acknowledged_pct: Optional[float] = None
+    resolved_on_time: int = 0
+    resolved_late: int = 0
+    resolved_on_time_pct: Optional[float] = None
+    resolved_late_pct: Optional[float] = None
+    avg_resolution_hours: Optional[float] = None
+    avg_days_unresolved: Optional[float] = None
+
+
+class GrievancePriorityBreakdownItem(BaseModel):
+    priority: str
+    total: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+
+
+class GrievanceDeptBreakdownItem(BaseModel):
+    department_id: Optional[UUID] = None
+    total: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+    avg_resolution_hours: Optional[float] = None
+
+
+class GrievanceStageBreakdownItem(BaseModel):
+    stage_id: Optional[UUID] = None
+    stage_name: Optional[str] = None
+    stage_order: Optional[int] = None
+    total: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+
+
+class GrievanceProjectBreakdownItem(BaseModel):
+    project_id: UUID
+    project_name: Optional[str] = None
+    total: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+
+
+class GrievanceOrgBreakdownItem(BaseModel):
+    organisation_id: UUID
+    org_name: Optional[str] = None
+    total: int = 0
+    unresolved: int = 0
+    resolved: int = 0
+
+
+class GrievanceDashboardOverdueItem(BaseModel):
+    feedback_id: UUID
+    unique_ref: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    target_resolution_date: Optional[datetime] = None
+    days_overdue: Optional[float] = None
+    department_id: Optional[UUID] = None
+    assigned_to_user_id: Optional[UUID] = None
+    committee_id: Optional[UUID] = None
+    issue_lga: Optional[str] = None
+
+
+class GrievanceListItem(BaseModel):
+    feedback_id: UUID
+    unique_ref: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    category: Optional[str] = None
+    submitted_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = None
+    target_resolution_date: Optional[datetime] = None
+    days_unresolved: Optional[float] = None
+    department_id: Optional[UUID] = None
+    service_id: Optional[UUID] = None
+    product_id: Optional[UUID] = None
+    category_def_id: Optional[UUID] = None
+    issue_lga: Optional[str] = None
+    issue_ward: Optional[str] = None
+    assigned_to_user_id: Optional[UUID] = None
+    committee_id: Optional[UUID] = None
+    stage_id: Optional[UUID] = None
+    project_id: Optional[UUID] = None
+
+
+class PaginatedGrievancesResponse(BaseModel):
+    total: int = 0
+    page: int = 1
+    page_size: int = 50
+    items: List[GrievanceListItem] = Field(default_factory=list)
+
+
+class GrievanceDashboardResponse(BaseModel):
+    """Project-scope grievance dashboard."""
+    summary: GrievanceSummaryStats = Field(default_factory=GrievanceSummaryStats)
+    by_priority: List[GrievancePriorityBreakdownItem] = Field(default_factory=list)
+    by_department: List[GrievanceDeptBreakdownItem] = Field(default_factory=list)
+    by_stage: List[GrievanceStageBreakdownItem] = Field(default_factory=list)
+    overdue: List[GrievanceDashboardOverdueItem] = Field(default_factory=list)
+    grievances: PaginatedGrievancesResponse = Field(default_factory=PaginatedGrievancesResponse)
+
+
+class OrgGrievanceDashboardResponse(BaseModel):
+    """Org-scope grievance dashboard."""
+    summary: GrievanceSummaryStats = Field(default_factory=GrievanceSummaryStats)
+    by_priority: List[GrievancePriorityBreakdownItem] = Field(default_factory=list)
+    by_department: List[GrievanceDeptBreakdownItem] = Field(default_factory=list)
+    by_project: List[GrievanceProjectBreakdownItem] = Field(default_factory=list)
+    overdue: List[GrievanceDashboardOverdueItem] = Field(default_factory=list)
+    grievances: PaginatedGrievancesResponse = Field(default_factory=PaginatedGrievancesResponse)
+
+
+class PlatformGrievanceDashboardResponse(BaseModel):
+    """Platform-scope grievance dashboard."""
+    summary: GrievanceSummaryStats = Field(default_factory=GrievanceSummaryStats)
+    by_priority: List[GrievancePriorityBreakdownItem] = Field(default_factory=list)
+    by_department: List[GrievanceDeptBreakdownItem] = Field(default_factory=list)
+    by_org: List[GrievanceOrgBreakdownItem] = Field(default_factory=list)
+    overdue: List[GrievanceDashboardOverdueItem] = Field(default_factory=list)
+    grievances: PaginatedGrievancesResponse = Field(default_factory=PaginatedGrievancesResponse)
+
+
 # ── Internal: SLA upsert ──────────────────────────────────────────────────────
 
 class SLAStatusUpsert(BaseModel):
