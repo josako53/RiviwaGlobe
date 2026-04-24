@@ -131,12 +131,15 @@ async def get_client(
 @router.get("")
 async def list_clients(
     environment: Optional[str] = None,
+    organisation_id: Optional[uuid.UUID] = None,
     db: AsyncSession = Depends(get_async_session),
     _admin = AdminDep,
 ) -> dict:
     q = select(IntegrationClient).where(IntegrationClient.is_active == True)
     if environment:
         q = q.where(IntegrationClient.environment == environment.upper())
+    if organisation_id:
+        q = q.where(IntegrationClient.organisation_id == organisation_id)
     rows = (await db.execute(q.order_by(IntegrationClient.created_at.desc()))).scalars().all()
     return {"total": len(rows), "items": [_client_out(c) for c in rows]}
 

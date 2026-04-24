@@ -75,6 +75,8 @@ def _issue_access_token(
     }
     if user_id:
         payload["user_id"] = str(user_id)
+    if client.organisation_id:
+        payload["org_id"] = str(client.organisation_id)
 
     token = jwt.encode(payload, settings.AUTH_SECRET_KEY, algorithm=settings.AUTH_ALGORITHM)
     return token, jti, exp

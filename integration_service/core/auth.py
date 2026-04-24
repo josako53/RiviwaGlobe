@@ -43,6 +43,8 @@ class AuthContext:
         self.scopes      = scopes
         self.user_id     = user_id
         self.auth_method = auth_method
+        # Derived from client — every request is org-scoped
+        self.org_id: Optional[uuid.UUID] = client.organisation_id
 
     def require_scope(self, scope: str) -> None:
         if scope not in self.scopes:
@@ -50,6 +52,35 @@ class AuthContext:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"error": "INSUFFICIENT_SCOPE", "required": scope},
             )
+
+    def require_org(self) -> uuid.UUID:
+        """Raise 403 if the client has no organisation_id bound."""
+        if not self.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "CLIENT_NOT_ORG_BOUND",
+                    "message": "This client is not bound to an organisation. "
+                               "Set organisation_id when registering the client.",
+                },
+            )
+        return self.org_id
+
+    def validate_org(self, requested_org_id: Optional[uuid.UUID]) -> uuid.UUID:
+        """
+        Ensure requested_org_id (if provided) matches the client's bound org.
+        Falls back to the client's org if None. Raises 403 on mismatch.
+        """
+        bound = self.require_org()
+        if requested_org_id and requested_org_id != bound:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "ORG_MISMATCH",
+                    "message": "Requested org_id does not match the client's bound organisation.",
+                },
+            )
+        return bound
 
 
 async def _get_redis() -> aioredis.Redis:

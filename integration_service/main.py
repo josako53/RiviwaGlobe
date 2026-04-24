@@ -132,13 +132,14 @@ async def audit_log_middleware(request: Request, call_next) -> Response:
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 
-from api.v1 import clients, oauth, context, widget, webhooks   # noqa: E402
+from api.v1 import clients, oauth, context, widget, webhooks, feedback_bridge   # noqa: E402
 
-app.include_router(clients.router,  prefix="/api/v1")
-app.include_router(oauth.router,    prefix="/api/v1")
-app.include_router(context.router,  prefix="/api/v1")
-app.include_router(widget.router,   prefix="/api/v1")
-app.include_router(webhooks.router, prefix="/api/v1")
+app.include_router(clients.router,         prefix="/api/v1")
+app.include_router(oauth.router,           prefix="/api/v1")
+app.include_router(context.router,         prefix="/api/v1")
+app.include_router(widget.router,          prefix="/api/v1")
+app.include_router(webhooks.router,        prefix="/api/v1")
+app.include_router(feedback_bridge.router, prefix="/api/v1")
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

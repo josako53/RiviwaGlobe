@@ -1,18 +1,16 @@
 """
 api/v1/widget.py — Widget and mini-app session management.
 
+All widget sessions are org-scoped. The client's bound organisation_id
+is automatically injected — the frontend never needs to supply it.
+
 Two embed modes:
   1. JS Widget / Tag  — partner embeds <script> tag; JS calls this API
   2. Mini App         — partner mobile app opens a Riviwa WebView
-
-Widget session lifecycle:
-  1. POST /integration/widget/session   — partner backend creates widget session
-  2. GET  /integration/widget/config    — JS widget fetches config (CORS-checked)
-  3. User completes feedback in widget
-  4. Riviwa fires webhook to partner on feedback.submitted event
 """
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
@@ -20,16 +18,14 @@ from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-
-import json
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import IntegrationAuthDep, AuthContext
 from core.config import settings
 from core.security import encrypt_field, decrypt_field, generate_opaque_token, hash_code
 from db.session import get_async_session
 from models.integration import ContextSession, IntegrationClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/integration/widget", tags=["Integration — Widget & Mini App"])
@@ -37,7 +33,7 @@ router = APIRouter(prefix="/integration/widget", tags=["Integration — Widget &
 
 def _check_origin(client: IntegrationClient, origin: Optional[str]) -> bool:
     if not client.allowed_origins:
-        return False  # no allowed origins = block all cross-origin
+        return False
     if "*" in client.allowed_origins:
         return True
     return origin in client.allowed_origins if origin else False
@@ -52,28 +48,26 @@ async def create_widget_session(
     ctx: AuthContext = IntegrationAuthDep,
 ) -> dict:
     """
-    Create a widget/mini-app embed session.
-
-    Called from the partner's **backend** to generate a signed session
-    that the frontend widget uses to authenticate itself.
+    Create a widget/mini-app embed session. Automatically scoped to the
+    client's bound organisation_id — no need to pass org_id in the body.
 
     Body:
       user_ref      — partner's user ID / reference (opaque to Riviwa)
       project_id    — lock widget to a specific Riviwa project (optional)
-      org_id        — lock widget to a specific org (optional)
       context_token — pre-existing context session token (optional)
       ttl_seconds   — session TTL override (default 30 min, max 2 hours)
-      locale        — UI locale hint, e.g. "sw" or "en" (optional)
-      theme         — "light" | "dark" | "auto" (optional)
+      locale        — UI locale hint, e.g. "sw" or "en"
+      theme         — "light" | "dark" | "auto"
 
-    Returns embed_token used by the frontend widget.
+    Returns embed_token + org_id so the widget auto-configures for the right org.
     """
     ctx.require_scope("feedback:write")
+    org_id = ctx.validate_org(
+        uuid.UUID(body["org_id"]) if body.get("org_id") else None
+    )
 
     ttl = min(int(body.get("ttl_seconds", 1800)), 7200)
     expires_at = datetime.utcnow() + timedelta(seconds=ttl)
-
-    raw_token, token_hash = generate_opaque_token(32)
 
     config = {
         "user_ref":      body.get("user_ref"),
@@ -83,27 +77,31 @@ async def create_widget_session(
         "_widget":       True,
     }
     encrypted = encrypt_field(json.dumps(config))
+    raw_token, token_hash = generate_opaque_token(32)
 
     session = ContextSession(
         client_id           = ctx.client.id,
         token_hash          = token_hash,
         pre_filled_data_enc = encrypted,
         project_id          = uuid.UUID(body["project_id"]) if body.get("project_id") else None,
-        org_id              = uuid.UUID(body["org_id"])      if body.get("org_id")     else None,
+        org_id              = org_id,
         expires_at          = expires_at,
     )
     db.add(session)
     await db.commit()
     await db.refresh(session)
 
-    log.info("integration.widget_session_created", client_id=str(ctx.client.id))
+    log.info("integration.widget_session_created",
+             client_id=str(ctx.client.id), org_id=str(org_id))
 
     return {
         "embed_token":  raw_token,
         "session_id":   str(session.id),
+        "org_id":       str(org_id),
+        "project_id":   str(session.project_id) if session.project_id else None,
         "expires_at":   expires_at.isoformat(),
         "ttl_seconds":  ttl,
-        "embed_url":    f"{settings.RIVIWA_WIDGET_BASE_URL}/embed?token={raw_token}",
+        "embed_url":    f"{settings.RIVIWA_WIDGET_BASE_URL}/embed?token={raw_token}&org={org_id}",
         "warning":      "embed_token is single-use and expires in the ttl specified.",
     }
 
@@ -119,9 +117,8 @@ async def get_widget_config(
 ) -> JSONResponse:
     """
     Called by the embedded JS widget to fetch runtime configuration.
-
-    Checks Origin header against the client's allowed_origins list.
-    Returns CORS headers and widget configuration.
+    Checks Origin header against allowed_origins. Returns org_id so the
+    widget knows which organisation's projects/categories to display.
     """
     origin = request.headers.get("origin")
     result = await db.execute(
@@ -145,11 +142,11 @@ async def get_widget_config(
         "client_id":     client.client_id,
         "client_name":   client.name,
         "environment":   client.environment,
+        "org_id":        str(client.organisation_id) if client.organisation_id else None,
         "scopes":        client.allowed_scopes,
         "require_auth":  "feedback:write" in client.allowed_scopes,
     }
 
-    # If a session token was provided, attach context
     if token:
         token_hash = hash_code(token)
         sc_result = await db.execute(
@@ -161,10 +158,16 @@ async def get_widget_config(
         sess = sc_result.scalars().first()
         if sess and sess.expires_at > datetime.utcnow():
             try:
-                config["pre_fill"] = json.loads(decrypt_field(sess.pre_filled_data_enc))
+                pre_fill = json.loads(decrypt_field(sess.pre_filled_data_enc))
+                if not pre_fill.get("_widget"):
+                    config["pre_fill"] = pre_fill
+                # Always surface the session's org_id (authoritative)
+                if sess.org_id:
+                    config["org_id"] = str(sess.org_id)
+                if sess.project_id:
+                    config["project_id"] = str(sess.project_id)
             except Exception:
                 pass
-
 
     headers = {
         "Access-Control-Allow-Origin": origin or "*",
@@ -174,7 +177,7 @@ async def get_widget_config(
     return JSONResponse(content=config, headers=headers)
 
 
-# ── GET /integration/widget/snippet — JS tag snippet for copy-paste ──────────
+# ── GET /integration/widget/snippet — JS tag snippet ─────────────────────────
 
 @router.get("/snippet")
 async def get_embed_snippet(
@@ -183,8 +186,8 @@ async def get_embed_snippet(
     ctx: AuthContext = IntegrationAuthDep,
 ) -> dict:
     """
-    Returns the copy-paste JS snippet that partners include on their website.
-    Similar to Google Tag / HubSpot tracking snippet.
+    Returns the copy-paste JS snippet for website embedding.
+    The snippet bakes in the org_id so every page-view is auto-scoped.
     """
     result = await db.execute(
         select(IntegrationClient).where(
@@ -196,8 +199,9 @@ async def get_embed_snippet(
     if not client or client.id != ctx.client.id:
         raise HTTPException(404, {"error": "CLIENT_NOT_FOUND"})
 
-    base = settings.RIVIWA_WIDGET_BASE_URL
-    # Double-brace JS curly braces to escape f-string interpolation
+    org_id = str(client.organisation_id) if client.organisation_id else "null"
+    base   = settings.RIVIWA_WIDGET_BASE_URL
+
     snippet = (
         "<!-- Riviwa Feedback Widget -->\n"
         "<script>\n"
@@ -205,7 +209,7 @@ async def get_embed_snippet(
         "  ;(r[w].q=r[w].q||[]).push(arguments)}},r[w].l=1*new Date();a=i.createElement(v),\n"
         "  m=i.getElementsByTagName(v)[0];a.async=1;a.src=i2;m.parentNode.insertBefore(a,m)\n"
         f"  }})(window,document,'script','{base}/widget.js','riviwa');\n"
-        f"  riviwa('init', '{client_id}');\n"
+        f"  riviwa('init', '{client_id}', {{org: '{org_id}'}});\n"
         "  riviwa('track', 'page_view');\n"
         "</script>\n"
         "<!-- End Riviwa Feedback Widget -->"
@@ -213,6 +217,7 @@ async def get_embed_snippet(
 
     return {
         "client_id": client_id,
+        "org_id":    org_id,
         "snippet":   snippet,
         "widget_js": f"{base}/widget.js",
         "docs_url":  "https://docs.riviwa.com/integration/widget",
