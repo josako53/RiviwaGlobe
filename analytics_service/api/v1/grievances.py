@@ -10,7 +10,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Query
 
-from core.dependencies import AnalyticsDbDep, FeedbackDbDep, StaffDep
+from core.dependencies import AnalyticsDbDep, FeedbackDbDep, StaffDep, assert_project_org_access
 from repositories.analytics_repo import AnalyticsRepository
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
@@ -59,6 +59,7 @@ async def get_unresolved_grievances(
     Filterable by min_days, priority, status, department_id, service_id, product_id, category_def_id.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_unresolved_grievances(
         project_id,
         min_days=min_days,
@@ -264,6 +265,7 @@ async def get_grievance_dashboard(
     d_to   = _date.fromisoformat(date_to)   if date_to   else None
 
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
 
     summary_row, priority_rows, dept_rows, stage_rows, overdue_rows, list_data = (
         await repo.get_project_grievance_dashboard_summary(

@@ -24,7 +24,22 @@ class FeedbackAnalyticsRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    # ── Internal helper ───────────────────────────────────────────────────────
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
+    async def get_project_org_id(self, project_id: uuid.UUID) -> Optional[uuid.UUID]:
+        """Look up the organisation_id that owns a project (for org-scope enforcement)."""
+        rows = await self._fetchone(
+            "SELECT organisation_id FROM fb_projects WHERE id = :pid LIMIT 1",
+            {"pid": str(project_id)},
+        )
+        if rows and rows.get("organisation_id"):
+            return uuid.UUID(str(rows["organisation_id"]))
+        return None
+
+    async def _fetchone(self, sql: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        result = await self.db.execute(text(sql), params or {})
+        row = result.mappings().first()
+        return dict(row) if row else None
 
     async def _fetchall(self, sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         result = await self.db.execute(text(sql), params or {})

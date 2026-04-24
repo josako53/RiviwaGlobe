@@ -72,7 +72,9 @@ class AIConversation(SQLModel, table=True):
     # JSONB: list of submitted feedback UUIDs and their reference numbers
     submitted_feedback: Optional[List[Any]] = Field(default=None, sa_column=Column(JSONB))
 
-    # ── Project context (auto-detected via RAG) ───────────────────────────────
+    # ── Organisation + Project context ───────────────────────────────────────
+    org_id:       Optional[uuid.UUID] = Field(default=None, index=True,
+                                              description="Bound organisation — set on start, never changed")
     project_id:   Optional[uuid.UUID] = Field(default=None)
     project_name: Optional[str]       = Field(default=None, max_length=300)
 

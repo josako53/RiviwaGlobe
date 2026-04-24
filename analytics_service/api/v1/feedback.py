@@ -12,7 +12,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Query
 
-from core.dependencies import FeedbackDbDep, StaffDep
+from core.dependencies import FeedbackDbDep, StaffDep, assert_project_org_access
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
     FeedbackBreakdownItem,
@@ -52,6 +52,7 @@ async def get_time_to_open(
     """
     from datetime import date as _date
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
 
     d_from = _date.fromisoformat(date_from) if date_from else None
     d_to   = _date.fromisoformat(date_to)   if date_to   else None
@@ -100,6 +101,7 @@ async def get_unread_feedback(
     Optionally filter by priority, feedback_type, department_id, service_id, product_id, category_def_id.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_unread_all(
         project_id, priority=priority, feedback_type=feedback_type,
         department_id=department_id, service_id=service_id,
@@ -145,6 +147,7 @@ async def get_overdue_feedback(
     target_resolution_date < now().
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_overdue(
         project_id, feedback_type=feedback_type,
         department_id=department_id, service_id=service_id,
@@ -185,6 +188,7 @@ async def get_not_processed_feedback(
     Feedbacks acknowledged/in_review but not yet resolved.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_read_not_processed(project_id, feedback_type=feedback_type)
 
     items = [
@@ -216,6 +220,7 @@ async def get_processed_today(
     Feedbacks that moved to 'in_review' status today.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_processed_today(project_id)
 
     items = [
@@ -243,6 +248,7 @@ async def get_resolved_today(
     Feedbacks that were resolved today, with resolution duration in hours.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_resolved_today(project_id)
 
     items = [
@@ -277,6 +283,7 @@ async def get_feedback_by_service(
     Returns: service_id, total, grievances, suggestions, applause, resolved, avg_resolution_hours.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
     rows = await repo.get_breakdown_by_service(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
@@ -312,6 +319,7 @@ async def get_feedback_by_product(
     Returns: product_id, total, grievances, suggestions, applause, resolved, avg_resolution_hours.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
     rows = await repo.get_breakdown_by_product(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
@@ -348,6 +356,7 @@ async def get_feedback_by_category(
              suggestions, applause, resolved, avg_resolution_hours.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
     rows = await repo.get_breakdown_by_category_def(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
@@ -386,6 +395,7 @@ async def get_feedback_by_department(
     for any or all feedback types.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
     rows = await repo.get_breakdown_by_department(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
@@ -422,6 +432,7 @@ async def get_feedback_by_stage(
     project stages for any or all feedback types.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
     rows = await repo.get_breakdown_by_stage(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
@@ -462,6 +473,7 @@ async def get_feedback_by_branch(
     Only includes rows where branch_id IS NOT NULL (set at submission).
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
     rows = await repo.get_breakdown_by_branch(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)

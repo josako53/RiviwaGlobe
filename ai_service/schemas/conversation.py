@@ -17,6 +17,10 @@ class StartConversation(BaseModel):
         default="sw",
         description="Preferred language: 'sw' (Swahili) or 'en' (English)",
     )
+    org_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Organisation UUID — locks the conversation to this org's projects/categories.",
+    )
     project_id: Optional[uuid.UUID] = Field(
         default=None,
         description="Pre-select a project (e.g., from a project page). Omit to let AI detect.",

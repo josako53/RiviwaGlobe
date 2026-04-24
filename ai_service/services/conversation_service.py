@@ -142,6 +142,7 @@ class ConversationService:
         self,
         channel: str,
         language: str = "sw",
+        org_id: Optional[uuid.UUID] = None,
         project_id: Optional[uuid.UUID] = None,
         user_id: Optional[uuid.UUID] = None,
         phone_number: Optional[str] = None,
@@ -150,6 +151,8 @@ class ConversationService:
     ) -> Tuple[AIConversation, str]:
         """
         Create a new conversation session and return (session, greeting_reply).
+        org_id scopes the conversation to a specific organisation — RAG and
+        project detection will only consider projects belonging to that org.
         """
         # Load active projects so we can suggest locations in the greeting
         active_projects = await self.kb_repo.list_active()
@@ -161,6 +164,7 @@ class ConversationService:
             "whatsapp_id": whatsapp_id,
             "web_token": web_token,
             "user_id": user_id,
+            "org_id": org_id,
             "project_id": project_id,
         }
         conv = await self.conv_repo.create(data)

@@ -34,6 +34,7 @@ def _conv_response(conv, reply: str, submitted: bool = False, submitted_feedback
         "language":          conv.language,
         "submitted":         submitted,
         "submitted_feedback": fb_list,
+        "org_id":            str(conv.org_id) if conv.org_id else None,
         "project_name":      conv.project_name,
         "is_urgent":         conv.is_urgent,
         "incharge_name":     conv.incharge_name,
@@ -56,6 +57,7 @@ async def start_conversation(body: StartConversation, db: DbDep, token: OptToken
     conv, reply = await _svc(db).start_conversation(
         channel    = body.channel,
         language   = body.language,
+        org_id     = body.org_id,
         project_id = body.project_id,
         user_id    = user_id,
         web_token  = body.web_token,

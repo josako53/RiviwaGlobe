@@ -124,6 +124,33 @@ async def require_org_admin(
     return token
 
 
+# ── Org-scope enforcement helpers ────────────────────────────────────────────
+
+def assert_org_access(token: TokenClaims, requested_org_id: "uuid.UUID") -> None:
+    """
+    Raise 403 if a non-platform-admin tries to access a different org's data.
+    Platform admins (super_admin/admin) can access any org.
+    """
+    import uuid as _uuid
+    if _is_platform_admin(token):
+        return
+    if not token.org_id:
+        raise ForbiddenError(message="Switch to an active organisation to access analytics.")
+    if token.org_id != requested_org_id:
+        raise ForbiddenError(message="You do not have access to this organisation's data.")
+
+
+def assert_project_org_access(token: TokenClaims, project_org_id: "Optional[uuid.UUID]") -> None:
+    """
+    After resolving a project's organisation_id, enforce that the token's
+    org matches. Skipped for platform admins or when org cannot be determined.
+    """
+    if _is_platform_admin(token):
+        return
+    if project_org_id and token.org_id and token.org_id != project_org_id:
+        raise ForbiddenError(message="This project belongs to a different organisation.")
+
+
 # ── Internal service key dependency ──────────────────────────────────────────
 
 async def require_internal_key(
@@ -164,5 +191,13 @@ StaffDep           = Annotated[TokenClaims, Depends(require_staff)]
 GRMOfficerDep      = Annotated[TokenClaims, Depends(require_grm_officer)]
 OrgAdminDep        = Annotated[TokenClaims, Depends(require_org_admin)]
 AnalyticsDbDep     = Annotated[AsyncSession, Depends(get_analytics_db)]
+
+# Re-export so routers import from one place
+__all__ = [
+    "assert_org_access", "assert_project_org_access",
+    "TokenClaims", "_is_platform_admin",
+    "CurrentUser", "OptTokenDep", "StaffDep", "GRMOfficerDep", "OrgAdminDep",
+    "AnalyticsDbDep", "FeedbackDbDep",
+]
 FeedbackDbDep      = Annotated[AsyncSession, Depends(get_feedback_db)]
 InternalKeyDep     = Depends(require_internal_key)

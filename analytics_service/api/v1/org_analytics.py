@@ -38,7 +38,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Path, Query
 
-from core.dependencies import FeedbackDbDep, StaffDep
+from core.dependencies import FeedbackDbDep, StaffDep, assert_org_access
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
     FeedbackBreakdownItem,
@@ -94,6 +94,7 @@ async def org_summary(
     High-level counts across all projects in the org:
     totals by feedback_type, by status, by priority, and resolution stats.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -113,6 +114,7 @@ async def org_by_project(
     """
     Feedback counts per project within the org.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -134,6 +136,7 @@ async def org_by_period(
     """
     Submission volume over time at day/week/month granularity.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -154,6 +157,7 @@ async def org_by_channel(
     """
     Feedback counts grouped by intake channel across the org.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -192,6 +196,7 @@ async def org_by_branch(
     avg resolution hours per branch — enabling cross-branch comparison.
     Only includes rows where branch_id IS NOT NULL.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -210,6 +215,7 @@ async def org_by_department(
     fb_db:  FeedbackDbDep = None,
 ) -> OrgDimensionBreakdownResponse:
     """Feedback counts grouped by department_id across the org."""
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -228,6 +234,7 @@ async def org_by_service(
     fb_db:  FeedbackDbDep = None,
 ) -> OrgDimensionBreakdownResponse:
     """Feedback counts grouped by service_id across the org."""
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -246,6 +253,7 @@ async def org_by_product(
     fb_db:  FeedbackDbDep = None,
 ) -> OrgDimensionBreakdownResponse:
     """Feedback counts grouped by product_id across the org."""
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -267,6 +275,7 @@ async def org_by_category(
     Feedback counts grouped by dynamic category (category_def_id) across the org.
     Includes name/slug from feedback_category_defs. NULL = 'uncategorised'.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -304,6 +313,7 @@ async def org_grievance_summary(
     Org-wide grievance summary: total, unresolved, escalated, dismissed,
     avg resolution hours, avg days unresolved.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -322,6 +332,7 @@ async def org_grievance_by_level(
     """
     Grievance counts grouped by current GRM escalation level across the org.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -341,6 +352,7 @@ async def org_grievance_by_location(
     """
     Grievance counts grouped by LGA and ward across the org.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -369,6 +381,7 @@ async def org_grievance_dashboard(
     overdue list, and paginated grievance list.
     All results scoped to the org; optionally filtered to a single project.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -451,6 +464,7 @@ async def org_grievance_sla(
     SLA targets: critical 4h/72h, high 8h/168h, medium 24h/336h, low 48h/720h
     (ack hours / resolution hours).
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -478,6 +492,7 @@ async def org_suggestion_summary(
     Org-wide suggestion summary: total, actioned, noted, pending (submitted/acknowledged),
     actioned_rate, avg hours to implement.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -496,6 +511,7 @@ async def org_suggestions_by_project(
     """
     Suggestion counts and implementation rate per project within the org.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -520,6 +536,7 @@ async def org_applause_summary(
     Org-wide applause summary: total, top categories, by project,
     and month-on-month trend.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
@@ -543,6 +560,7 @@ async def org_inquiry_summary(
     Org-wide inquiry summary: total, open, resolved, dismissed,
     avg response hours, avg days open, open counts by priority.
     """
+    assert_org_access(_token, org_id)
     repo = FeedbackAnalyticsRepository(fb_db)
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
