@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka-1:9092")

@@ -13,6 +13,8 @@ Output schema: feedback_id, escalation_probability, predicted_resolution_hours (
                recommended_priority, scored_at
 """
 
+from __future__ import annotations
+
 import sys
 import logging
 from datetime import datetime, timezone
