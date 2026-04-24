@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 
 import jwt
 import structlog
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -481,14 +481,14 @@ async def introspect_token(
 
 @router.get("/integration/oauth/userinfo")
 async def userinfo(
-    authorization: str = "",
+    authorization: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """
     OIDC userinfo endpoint.
     Returns basic profile for the authenticated user (requires profile:read scope).
     """
-    if not authorization.lower().startswith("bearer "):
+    if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, {"error": "missing_token"})
     token = authorization[7:]
     try:
