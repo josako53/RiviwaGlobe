@@ -16,7 +16,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Column, Index, Text
+from sqlalchemy import Column, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -83,8 +83,10 @@ class IntegrationClient(SQLModel, table=True):
 
     name:        str           = Field(max_length=200)
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
-    client_type: ClientType    = Field(default=ClientType.API)
-    environment: ClientEnvironment = Field(default=ClientEnvironment.SANDBOX)
+    client_type: ClientType    = Field(default=ClientType.API,
+                                       sa_column=Column(String(32), nullable=False, server_default="API"))
+    environment: ClientEnvironment = Field(default=ClientEnvironment.SANDBOX,
+                                           sa_column=Column(String(16), nullable=False, server_default="SANDBOX"))
 
     # Owning organisation (soft FK — org lives in auth_db)
     organisation_id: Optional[uuid.UUID] = Field(default=None, index=True)
@@ -248,7 +250,7 @@ class OAuthToken(SQLModel, table=True):
     client_id: uuid.UUID = Field(foreign_key="integration_clients.id", index=True)
     user_id:   Optional[uuid.UUID] = Field(default=None, index=True)
 
-    grant_type:    TokenGrantType = Field()
+    grant_type:    TokenGrantType = Field(sa_column=Column(String(32), nullable=False))
     scopes:        List[str]      = Field(
         default_factory=list,
         sa_column=Column(JSONB, nullable=False, server_default="[]"),
@@ -332,7 +334,9 @@ class WebhookDelivery(SQLModel, table=True):
         sa_column=Column(JSONB, nullable=False),
     )
 
-    status:         DeliveryStatus = Field(default=DeliveryStatus.PENDING, index=True)
+    status:         DeliveryStatus = Field(default=DeliveryStatus.PENDING,
+                                           sa_column=Column(String(16), nullable=False,
+                                                            server_default="PENDING", index=True))
     attempt_count:  int            = Field(default=0)
     last_status_code: Optional[int] = Field(default=None)
     last_error:     Optional[str]  = Field(default=None, sa_column=Column(Text))
