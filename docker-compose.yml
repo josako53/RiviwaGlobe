@@ -991,7 +991,10 @@ services:
     init: true
     restart: unless-stopped
     networks: [riviwa-net]
-    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    user: root
+    command: >
+      bash -c "chmod 777 /opt/spark/work &&
+               exec /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"
     environment:
       SPARK_WORKER_MEMORY: 2g
       SPARK_WORKER_CORES: "2"

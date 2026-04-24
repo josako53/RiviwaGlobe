@@ -6,7 +6,9 @@ USER root
 RUN pip install --no-cache-dir \
     psycopg2-binary==2.9.9 \
     redis==5.2.1 \
-    apscheduler==3.10.4
+    apscheduler==3.10.4 \
+    pandas==2.0.3 \
+    pyarrow==12.0.1
 
 # netcat for healthchecks in entrypoint.sh
 RUN apt-get update -qq && \
