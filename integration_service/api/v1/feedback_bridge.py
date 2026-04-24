@@ -146,27 +146,25 @@ async def submit_feedback(
                                   "message": "Provide at least one of: phone, name, email, account_ref — or a valid context_token"})
 
     # ── 4. Forward to feedback_service ───────────────────────────────────────
+    project_id_val = body.get("project_id") or pre_fill.get("project_id")
     feedback_payload = {
-        "feedback_type":  feedback_type,
-        "title":          title,
-        "description":    body.get("description", ""),
-        "category_id":    body.get("category_id") or pre_fill.get("category_id"),
-        "department_id":  body.get("department_id") or pre_fill.get("department_id"),
-        "project_id":     body.get("project_id") or pre_fill.get("project_id") or str(pre_fill.get("project_id", "")),
-        "priority":       body.get("priority", "MEDIUM").upper(),
-        "channel":        body.get("channel", "API"),
-        "org_id":         str(org_id),
-        # Submitter identity
-        "phone":          phone,
-        "name":           name,
-        "email":          email,
-        "account_ref":    account_ref,
-        # Integration metadata
-        "integration_client_id": ctx.client.client_id,
-        "source_ref":    body.get("source_ref"),
-        "metadata":      body.get("metadata"),
+        "feedback_type":   feedback_type.lower(),           # feedback_service expects lowercase
+        "title":           title,
+        "description":     body.get("description") or title,
+        "category_id":     body.get("category_id") or pre_fill.get("category_id"),
+        "department_id":   body.get("department_id") or pre_fill.get("department_id"),
+        "project_id":      project_id_val,
+        "priority":        (body.get("priority") or "medium").lower(),
+        "channel":         body.get("channel", "api").lower(),
+        "org_id":          str(org_id),
+        "phone":           phone,
+        "name":            name,
+        "email":           email,
+        "account_ref":     account_ref,
+        "issue_lga":       body.get("issue_lga") or pre_fill.get("issue_lga"),
+        "source_ref":      body.get("source_ref"),
     }
-    # Strip None values
+    # Strip None/empty values
     feedback_payload = {k: v for k, v in feedback_payload.items() if v is not None and v != ""}
 
     feedback_result = await _forward_to_feedback_service(feedback_payload)

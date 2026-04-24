@@ -337,12 +337,13 @@ async def integration_submit_feedback(request: Request, db: DbDep, kafka: KafkaD
     Internal endpoint called by integration_service feedback bridge.
     Accepts X-Service-Key header — no JWT required.
 
-    Maps integration payload (phone/name/account_ref) to feedback service
-    fields (submitter_name/submitter_phone) and uses org_id + project_id
-    from the integration context.
+    Uses submit_from_consumer() path so project_id is optional (AI can detect).
+    Maps integration fields (title→subject, phone→submitter_phone, name→submitter_name).
+    Channel is normalised via FeedbackChannel._missing_ alias resolution.
     """
     from fastapi.responses import JSONResponse
     from core.config import settings as fb_settings
+    from models.feedback import FeedbackChannel, FeedbackType, FeedbackPriority
 
     service_key = request.headers.get("X-Service-Key", "")
     if service_key != fb_settings.INTERNAL_SERVICE_KEY:
@@ -351,66 +352,69 @@ async def integration_submit_feedback(request: Request, db: DbDep, kafka: KafkaD
 
     body = await request.json()
 
-    from models.feedback import FeedbackChannel, FeedbackType, FeedbackPriority
-
-    # Map integration fields → feedback service fields
-    feedback_type_raw = body.get("feedback_type", "GRIEVANCE")
-    project_id        = body.get("project_id")
-    title             = body.get("title", "")
-    description       = body.get("description", "")
-    priority_raw      = (body.get("priority") or "medium").lower()
-    channel_raw       = (body.get("channel") or "other").lower()
-    phone             = body.get("phone")
-    name              = body.get("name")
-    email             = body.get("email")
-    account_ref       = body.get("account_ref")
-    department_id     = body.get("department_id")
-    category_id       = body.get("category_id")
-    source_ref        = body.get("source_ref")
-    metadata          = body.get("metadata") or {}
-
-    if not project_id:
+    title        = (body.get("title") or "").strip()
+    description  = (body.get("description") or title).strip()
+    if not description:
         return JSONResponse(status_code=400,
-                            content={"error": "PROJECT_ID_REQUIRED",
-                                     "message": "project_id is required for integration submissions."})
+                            content={"error": "DESCRIPTION_REQUIRED",
+                                     "message": "title or description is required."})
 
-    # Normalise channel through alias resolution (api → other, web_widget → web_portal, etc.)
-    channel_obj = FeedbackChannel.from_alias(channel_raw) or FeedbackChannel.OTHER
-    channel_val = channel_obj.value   # always a valid lowercase enum value
-
-    # Normalise priority — enum values are lowercase ("medium", "high", etc.)
+    # Normalise feedback_type → lowercase enum value ("grievance", "suggestion", etc.)
     try:
-        priority_val = FeedbackPriority(priority_raw.lower()).value
-    except ValueError:
-        priority_val = "medium"
-
-    # Normalise feedback_type — enum values are lowercase ("grievance", etc.)
-    try:
-        feedback_type_val = FeedbackType(feedback_type_raw.lower()).value
+        feedback_type_val = FeedbackType((body.get("feedback_type") or "grievance").lower()).value
     except ValueError:
         feedback_type_val = "grievance"
 
-    # Build data dict matching feedback service's submit() structure
+    # Normalise channel: "API"/"WEB_WIDGET" etc. → FeedbackChannel via _missing_ alias
+    channel_raw = (body.get("channel") or "other").lower()
+    try:
+        channel_val = FeedbackChannel(channel_raw).value
+    except ValueError:
+        channel_val = FeedbackChannel.OTHER.value
+
+    # Build data dict matching submit_from_consumer() expected fields
     data = {
-        "project_id":      project_id,
         "feedback_type":   feedback_type_val,
-        "subject":         title[:500],
-        "description":     description or title,
-        "channel":         channel_val,
-        "priority":        priority_val,
+        "description":     description,
+        "subject":         title[:100] if title else description[:100],
+        "issue_lga":       body.get("issue_lga"),
+        "project_id":      body.get("project_id"),
+        "category":        body.get("category"),
+        "category_def_id": body.get("category_id"),
         "is_anonymous":    False,
-        "submitter_name":  name,
-        "submitter_phone": phone,
-        "email":           email,
-        "department_id":   department_id,
-        "category_def_id": category_id,
+        "submitter_name":  body.get("name"),
+        "submitter_phone": body.get("phone"),
+        "department_id":   body.get("department_id"),
     }
-    # Strip None values
+    # Strip None values so optional fields don't override defaults
     data = {k: v for k, v in data.items() if v is not None}
 
     try:
-        result = await _svc(db, kafka).submit(data, token_sub=None)
-        return feedback_out(result)
+        svc = _svc(db, kafka)
+        if data.get("project_id"):
+            # Staff path: project_id known, skip AI, submit immediately
+            staff_data = {
+                **data,
+                "channel":  channel_val,
+                "priority": (body.get("priority") or "medium").lower(),
+            }
+            result = await svc.submit(staff_data, token_sub=None)
+        else:
+            # Consumer path: no project_id — AI auto-detects from issue_lga + description
+            result = await svc.submit_from_consumer(
+                data,
+                user_id=None,
+                channel_override=channel_val,
+            )
+        return {
+            "id":            str(result.id),
+            "reference":     result.unique_ref,
+            "status":        result.status.value,
+            "feedback_type": result.feedback_type.value,
+            "project_id":    str(result.project_id) if result.project_id else None,
+        }
     except Exception as exc:
+        import structlog as _log
+        _log.get_logger(__name__).error("integration.submit_failed", error=str(exc))
         return JSONResponse(status_code=422,
-                            content={"error": "SUBMISSION_FAILED", "message": str(exc)[:200]})
+                            content={"error": "SUBMISSION_FAILED", "message": str(exc)[:300]})
