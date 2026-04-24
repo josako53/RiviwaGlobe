@@ -322,3 +322,95 @@ async def ai_enrich_feedback(feedback_id: uuid.UUID, request: Request, db: DbDep
         await db.flush()
 
     return {"enriched": changed, "feedback_id": str(feedback_id)}
+
+
+# ── POST /api/v1/feedback/integration/submit — Integration bridge (X-Service-Key) ──
+
+@router.post(
+    "/integration/submit",
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit feedback from integration_service bridge (internal only)",
+    include_in_schema=False,
+)
+async def integration_submit_feedback(request: Request, db: DbDep, kafka: KafkaDep) -> dict:
+    """
+    Internal endpoint called by integration_service feedback bridge.
+    Accepts X-Service-Key header — no JWT required.
+
+    Maps integration payload (phone/name/account_ref) to feedback service
+    fields (submitter_name/submitter_phone) and uses org_id + project_id
+    from the integration context.
+    """
+    from fastapi.responses import JSONResponse
+    from core.config import settings as fb_settings
+
+    service_key = request.headers.get("X-Service-Key", "")
+    if service_key != fb_settings.INTERNAL_SERVICE_KEY:
+        return JSONResponse(status_code=403,
+                            content={"error": "FORBIDDEN", "message": "Invalid service key."})
+
+    body = await request.json()
+
+    from models.feedback import FeedbackChannel, FeedbackType, FeedbackPriority
+
+    # Map integration fields → feedback service fields
+    feedback_type_raw = body.get("feedback_type", "GRIEVANCE")
+    project_id        = body.get("project_id")
+    title             = body.get("title", "")
+    description       = body.get("description", "")
+    priority_raw      = (body.get("priority") or "medium").lower()
+    channel_raw       = (body.get("channel") or "other").lower()
+    phone             = body.get("phone")
+    name              = body.get("name")
+    email             = body.get("email")
+    account_ref       = body.get("account_ref")
+    department_id     = body.get("department_id")
+    category_id       = body.get("category_id")
+    source_ref        = body.get("source_ref")
+    metadata          = body.get("metadata") or {}
+
+    if not project_id:
+        return JSONResponse(status_code=400,
+                            content={"error": "PROJECT_ID_REQUIRED",
+                                     "message": "project_id is required for integration submissions."})
+
+    # Normalise channel through alias resolution (api → other, web_widget → web_portal, etc.)
+    channel_obj = FeedbackChannel.from_alias(channel_raw) or FeedbackChannel.OTHER
+    channel_val = channel_obj.value   # always a valid lowercase enum value
+
+    # Normalise priority — enum values are lowercase ("medium", "high", etc.)
+    try:
+        priority_val = FeedbackPriority(priority_raw.lower()).value
+    except ValueError:
+        priority_val = "medium"
+
+    # Normalise feedback_type — enum values are lowercase ("grievance", etc.)
+    try:
+        feedback_type_val = FeedbackType(feedback_type_raw.lower()).value
+    except ValueError:
+        feedback_type_val = "grievance"
+
+    # Build data dict matching feedback service's submit() structure
+    data = {
+        "project_id":      project_id,
+        "feedback_type":   feedback_type_val,
+        "subject":         title[:500],
+        "description":     description or title,
+        "channel":         channel_val,
+        "priority":        priority_val,
+        "is_anonymous":    False,
+        "submitter_name":  name,
+        "submitter_phone": phone,
+        "email":           email,
+        "department_id":   department_id,
+        "category_def_id": category_id,
+    }
+    # Strip None values
+    data = {k: v for k, v in data.items() if v is not None}
+
+    try:
+        result = await _svc(db, kafka).submit(data, token_sub=None)
+        return feedback_out(result)
+    except Exception as exc:
+        return JSONResponse(status_code=422,
+                            content={"error": "SUBMISSION_FAILED", "message": str(exc)[:200]})

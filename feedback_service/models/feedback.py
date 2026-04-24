@@ -282,18 +282,24 @@ class FeedbackChannel(str, Enum):
         clean = value.strip().lower()
         # Short-hand aliases clients may send
         aliases = {
-            "web":       cls.WEB_PORTAL,
-            "mobile":    cls.MOBILE_APP,
-            "app":       cls.MOBILE_APP,
-            "call":      cls.PHONE_CALL,
-            "voice":     cls.PHONE_CALL,
-            "walk_in":   cls.IN_PERSON,
-            "walk-in":   cls.IN_PERSON,
-            "meeting":   cls.PUBLIC_MEETING,
-            "paper":     cls.PAPER_FORM,
-            "form":      cls.PAPER_FORM,
-            "wa":        cls.WHATSAPP,
-            "wa_voice":  cls.WHATSAPP_VOICE,
+            "web":        cls.WEB_PORTAL,
+            "mobile":     cls.MOBILE_APP,
+            "app":        cls.MOBILE_APP,
+            "call":       cls.PHONE_CALL,
+            "voice":      cls.PHONE_CALL,
+            "walk_in":    cls.IN_PERSON,
+            "walk-in":    cls.IN_PERSON,
+            "meeting":    cls.PUBLIC_MEETING,
+            "paper":      cls.PAPER_FORM,
+            "form":       cls.PAPER_FORM,
+            "wa":         cls.WHATSAPP,
+            "wa_voice":   cls.WHATSAPP_VOICE,
+            # Integration bridge channels
+            "api":        cls.OTHER,
+            "web_widget": cls.WEB_PORTAL,
+            "mini_app":   cls.MOBILE_APP,
+            "chatbot":    cls.OTHER,
+            "partner_api": cls.OTHER,
         }
         if clean in aliases:
             return aliases[clean]

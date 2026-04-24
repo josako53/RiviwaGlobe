@@ -256,16 +256,15 @@ async def get_feedback_status(
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _forward_to_feedback_service(payload: dict) -> dict:
-    """POST to feedback_service internal endpoint."""
+    """POST to feedback_service internal integration endpoint."""
     try:
         async with httpx.AsyncClient(timeout=15.0) as http:
             resp = await http.post(
-                f"{settings.FEEDBACK_SERVICE_URL}/api/v1/feedback",
+                f"{settings.FEEDBACK_SERVICE_URL}/api/v1/feedback/integration/submit",
                 json=payload,
                 headers={
-                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
-                    "X-Integration":  "true",
-                    "Content-Type":   "application/json",
+                    "X-Service-Key": settings.INTERNAL_SERVICE_KEY,
+                    "Content-Type":  "application/json",
                 },
             )
         if resp.status_code in (200, 201):
