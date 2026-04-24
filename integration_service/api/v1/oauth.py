@@ -407,7 +407,7 @@ async def revoke_token(
     try:
         payload = jwt.decode(token, settings.AUTH_SECRET_KEY,
                              algorithms=[settings.AUTH_ALGORITHM],
-                             options={"verify_exp": False})
+                             options={"verify_exp": False, "verify_aud": False})
         jti = payload.get("jti")
         if jti:
             result = await db.execute(select(OAuthToken).where(OAuthToken.jti == jti))
