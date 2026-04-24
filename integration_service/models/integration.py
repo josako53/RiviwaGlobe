@@ -11,8 +11,6 @@ Tables
   webhook_deliveries      — outbound webhook delivery log with retry state
   integration_audit_logs  — immutable audit trail for every API call
 """
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
 from enum import Enum
