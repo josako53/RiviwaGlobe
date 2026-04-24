@@ -36,7 +36,7 @@ logger = logging.getLogger("scheduler")
 # Config
 # ---------------------------------------------------------------------------
 
-SPARK_MASTER = os.getenv("SPARK_MASTER", "spark://spark_master:7077")
+SPARK_MASTER = os.getenv("SPARK_MASTER", "spark://spark-master:7077")
 SPARK_PACKAGES = (
     "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,"
     "org.postgresql:postgresql:42.6.0"
