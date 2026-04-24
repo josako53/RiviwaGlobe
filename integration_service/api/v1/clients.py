@@ -95,15 +95,16 @@ async def register_client(
     log.info("integration.client_registered", client_id=client_id, name=body["name"])
 
     response = {
-        "id":            str(client.id),
-        "client_id":     client.client_id,
-        "client_secret": client_secret,   # shown ONCE
-        "name":          client.name,
-        "client_type":   client.client_type,
-        "environment":   client.environment,
-        "allowed_scopes": client.allowed_scopes,
-        "created_at":    client.created_at.isoformat(),
-        "warning":       "Store client_secret securely — it will not be shown again.",
+        "id":              str(client.id),
+        "client_id":       client.client_id,
+        "client_secret":   client_secret,   # shown ONCE
+        "name":            client.name,
+        "client_type":     client.client_type,
+        "environment":     client.environment,
+        "organisation_id": str(client.organisation_id) if client.organisation_id else None,
+        "allowed_scopes":  client.allowed_scopes,
+        "created_at":      client.created_at.isoformat(),
+        "warning":         "Store client_secret securely — it will not be shown again.",
     }
     if webhook_raw:
         response["webhook_signing_secret"] = webhook_raw
