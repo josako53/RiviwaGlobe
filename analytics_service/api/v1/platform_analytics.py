@@ -26,13 +26,21 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Optional
+from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Query
 
 from core.dependencies import FeedbackDbDep, StaffDep
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
+
 from schemas.analytics import (
+    GrievanceDashboardOverdueItem,
+    GrievanceDeptBreakdownItem,
+    GrievanceListItem,
+    GrievanceOrgBreakdownItem,
+    GrievancePriorityBreakdownItem,
+    GrievanceSummaryStats,
     InquirySummaryResponse,
     OrgApplauseByOrgItem,
     OrgApplauseCategoryItem,
@@ -44,9 +52,11 @@ from schemas.analytics import (
     OrgGrievanceSummaryResponse,
     OrgSLAByPriority,
     OrgSuggestionSummaryResponse,
+    PaginatedGrievancesResponse,
     PlatformApplauseSummaryResponse,
     PlatformByOrgItem,
     PlatformByOrgResponse,
+    PlatformGrievanceDashboardResponse,
     PlatformSummaryResponse,
 )
 
@@ -170,6 +180,97 @@ async def platform_grievance_summary(
     d_to   = date.fromisoformat(date_to)   if date_to   else None
     data = await repo.get_platform_grievance_summary(date_from=d_from, date_to=d_to)
     return OrgGrievanceSummaryResponse(**data)
+
+
+@router.get("/grievances/dashboard", response_model=PlatformGrievanceDashboardResponse)
+async def platform_grievance_dashboard(
+    org_id:        Optional[UUID] = Query(None, description="Filter to a specific organisation (omit for all orgs)"),
+    project_id:    Optional[UUID] = Query(None, description="Filter to a specific project"),
+    department_id: Optional[UUID] = Query(None, description="Filter by department UUID"),
+    status:        Optional[str]  = Query(None, description="Filter by status (SUBMITTED, ACKNOWLEDGED, IN_REVIEW, ESCALATED, RESOLVED, CLOSED, DISMISSED)"),
+    priority:      Optional[str]  = Query(None, description="Filter by priority (CRITICAL, HIGH, MEDIUM, LOW)"),
+    date_from:     Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    page:          int            = Query(1,   ge=1),
+    page_size:     int            = Query(50,  ge=1, le=200),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> PlatformGrievanceDashboardResponse:
+    """
+    Comprehensive grievance dashboard across the entire platform.
+    Returns summary stats (totals, resolved on time %, resolved late %, acknowledged %),
+    priority breakdown, department breakdown, per-org breakdown, overdue list,
+    and paginated full grievance list.
+    All filters are optional — omit all to see platform-wide data.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+
+    summary_row   = await repo.get_platform_grievance_dashboard_summary(
+        org_id=org_id, project_id=project_id, department_id=department_id,
+        status=status, priority=priority, date_from=d_from, date_to=d_to,
+    )
+    priority_rows = await repo.get_platform_grievance_by_priority(
+        org_id=org_id, project_id=project_id, department_id=department_id,
+        status=status, date_from=d_from, date_to=d_to,
+    )
+    dept_rows     = await repo.get_platform_grievance_by_dept(
+        org_id=org_id, project_id=project_id,
+        status=status, priority=priority, date_from=d_from, date_to=d_to,
+    )
+    org_rows      = await repo.get_platform_grievance_by_org(
+        project_id=project_id, department_id=department_id,
+        status=status, priority=priority, date_from=d_from, date_to=d_to,
+    )
+    overdue_rows  = await repo.get_platform_grievance_overdue(
+        org_id=org_id, project_id=project_id,
+        department_id=department_id, priority=priority,
+    )
+    list_data     = await repo.get_platform_grievance_list(
+        org_id=org_id, project_id=project_id, department_id=department_id,
+        status=status, priority=priority, date_from=d_from, date_to=d_to,
+        page=page, page_size=page_size,
+    )
+
+    total           = int(summary_row.get("total_grievances") or 0)
+    resolved        = int(summary_row.get("resolved") or 0)
+    closed          = int(summary_row.get("closed") or 0)
+    ack_count       = int(summary_row.get("acknowledged_count") or 0)
+    res_on_time     = int(summary_row.get("resolved_on_time") or 0)
+    res_late        = int(summary_row.get("resolved_late") or 0)
+    res_with_dl     = res_on_time + res_late
+
+    summary = GrievanceSummaryStats(
+        total_grievances     = total,
+        resolved             = resolved,
+        closed               = closed,
+        unresolved           = int(summary_row.get("unresolved") or 0),
+        escalated            = int(summary_row.get("escalated") or 0),
+        dismissed            = int(summary_row.get("dismissed") or 0),
+        acknowledged_count   = ack_count,
+        acknowledged_pct     = round(ack_count / total * 100, 2) if total > 0 else None,
+        resolved_on_time     = res_on_time,
+        resolved_late        = res_late,
+        resolved_on_time_pct = round(res_on_time / res_with_dl * 100, 2) if res_with_dl > 0 else None,
+        resolved_late_pct    = round(res_late / res_with_dl * 100, 2) if res_with_dl > 0 else None,
+        avg_resolution_hours = summary_row.get("avg_resolution_hours"),
+        avg_days_unresolved  = summary_row.get("avg_days_unresolved"),
+    )
+
+    return PlatformGrievanceDashboardResponse(
+        summary      = summary,
+        by_priority  = [GrievancePriorityBreakdownItem(**r) for r in priority_rows],
+        by_department= [GrievanceDeptBreakdownItem(**r) for r in dept_rows],
+        by_org       = [GrievanceOrgBreakdownItem(**r) for r in org_rows],
+        overdue      = [GrievanceDashboardOverdueItem(**r) for r in overdue_rows],
+        grievances   = PaginatedGrievancesResponse(
+            total     = list_data["total"],
+            page      = page,
+            page_size = page_size,
+            items     = [GrievanceListItem(**r) for r in list_data["items"]],
+        ),
+    )
 
 
 @router.get("/grievances/sla", response_model=OrgGrievanceSLAResponse)
