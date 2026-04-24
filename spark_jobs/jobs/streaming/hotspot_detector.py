@@ -8,6 +8,7 @@ rolling baseline loaded from analytics_db at startup (broadcast join).
 When count > baseline_avg × 2.0 AND count >= 5, an alert row is written
 to analytics_db.hotspot_alerts and a Redis key is set.
 """
+from __future__ import annotations
 
 import sys
 import logging

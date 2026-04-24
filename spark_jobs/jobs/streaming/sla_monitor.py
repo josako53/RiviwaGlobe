@@ -22,6 +22,7 @@ res_sla_breached     bool
 res_sla_met          bool
 last_event_ts        float
 """
+from __future__ import annotations
 
 import sys
 import os

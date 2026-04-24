@@ -19,6 +19,7 @@ Redis key scheme
   dashboard:{project_id}:overdue_count     -> int
   dashboard:{project_id}:last_updated      -> ISO-8601 timestamp
 """
+from __future__ import annotations
 
 import sys
 import logging
