@@ -184,6 +184,31 @@ def _dim_items(rows: list) -> list[OrgDimensionBreakdownItem]:
     ]
 
 
+@router.get("/by-branch", response_model=OrgDimensionBreakdownResponse)
+async def platform_by_branch(
+    org_id:        Optional[UUID] = Query(None, description="Filter to a specific organisation"),
+    project_id:    Optional[UUID] = Query(None, description="Filter to a specific project"),
+    feedback_type: Optional[str]  = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> OrgDimensionBreakdownResponse:
+    """
+    Feedback counts grouped by branch_id across the entire platform.
+    All filters optional — omit all for platform-wide branch comparison.
+    Only includes rows where branch_id IS NOT NULL.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_platform_by_branch(
+        org_id=org_id, project_id=project_id,
+        feedback_type=feedback_type, date_from=d_from, date_to=d_to,
+    )
+    return OrgDimensionBreakdownResponse(dimension="branch_id", total_items=len(rows), items=_dim_items(rows))
+
+
 @router.get("/by-department", response_model=OrgDimensionBreakdownResponse)
 async def platform_by_department(
     org_id:        Optional[UUID] = Query(None, description="Filter to a specific organisation"),

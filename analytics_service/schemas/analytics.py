@@ -368,7 +368,8 @@ class AIInsightResponse(BaseModel):
 # ── Breakdown: By Service / Product / Category Def ────────────────────────────
 
 class FeedbackBreakdownItem(BaseModel):
-    """One row in a department/service/product/category breakdown — counts per dimension value."""
+    """One row in a branch/department/service/product/category breakdown — counts per dimension value."""
+    branch_id: Optional[UUID] = None
     department_id: Optional[UUID] = None
     service_id: Optional[UUID] = None
     product_id: Optional[UUID] = None

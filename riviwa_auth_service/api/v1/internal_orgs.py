@@ -8,9 +8,11 @@ from external traffic in production.
 Endpoints
 ─────────
   GET /api/v1/internal/orgs/{org_id}/ai-context
-      Returns a compact org profile for AI insights enrichment:
-      display_name, description, org_type, branches (name/status),
-      published FAQs, departments (id/name), services (id/title/type).
+      Returns a compact org profile for AI insights enrichment.
+
+  GET /api/v1/internal/departments/{dept_id}
+      Returns dept id, name, and branch_id. Used by feedback_service to
+      resolve branch_id at submission time when department_id is provided.
 """
 from __future__ import annotations
 
@@ -118,7 +120,7 @@ async def get_org_ai_context(
     )).mappings().all()
 
     return {
-        "org_id":        str(org_row["id"]),
+        "org_id": str(org_row["id"]),
         "legal_name":    org_row["legal_name"],
         "display_name":  org_row["display_name"],
         "description":   org_row["description"],
@@ -163,4 +165,44 @@ async def get_org_ai_context(
             }
             for r in service_rows
         ],
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /internal/departments/{dept_id}
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/departments/{dept_id}",
+    summary="[Internal] Resolve department branch_id",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_department_internal(
+    dept_id: uuid.UUID,
+    db:      AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns id, name, code and branch_id for a single department.
+    Called by feedback_service at submission time to denormalise
+    branch_id onto the feedback row for branch-level analytics.
+    """
+    from sqlalchemy import text
+
+    row = (await db.execute(
+        text("""
+            SELECT id, name, code, branch_id
+            FROM org_departments
+            WHERE id = :dept_id AND is_active = true
+        """),
+        {"dept_id": str(dept_id)},
+    )).mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Department not found.")
+
+    return {
+        "id":        str(row["id"]),
+        "name":      row["name"],
+        "code":      row["code"],
+        "branch_id": str(row["branch_id"]) if row["branch_id"] else None,
     }

@@ -523,6 +523,16 @@ class Feedback(SQLModel, table=True):
         ),
     )
 
+    # Branch this feedback belongs to (denormalised from department.branch_id at submission)
+    branch_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description=(
+            "auth_service OrgBranch.id — denormalised from OrgDepartment.branch_id at "
+            "submission time when department_id is provided. Enables branch-level analytics "
+            "without a cross-DB join. No DB-level FK (cross-database reference)."
+        ),
+    )
+
     # Optional: which specific service location the feedback is about
     service_location_id: Optional[uuid.UUID] = Field(
         default=None, nullable=True, index=True,

@@ -177,6 +177,29 @@ def _dim_items(rows: list, dimension: str) -> list:
     ]
 
 
+@router.get("/{org_id}/by-branch", response_model=OrgDimensionBreakdownResponse)
+async def org_by_branch(
+    org_id:        UUID          = Path(...),
+    feedback_type: Optional[str] = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str] = Query(None),
+    date_to:       Optional[str] = Query(None),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> OrgDimensionBreakdownResponse:
+    """
+    Feedback counts grouped by branch_id across all projects in the org.
+    Returns grievances, suggestions, applause, inquiries, resolved count and
+    avg resolution hours per branch — enabling cross-branch comparison.
+    Only includes rows where branch_id IS NOT NULL.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_org_by_branch(org_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+    items = _dim_items(rows, "branch_id")
+    return OrgDimensionBreakdownResponse(dimension="branch_id", total_items=len(items), items=items)
+
+
 @router.get("/{org_id}/by-department", response_model=OrgDimensionBreakdownResponse)
 async def org_by_department(
     org_id:        UUID          = Path(...),

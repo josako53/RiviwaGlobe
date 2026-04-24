@@ -82,6 +82,34 @@ _LEVEL_ORDER = [
 ]
 
 
+async def _resolve_branch_id(department_id: uuid.UUID) -> uuid.UUID | None:
+    """
+    Call auth_service GET /internal/departments/{dept_id} to resolve the
+    branch_id for a department. Returns None if unreachable or no branch set.
+    Never raises — branch_id is optional analytics metadata.
+    """
+    import httpx
+    from core.config import settings
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/departments/{department_id}",
+                headers={
+                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                    "X-Service-Name": "feedback_service",
+                },
+            )
+            if r.status_code == 200:
+                raw = r.json().get("branch_id")
+                return uuid.UUID(raw) if raw else None
+            log.warning("feedback.branch_resolve_failed", dept=str(department_id), status=r.status_code)
+            return None
+    except Exception as exc:
+        log.warning("feedback.branch_resolve_unreachable", dept=str(department_id), error=str(exc))
+        return None
+
+
 async def _classify_via_ai_service(data: dict) -> dict | None:
     """
     Call ai_service POST /api/v1/ai/internal/classify to auto-detect
@@ -204,6 +232,7 @@ class FeedbackService:
             stage_id                     = active_stage.id if active_stage else None,
             subproject_id                = self._to_uuid(data.get("subproject_id")),
             department_id                = self._to_uuid(data.get("department_id")),
+            branch_id                    = self._to_uuid(data.get("branch_id")),
             service_location_id          = self._to_uuid(data.get("service_location_id")),
             service_id                   = self._to_uuid(data.get("service_id")),
             product_id                   = self._to_uuid(data.get("product_id")),
@@ -245,6 +274,10 @@ class FeedbackService:
         if data.get("submitted_at"):
             f.submitted_at = datetime.fromisoformat(data["submitted_at"]).replace(tzinfo=timezone.utc) if not datetime.fromisoformat(data["submitted_at"]).tzinfo else datetime.fromisoformat(data["submitted_at"])
         f = await self.repo.create(f)
+
+        # Resolve branch_id from department when not explicitly provided
+        if f.department_id and not f.branch_id:
+            f.branch_id = await _resolve_branch_id(f.department_id)
 
         # Auto-link to dynamic FeedbackCategoryDef by slug
         slug = _category_slug(data.get("category"))

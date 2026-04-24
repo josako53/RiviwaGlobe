@@ -441,3 +441,41 @@ async def get_feedback_by_stage(
         for r in rows
     ]
     return FeedbackByStageResponse(total_items=len(items), items=items)
+
+
+# ── GET /analytics/feedback/by-branch ────────────────────────────────────────
+
+@router.get("/by-branch", response_model=FeedbackBreakdownResponse)
+async def get_feedback_by_branch(
+    project_id:    UUID          = Query(..., description="Project UUID"),
+    feedback_type: Optional[str] = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> FeedbackBreakdownResponse:
+    """
+    Feedback counts grouped by branch_id within a project.
+    Returns grievances, suggestions, applause, inquiries, resolved count and
+    avg resolution hours per branch — enabling cross-branch comparison
+    for any or all feedback types.
+    Only includes rows where branch_id IS NOT NULL (set at submission).
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_breakdown_by_branch(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+    items = [
+        FeedbackBreakdownItem(
+            branch_id            = r.get("branch_id"),
+            total                = int(r.get("total", 0)),
+            grievances           = int(r.get("grievances", 0)),
+            suggestions          = int(r.get("suggestions", 0)),
+            applause             = int(r.get("applause", 0)),
+            inquiries            = int(r.get("inquiries", 0)),
+            resolved             = int(r.get("resolved", 0)),
+            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+        )
+        for r in rows
+    ]
+    return FeedbackBreakdownResponse(total_items=len(items), items=items)
