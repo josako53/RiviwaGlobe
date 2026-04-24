@@ -861,7 +861,7 @@ class FeedbackAnalyticsRepository:
             SELECT
                 f.stage_id,
                 ps.name                                                           AS stage_name,
-                ps.order_index                                                    AS stage_order,
+                ps.stage_order                                                    AS stage_order,
                 COUNT(*)                                                          AS total,
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')      AS grievances,
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')     AS suggestions,
@@ -875,11 +875,11 @@ class FeedbackAnalyticsRepository:
                     ) AS NUMERIC
                 ), 2)                                                             AS avg_resolution_hours
             FROM feedbacks f
-            LEFT JOIN project_stages ps ON ps.id = f.stage_id
+            LEFT JOIN fb_project_stages ps ON ps.id = f.stage_id
             WHERE f.project_id = :project_id
               AND f.stage_id IS NOT NULL
               {extra}
-            GROUP BY f.stage_id, ps.name, ps.order_index
+            GROUP BY f.stage_id, ps.name, ps.stage_order
             ORDER BY stage_order ASC NULLS LAST, total DESC
         """
         return await self._fetchall(sql, params)
