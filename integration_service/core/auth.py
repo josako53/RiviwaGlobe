@@ -131,6 +131,7 @@ async def _auth_by_bearer(
             token,
             settings.AUTH_SECRET_KEY,
             algorithms=[settings.AUTH_ALGORITHM],
+            options={"verify_aud": False},
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,

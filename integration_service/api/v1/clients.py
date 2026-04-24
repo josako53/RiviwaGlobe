@@ -35,7 +35,8 @@ def _require_platform_admin(authorization: str = Header(...)):
     token = authorization[7:]
     try:
         payload = jwt.decode(token, settings.AUTH_SECRET_KEY,
-                             algorithms=[settings.AUTH_ALGORITHM])
+                             algorithms=[settings.AUTH_ALGORITHM],
+                             options={"verify_aud": False})
         if payload.get("platform_role") not in ("super_admin", "admin"):
             raise HTTPException(status_code=403, detail={"error": "INSUFFICIENT_ROLE"})
         return payload

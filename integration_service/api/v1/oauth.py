@@ -172,6 +172,7 @@ async def authorize(
             payload = jwt.decode(
                 auth_header[7:], settings.AUTH_SECRET_KEY,
                 algorithms=[settings.AUTH_ALGORITHM],
+                options={"verify_aud": False},
             )
             user_id = uuid.UUID(payload["user_id"]) if payload.get("user_id") else None
         except Exception:
@@ -445,7 +446,8 @@ async def introspect_token(
     """
     try:
         payload = jwt.decode(token, settings.AUTH_SECRET_KEY,
-                             algorithms=[settings.AUTH_ALGORITHM])
+                             algorithms=[settings.AUTH_ALGORITHM],
+                             options={"verify_aud": False})
     except jwt.ExpiredSignatureError:
         return {"active": False}
     except jwt.InvalidTokenError:
@@ -489,7 +491,8 @@ async def userinfo(
     token = authorization[7:]
     try:
         payload = jwt.decode(token, settings.AUTH_SECRET_KEY,
-                             algorithms=[settings.AUTH_ALGORITHM])
+                             algorithms=[settings.AUTH_ALGORITHM],
+                             options={"verify_aud": False})
     except Exception:
         raise HTTPException(401, {"error": "invalid_token"})
 
