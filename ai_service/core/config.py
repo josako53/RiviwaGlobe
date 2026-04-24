@@ -33,10 +33,11 @@ class Settings(BaseSettings):
     AUTH_ALGORITHM: str = Field(default="HS256")
 
     # ── Service-to-service ────────────────────────────────────────────────────
-    INTERNAL_SERVICE_KEY:  str = Field(default="change-me-in-production")
-    FEEDBACK_SERVICE_URL:  str = Field(default="http://feedback_service:8090")
-    AUTH_SERVICE_URL:      str = Field(default="http://riviwa_auth_service:8000")
+    INTERNAL_SERVICE_KEY:    str = Field(default="change-me-in-production")
+    FEEDBACK_SERVICE_URL:    str = Field(default="http://feedback_service:8090")
+    AUTH_SERVICE_URL:        str = Field(default="http://riviwa_auth_service:8000")
     STAKEHOLDER_SERVICE_URL: str = Field(default="http://stakeholder_service:8070")
+    ANALYTICS_SERVICE_URL:   str = Field(default="http://analytics_service:8095")
 
     # ── Ollama LLM ────────────────────────────────────────────────────────────
     OLLAMA_BASE_URL:     str = Field(default="http://ollama:11434")

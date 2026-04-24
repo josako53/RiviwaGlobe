@@ -26,6 +26,8 @@ At confidence≥0.80 show summary and ask confirmation. Then set ready_to_submit
 
 PROJECTS: {{PROJECT_CONTEXT}}
 
+{{ANALYTICS_CONTEXT}}
+
 Always reply with JSON only (no markdown):
 {"reply":"<response in Consumer language>","extracted":{"feedback_type":"grievance|suggestion|applause|unknown","subject":"<summary>","description":"<detail>","issue_location_description":"<location>","ward":null,"lga":null,"region":null,"date_of_incident":null,"is_anonymous":false,"submitter_name":null,"category_slug":"other","language":"sw","confidence":0.0,"ready_to_submit":false,"is_followup":false,"followup_ref":null,"is_urgent":false,"multiple_issues":false,"feedback_items":[]},"action":"continue|confirm|submit|followup|done"}"""
 
@@ -84,16 +86,18 @@ class OllamaService:
         messages: List[Dict[str, str]],
         project_context: str = "",
         knowledge_context: str = "",
+        analytics_context: str = "",
         temperature: float = 0.7,
     ) -> Dict[str, Any]:
         """
         Send messages to Groq (if GROQ_API_KEY set) or local Ollama.
         Returns the parsed JSON dict from the LLM, or a safe fallback dict.
 
-        knowledge_context: optional RAG context from Obsidian vault prepended
-        to the system prompt to ground answers in org-specific knowledge.
+        knowledge_context:  Obsidian vault RAG chunks — GRM procedures, definitions
+        analytics_context:  live analytics snapshot — actual grievance counts, rates
         """
         system = _SYSTEM_PROMPT.replace("{{PROJECT_CONTEXT}}", project_context or "No projects synced yet.")
+        system = system.replace("{{ANALYTICS_CONTEXT}}", analytics_context or "")
         if knowledge_context:
             system = knowledge_context + "\n\n" + system
 

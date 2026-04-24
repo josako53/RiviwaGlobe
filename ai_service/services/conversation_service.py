@@ -101,6 +101,28 @@ _STATUS_LABELS = {
 }
 
 
+def _make_analytics_token() -> str:
+    """
+    Generate a short-lived internal JWT to call analytics_service endpoints.
+    Uses the same SECRET_KEY + HS256 algorithm the auth service signs with.
+    Returns "" on any error so analytics enrichment degrades gracefully.
+    """
+    try:
+        import time, uuid as _uuid
+        import jwt as _jwt
+        now = int(time.time())
+        payload = {
+            "sub":            "ai_service_internal",
+            "jti":            str(_uuid.uuid4()),
+            "iat":            now,
+            "exp":            now + 300,          # 5-minute token
+            "platform_role":  "super_admin",      # analytics endpoints require staff auth
+        }
+        return _jwt.encode(payload, settings.AUTH_SECRET_KEY, algorithm=settings.AUTH_ALGORITHM)
+    except Exception:
+        return ""
+
+
 class ConversationService:
     def __init__(self, db: AsyncSession) -> None:
         self.db        = db
@@ -112,6 +134,7 @@ class ConversationService:
         self.fb_client = FeedbackClient()
         self.auth_client = AuthClient()
         self.stt       = STTService()
+        self._analytics_token: str = _make_analytics_token()
 
     # ── Public: start / resume ────────────────────────────────────────────────
 
@@ -223,12 +246,24 @@ class ConversationService:
         except Exception as exc:
             log.warning("conversation.knowledge_search_failed", error=str(exc))
 
+        # Fetch live analytics snapshot for the identified project
+        analytics_context = ""
+        if conv.project_id and self._analytics_token:
+            try:
+                from services.analytics_client import get_project_analytics_context
+                analytics_context = await get_project_analytics_context(
+                    conv.project_id, self._analytics_token
+                )
+            except Exception as exc:
+                log.warning("conversation.analytics_context_failed", error=str(exc))
+
         # Call LLM
         try:
             llm_resp = await self.ollama.chat(
                 messages=self._format_turns_for_llm(conv.get_turns()),
                 project_context=project_context,
                 knowledge_context=knowledge_context,
+                analytics_context=analytics_context,
             )
         except Exception as exc:
             log.error("conversation.llm_failed", conv_id=str(conversation_id), error=str(exc))
