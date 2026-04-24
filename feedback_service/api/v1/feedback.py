@@ -264,6 +264,49 @@ async def get_feedback_for_ai(feedback_id: uuid.UUID, request: Request, db: DbDe
     }
 
 
+@router.get(
+    "/integration/status/{feedback_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Get feedback status for integration bridge (internal only)",
+    include_in_schema=False,
+)
+async def integration_get_feedback_status(
+    feedback_id: uuid.UUID, request: Request, db: DbDep, kafka: KafkaDep
+) -> dict:
+    """
+    Internal endpoint for integration_service feedback bridge status checks.
+    Accepts X-Service-Key header — no JWT required.
+    Returns full status, reference, type, priority.
+    """
+    from fastapi.responses import JSONResponse
+    from core.config import settings as fb_settings
+    from sqlmodel import select
+    from models.feedback import Feedback
+
+    service_key = request.headers.get("X-Service-Key", "")
+    if service_key != fb_settings.INTERNAL_SERVICE_KEY:
+        return JSONResponse(status_code=403,
+                            content={"error": "FORBIDDEN", "message": "Invalid service key."})
+
+    result = await db.execute(select(Feedback).where(Feedback.id == feedback_id))
+    f = result.scalar_one_or_none()
+    if not f:
+        return JSONResponse(status_code=404,
+                            content={"error": "NOT_FOUND", "message": "Feedback not found."})
+
+    return {
+        "id":            str(f.id),
+        "reference":     f.unique_ref,
+        "project_id":    str(f.project_id) if f.project_id else None,
+        "feedback_type": f.feedback_type.value if f.feedback_type else None,
+        "status":        f.status.value if f.status else None,
+        "priority":      f.priority.value if f.priority else None,
+        "subject":       f.subject,
+        "submitted_at":  f.submitted_at.isoformat() if f.submitted_at else None,
+        "updated_at":    f.updated_at.isoformat() if hasattr(f, "updated_at") and f.updated_at else None,
+    }
+
+
 @router.patch(
     "/{feedback_id}/ai-enrich",
     status_code=status.HTTP_200_OK,

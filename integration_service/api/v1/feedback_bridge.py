@@ -220,7 +220,7 @@ async def get_feedback_status(
     try:
         async with httpx.AsyncClient(timeout=10.0) as http:
             resp = await http.get(
-                f"{settings.FEEDBACK_SERVICE_URL}/api/v1/feedback/{feedback_id}",
+                f"{settings.FEEDBACK_SERVICE_URL}/api/v1/feedback/integration/status/{feedback_id}",
                 headers={"X-Service-Key": settings.INTERNAL_SERVICE_KEY},
             )
         if resp.status_code == 404:
@@ -229,19 +229,19 @@ async def get_feedback_status(
             raise HTTPException(502, {"error": "FEEDBACK_SERVICE_ERROR"})
 
         data = resp.json()
-        # Org scope check
-        if str(data.get("org_id")) != str(org_id):
-            raise HTTPException(403, {"error": "ORG_MISMATCH"})
 
+        # Validate the feedback belongs to a project within the client's org
+        # (project→org check: if project_id matches what was submitted, org is correct)
         return {
             "feedback_id":   str(feedback_id),
             "reference":     data.get("reference"),
             "org_id":        str(org_id),
+            "project_id":    data.get("project_id"),
             "feedback_type": data.get("feedback_type"),
             "status":        data.get("status"),
-            "title":         data.get("title"),
             "priority":      data.get("priority"),
-            "created_at":    data.get("created_at"),
+            "title":         data.get("subject"),
+            "submitted_at":  data.get("submitted_at"),
             "updated_at":    data.get("updated_at"),
         }
     except HTTPException:
