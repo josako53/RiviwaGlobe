@@ -186,7 +186,6 @@ async def get_embed_snippet(
     Returns the copy-paste JS snippet that partners include on their website.
     Similar to Google Tag / HubSpot tracking snippet.
     """
-    from sqlalchemy import select
     result = await db.execute(
         select(IntegrationClient).where(
             IntegrationClient.client_id == client_id,
@@ -198,16 +197,19 @@ async def get_embed_snippet(
         raise HTTPException(404, {"error": "CLIENT_NOT_FOUND"})
 
     base = settings.RIVIWA_WIDGET_BASE_URL
-    snippet = f"""<!-- Riviwa Feedback Widget -->
-<script>
-  (function(r,i,v,i2,w,a){r['RiviwaObject']=w;r[w]=r[w]||function(){
-  (r[w].q=r[w].q||[]).push(arguments)},r[w].l=1*new Date();a=i.createElement(v),
-  m=i.getElementsByTagName(v)[0];a.async=1;a.src=i2;m.parentNode.insertBefore(a,m)
-  })(window,document,'script','{base}/widget.js','riviwa');
-  riviwa('init', '{client_id}');
-  riviwa('track', 'page_view');
-</script>
-<!-- End Riviwa Feedback Widget -->"""
+    # Double-brace JS curly braces to escape f-string interpolation
+    snippet = (
+        "<!-- Riviwa Feedback Widget -->\n"
+        "<script>\n"
+        "  (function(r,i,v,i2,w,a){{r['RiviwaObject']=w;r[w]=r[w]||function(){{}}\n"
+        "  ;(r[w].q=r[w].q||[]).push(arguments)}},r[w].l=1*new Date();a=i.createElement(v),\n"
+        "  m=i.getElementsByTagName(v)[0];a.async=1;a.src=i2;m.parentNode.insertBefore(a,m)\n"
+        f"  }})(window,document,'script','{base}/widget.js','riviwa');\n"
+        f"  riviwa('init', '{client_id}');\n"
+        "  riviwa('track', 'page_view');\n"
+        "</script>\n"
+        "<!-- End Riviwa Feedback Widget -->"
+    )
 
     return {
         "client_id": client_id,
