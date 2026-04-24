@@ -99,7 +99,7 @@ def load_baseline(spark: SparkSession) -> "Broadcast":  # noqa: F821
                 f"(SELECT project_id, issue_lga, category, "
                 f" COUNT(*)::float / 7.0 AS baseline_avg "
                 f" FROM feedbacks "
-                f" WHERE feedback_type='grievance' "
+                f" WHERE feedback_type::text='GRIEVANCE' "
                 f"   AND submitted_at >= to_timestamp({since_ts}) "
                 f" GROUP BY project_id, issue_lga, category) q",
             )

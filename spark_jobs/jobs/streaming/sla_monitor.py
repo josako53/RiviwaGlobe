@@ -352,7 +352,7 @@ def main() -> None:
     )
 
     query = (
-        sla_df.writeStream.foreachBatch(write_sla_batch)
+        sla_df.writeStream.outputMode("update").foreachBatch(write_sla_batch)
         .option(
             "checkpointLocation",
             "/tmp/spark_checkpoints/sla_monitor",
