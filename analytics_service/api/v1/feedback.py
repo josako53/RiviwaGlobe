@@ -17,6 +17,8 @@ from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
     FeedbackBreakdownItem,
     FeedbackBreakdownResponse,
+    FeedbackByStageItem,
+    FeedbackByStageResponse,
     NotProcessedFeedbackResponse,
     OverdueFeedbackItem,
     OverdueFeedbackResponse,
@@ -364,3 +366,78 @@ async def get_feedback_by_category(
         for r in rows
     ]
     return FeedbackBreakdownResponse(total_items=len(items), items=items)
+
+
+# ── GET /analytics/feedback/by-department ────────────────────────────────────
+
+@router.get("/by-department", response_model=FeedbackBreakdownResponse)
+async def get_feedback_by_department(
+    project_id:    UUID          = Query(..., description="Project UUID"),
+    feedback_type: Optional[str] = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> FeedbackBreakdownResponse:
+    """
+    Feedback counts grouped by department_id (branch) within a project.
+    Returns grievances, suggestions, applause, inquiries, resolved count and
+    avg resolution hours per department — enabling cross-department comparison
+    for any or all feedback types.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_breakdown_by_department(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+    items = [
+        FeedbackBreakdownItem(
+            department_id        = r.get("department_id"),
+            total                = int(r.get("total", 0)),
+            grievances           = int(r.get("grievances", 0)),
+            suggestions          = int(r.get("suggestions", 0)),
+            applause             = int(r.get("applause", 0)),
+            inquiries            = int(r.get("inquiries", 0)),
+            resolved             = int(r.get("resolved", 0)),
+            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+        )
+        for r in rows
+    ]
+    return FeedbackBreakdownResponse(total_items=len(items), items=items)
+
+
+# ── GET /analytics/feedback/by-stage ─────────────────────────────────────────
+
+@router.get("/by-stage", response_model=FeedbackByStageResponse)
+async def get_feedback_by_stage(
+    project_id:    UUID          = Query(..., description="Project UUID"),
+    feedback_type: Optional[str] = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> FeedbackByStageResponse:
+    """
+    Feedback counts grouped by sub-project stage (stage_id) within a project.
+    Returns stage name, order, and per-type counts — enabling comparison across
+    project stages for any or all feedback types.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_breakdown_by_stage(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+    items = [
+        FeedbackByStageItem(
+            stage_id             = r.get("stage_id"),
+            stage_name           = r.get("stage_name"),
+            stage_order          = r.get("stage_order"),
+            total                = int(r.get("total", 0)),
+            grievances           = int(r.get("grievances", 0)),
+            suggestions          = int(r.get("suggestions", 0)),
+            applause             = int(r.get("applause", 0)),
+            inquiries            = int(r.get("inquiries", 0)),
+            resolved             = int(r.get("resolved", 0)),
+            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+        )
+        for r in rows
+    ]
+    return FeedbackByStageResponse(total_items=len(items), items=items)

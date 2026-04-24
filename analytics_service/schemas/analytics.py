@@ -368,7 +368,8 @@ class AIInsightResponse(BaseModel):
 # ── Breakdown: By Service / Product / Category Def ────────────────────────────
 
 class FeedbackBreakdownItem(BaseModel):
-    """One row in a service/product/category breakdown — counts per dimension value."""
+    """One row in a department/service/product/category breakdown — counts per dimension value."""
+    department_id: Optional[UUID] = None
     service_id: Optional[UUID] = None
     product_id: Optional[UUID] = None
     category_def_id: Optional[UUID] = None
@@ -869,6 +870,26 @@ class PlatformGrievanceDashboardResponse(BaseModel):
     by_org: List[GrievanceOrgBreakdownItem] = Field(default_factory=list)
     overdue: List[GrievanceDashboardOverdueItem] = Field(default_factory=list)
     grievances: PaginatedGrievancesResponse = Field(default_factory=PaginatedGrievancesResponse)
+
+
+# ── Feedback: By Stage (sub-project) ─────────────────────────────────────────
+
+class FeedbackByStageItem(BaseModel):
+    stage_id: Optional[UUID] = None
+    stage_name: Optional[str] = None
+    stage_order: Optional[int] = None
+    total: int = 0
+    grievances: int = 0
+    suggestions: int = 0
+    applause: int = 0
+    inquiries: int = 0
+    resolved: int = 0
+    avg_resolution_hours: Optional[float] = None
+
+
+class FeedbackByStageResponse(BaseModel):
+    total_items: int = 0
+    items: List[FeedbackByStageItem] = Field(default_factory=list)
 
 
 # ── Internal: SLA upsert ──────────────────────────────────────────────────────

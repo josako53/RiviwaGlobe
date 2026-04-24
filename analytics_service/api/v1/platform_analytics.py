@@ -35,6 +35,8 @@ from core.dependencies import FeedbackDbDep, StaffDep
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 
 from schemas.analytics import (
+    FeedbackBreakdownItem,
+    FeedbackBreakdownResponse,
     GrievanceDashboardOverdueItem,
     GrievanceDeptBreakdownItem,
     GrievanceListItem,
@@ -48,6 +50,8 @@ from schemas.analytics import (
     OrgByChannelResponse,
     OrgByPeriodItem,
     OrgByPeriodResponse,
+    OrgDimensionBreakdownItem,
+    OrgDimensionBreakdownResponse,
     OrgGrievanceSLAResponse,
     OrgGrievanceSummaryResponse,
     OrgSLAByPriority,
@@ -158,6 +162,140 @@ async def platform_by_channel(
     rows = await repo.get_platform_by_channel(feedback_type=feedback_type, date_from=d_from, date_to=d_to)
     items = [OrgByChannelItem(**r) for r in rows]
     return OrgByChannelResponse(total_items=len(items), items=items)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DIMENSION BREAKDOWNS  (department / service / product / category / stage)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _dim_items(rows: list) -> list[OrgDimensionBreakdownItem]:
+    return [
+        OrgDimensionBreakdownItem(
+            dimension_id         = r.get("dimension_id"),
+            total                = int(r.get("total", 0)),
+            grievances           = int(r.get("grievances", 0)),
+            suggestions          = int(r.get("suggestions", 0)),
+            applause             = int(r.get("applause", 0)),
+            inquiries            = int(r.get("inquiries", 0)),
+            resolved             = int(r.get("resolved", 0)),
+            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+        )
+        for r in rows
+    ]
+
+
+@router.get("/by-department", response_model=OrgDimensionBreakdownResponse)
+async def platform_by_department(
+    org_id:        Optional[UUID] = Query(None, description="Filter to a specific organisation"),
+    project_id:    Optional[UUID] = Query(None, description="Filter to a specific project"),
+    feedback_type: Optional[str]  = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> OrgDimensionBreakdownResponse:
+    """
+    Feedback counts grouped by department_id (branch) across the platform.
+    All filters optional — omit all for platform-wide data.
+    Returns per-department breakdown for grievances, suggestions, applause,
+    inquiries, resolved count and avg resolution hours for comparison.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_platform_by_dimension(
+        "department_id", org_id=org_id, project_id=project_id,
+        feedback_type=feedback_type, date_from=d_from, date_to=d_to,
+    )
+    return OrgDimensionBreakdownResponse(dimension="department_id", total_items=len(rows), items=_dim_items(rows))
+
+
+@router.get("/by-service", response_model=OrgDimensionBreakdownResponse)
+async def platform_by_service(
+    org_id:        Optional[UUID] = Query(None, description="Filter to a specific organisation"),
+    project_id:    Optional[UUID] = Query(None, description="Filter to a specific project"),
+    feedback_type: Optional[str]  = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> OrgDimensionBreakdownResponse:
+    """
+    Feedback counts grouped by service_id across the platform.
+    All filters optional. Returns per-service breakdown for all feedback types.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_platform_by_dimension(
+        "service_id", org_id=org_id, project_id=project_id,
+        feedback_type=feedback_type, date_from=d_from, date_to=d_to,
+    )
+    return OrgDimensionBreakdownResponse(dimension="service_id", total_items=len(rows), items=_dim_items(rows))
+
+
+@router.get("/by-product", response_model=OrgDimensionBreakdownResponse)
+async def platform_by_product(
+    org_id:        Optional[UUID] = Query(None, description="Filter to a specific organisation"),
+    project_id:    Optional[UUID] = Query(None, description="Filter to a specific project"),
+    feedback_type: Optional[str]  = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> OrgDimensionBreakdownResponse:
+    """
+    Feedback counts grouped by product_id across the platform.
+    All filters optional. Returns per-product breakdown for all feedback types.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_platform_by_dimension(
+        "product_id", org_id=org_id, project_id=project_id,
+        feedback_type=feedback_type, date_from=d_from, date_to=d_to,
+    )
+    return OrgDimensionBreakdownResponse(dimension="product_id", total_items=len(rows), items=_dim_items(rows))
+
+
+@router.get("/by-category", response_model=FeedbackBreakdownResponse)
+async def platform_by_category(
+    org_id:        Optional[UUID] = Query(None, description="Filter to a specific organisation"),
+    project_id:    Optional[UUID] = Query(None, description="Filter to a specific project"),
+    feedback_type: Optional[str]  = Query(None, description="GRIEVANCE | SUGGESTION | APPLAUSE | INQUIRY — omit for all"),
+    date_from:     Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    date_to:       Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
+    _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
+) -> FeedbackBreakdownResponse:
+    """
+    Feedback counts grouped by dynamic category (category_def_id) across the platform.
+    All filters optional. Rows with NULL category_def_id appear as 'uncategorised'.
+    Returns category name, slug, and per-type breakdown for comparison.
+    """
+    repo = FeedbackAnalyticsRepository(fb_db)
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to   = date.fromisoformat(date_to)   if date_to   else None
+    rows = await repo.get_platform_by_category(
+        org_id=org_id, project_id=project_id,
+        feedback_type=feedback_type, date_from=d_from, date_to=d_to,
+    )
+    items = [
+        FeedbackBreakdownItem(
+            category_def_id      = r.get("category_def_id"),
+            category_name        = r.get("category_name") or "uncategorised",
+            category_slug        = r.get("category_slug"),
+            total                = int(r.get("total", 0)),
+            grievances           = int(r.get("grievances", 0)),
+            suggestions          = int(r.get("suggestions", 0)),
+            applause             = int(r.get("applause", 0)),
+            inquiries            = int(r.get("inquiries", 0)),
+            resolved             = int(r.get("resolved", 0)),
+            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+        )
+        for r in rows
+    ]
+    return FeedbackBreakdownResponse(total_items=len(items), items=items)
 
 
 # ════════════════════════════════════════════════════════════════════════════

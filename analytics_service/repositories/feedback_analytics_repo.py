@@ -791,6 +791,200 @@ class FeedbackAnalyticsRepository:
         """
         return await self._fetchall(sql, params)
 
+    # ── Project-level: By Department ─────────────────────────────────────────
+
+    async def get_breakdown_by_department(
+        self,
+        project_id: uuid.UUID,
+        feedback_type: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"project_id": str(project_id)}
+        extra_clauses: List[str] = []
+        if feedback_type:
+            extra_clauses.append("f.feedback_type::text = :feedback_type")
+            params["feedback_type"] = feedback_type.upper()
+        if date_from:
+            extra_clauses.append("f.submitted_at >= :date_from")
+            params["date_from"] = datetime(date_from.year, date_from.month, date_from.day, tzinfo=timezone.utc)
+        if date_to:
+            extra_clauses.append("f.submitted_at < :date_to")
+            params["date_to"] = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59, tzinfo=timezone.utc)
+        extra = ("AND " + " AND ".join(extra_clauses)) if extra_clauses else ""
+        sql = f"""
+            SELECT
+                f.department_id,
+                COUNT(*)                                                          AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')      AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')     AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')       AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')        AS inquiries,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))  AS resolved,
+                ROUND(CAST(
+                    AVG(CASE WHEN f.resolved_at IS NOT NULL
+                        THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                        ELSE NULL END
+                    ) AS NUMERIC
+                ), 2)                                                             AS avg_resolution_hours
+            FROM feedbacks f
+            WHERE f.project_id = :project_id
+              AND f.department_id IS NOT NULL
+              {extra}
+            GROUP BY f.department_id
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    # ── Project-level: By Stage (sub-project) ─────────────────────────────────
+
+    async def get_breakdown_by_stage(
+        self,
+        project_id: uuid.UUID,
+        feedback_type: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {"project_id": str(project_id)}
+        extra_clauses: List[str] = []
+        if feedback_type:
+            extra_clauses.append("f.feedback_type::text = :feedback_type")
+            params["feedback_type"] = feedback_type.upper()
+        if date_from:
+            extra_clauses.append("f.submitted_at >= :date_from")
+            params["date_from"] = datetime(date_from.year, date_from.month, date_from.day, tzinfo=timezone.utc)
+        if date_to:
+            extra_clauses.append("f.submitted_at < :date_to")
+            params["date_to"] = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59, tzinfo=timezone.utc)
+        extra = ("AND " + " AND ".join(extra_clauses)) if extra_clauses else ""
+        sql = f"""
+            SELECT
+                f.stage_id,
+                ps.name                                                           AS stage_name,
+                ps.order_index                                                    AS stage_order,
+                COUNT(*)                                                          AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')      AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')     AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')       AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')        AS inquiries,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))  AS resolved,
+                ROUND(CAST(
+                    AVG(CASE WHEN f.resolved_at IS NOT NULL
+                        THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                        ELSE NULL END
+                    ) AS NUMERIC
+                ), 2)                                                             AS avg_resolution_hours
+            FROM feedbacks f
+            LEFT JOIN project_stages ps ON ps.id = f.stage_id
+            WHERE f.project_id = :project_id
+              AND f.stage_id IS NOT NULL
+              {extra}
+            GROUP BY f.stage_id, ps.name, ps.order_index
+            ORDER BY stage_order ASC NULLS LAST, total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    # ── Platform-level: By Dimension (dept / service / product) ──────────────
+
+    def _platform_dim_filters(
+        self,
+        params: Dict[str, Any],
+        org_id: Optional[uuid.UUID],
+        project_id: Optional[uuid.UUID],
+        feedback_type: Optional[str],
+        date_from: Optional[date],
+        date_to: Optional[date],
+    ) -> str:
+        clauses = []
+        if org_id:
+            clauses.append("p.organisation_id = :filter_org_id")
+            params["filter_org_id"] = str(org_id)
+        if project_id:
+            clauses.append("f.project_id = :filter_project_id")
+            params["filter_project_id"] = str(project_id)
+        if feedback_type:
+            clauses.append("f.feedback_type::text = :feedback_type")
+            params["feedback_type"] = feedback_type.upper()
+        if date_from:
+            clauses.append("f.submitted_at >= :date_from")
+            params["date_from"] = datetime(date_from.year, date_from.month, date_from.day, tzinfo=timezone.utc)
+        if date_to:
+            clauses.append("f.submitted_at < :date_to")
+            params["date_to"] = datetime(date_to.year, date_to.month, date_to.day, 23, 59, 59, tzinfo=timezone.utc)
+        return (" AND " + " AND ".join(clauses)) if clauses else ""
+
+    async def get_platform_by_dimension(
+        self,
+        dimension: str,          # "department_id" | "service_id" | "product_id"
+        org_id: Optional[uuid.UUID] = None,
+        project_id: Optional[uuid.UUID] = None,
+        feedback_type: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        if dimension not in {"department_id", "service_id", "product_id"}:
+            return []
+        params: Dict[str, Any] = {}
+        extra = self._platform_dim_filters(params, org_id, project_id, feedback_type, date_from, date_to)
+        sql = f"""
+            SELECT
+                f.{dimension}                                                               AS dimension_id,
+                COUNT(*)                                                                    AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')               AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')                 AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')                  AS inquiries,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE f.{dimension} IS NOT NULL
+              {extra}
+            GROUP BY f.{dimension}
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    async def get_platform_by_category(
+        self,
+        org_id: Optional[uuid.UUID] = None,
+        project_id: Optional[uuid.UUID] = None,
+        feedback_type: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[Dict[str, Any]]:
+        params: Dict[str, Any] = {}
+        extra = self._platform_dim_filters(params, org_id, project_id, feedback_type, date_from, date_to)
+        sql = f"""
+            SELECT
+                f.category_def_id,
+                cd.name                                                                     AS category_name,
+                cd.slug                                                                     AS category_slug,
+                COUNT(*)                                                                    AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')               AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')                 AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')                  AS inquiries,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            LEFT JOIN feedback_category_defs cd ON cd.id = f.category_def_id
+            WHERE 1=1
+              {extra}
+            GROUP BY f.category_def_id, cd.name, cd.slug
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
     # ── Org-level: Summary ───────────────────────────────────────────────────
 
     async def get_org_summary(
