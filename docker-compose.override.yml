@@ -166,6 +166,16 @@ services:
       - ./analytics_service:/app/analytics_service
       - /opt/venv
 
+  # ── integration_service dev override ────────────────────────────────────
+  integration_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8100 --reload"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+    volumes:
+      - ./integration_service:/app
+      - /opt/venv
+
   # ── spark_jobs dev override ───────────────────────────────────────────────
   # In dev: bind-mount source so code changes are picked up on container restart.
   # Spark still runs against a single-node Kafka (kafka-1 only).

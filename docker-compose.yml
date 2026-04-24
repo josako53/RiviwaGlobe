@@ -919,6 +919,60 @@ services:
       redis:
         condition: service_healthy
 
+  # ── INTEGRATION DB ───────────────────────────────────────────────────────
+  integration_db:
+    image: postgres:15-alpine
+    container_name: integration_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${INTEGRATION_DB_USER:-integration_admin}
+      POSTGRES_PASSWORD: ${INTEGRATION_DB_PASSWORD:-integration_pass_999}
+      POSTGRES_DB:       ${INTEGRATION_DB_NAME:-integration_db}
+    ports: ["5442:5432"]
+    volumes: [integration_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${INTEGRATION_DB_USER:-integration_admin} -d ${INTEGRATION_DB_NAME:-integration_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # ── INTEGRATION SERVICE ───────────────────────────────────────────────────
+  # Third-party integration: mini-app, web widget/tag, AI chatbot, OAuth2 PKCE,
+  # API key management, webhook engine, external data bridge, mTLS for banks.
+  integration_service:
+    build:
+      context: ./integration_service
+      dockerfile: Dockerfile
+    container_name: integration_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8100:8100"]
+    environment:
+      INTEGRATION_DB_HOST:     integration_db
+      DB_PORT:                 5432
+      INTEGRATION_DB_USER:     ${INTEGRATION_DB_USER:-integration_admin}
+      INTEGRATION_DB_PASSWORD: ${INTEGRATION_DB_PASSWORD:-integration_pass_999}
+      INTEGRATION_DB_NAME:     ${INTEGRATION_DB_NAME:-integration_db}
+      AUTH_SECRET_KEY:         ${SECRET_KEY}
+      AUTH_ALGORITHM:          ${ALGORITHM:-HS256}
+      ENCRYPTION_KEY:          ${INTEGRATION_ENCRYPTION_KEY:-CHANGE_ME_32_BYTE_BASE64URL_KEY_HERE}
+      INTERNAL_SERVICE_KEY:    ${INTERNAL_SERVICE_KEY}
+      AUTH_SERVICE_URL:        http://riviwa_auth_service:8000
+      FEEDBACK_SERVICE_URL:    http://feedback_service:8090
+      REDIS_URL:               redis://redis:6379/7
+      RIVIWA_WIDGET_BASE_URL:  ${RIVIWA_WIDGET_BASE_URL:-https://widget.riviwa.com}
+      ENVIRONMENT: ${ENVIRONMENT}
+      DEBUG:        ${DEBUG:-false}
+    depends_on:
+      integration_db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ── Nginx reverse proxy + SSL termination ─────────────────────────────────
   nginx:
     image: nginx:1.27-alpine
@@ -942,6 +996,7 @@ services:
       - payment_service
       - notification_service
       - analytics_service
+      - integration_service
     healthcheck:
       test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:80/ || exit 0"]
       interval: 30s
@@ -1086,4 +1141,5 @@ volumes:
   spark_worker_data:
   spark_checkpoints:
   obsidian_vault_data:
+  integration_db_data:
   certbot_certs:
