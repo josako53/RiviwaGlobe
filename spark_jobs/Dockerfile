@@ -24,6 +24,24 @@ RUN chmod +x /app/entrypoint.sh
 # Create checkpoint directory
 RUN mkdir -p /tmp/spark_checkpoints && chmod 777 /tmp/spark_checkpoints
 
+# Pre-create ivy2 directories so spark-submit can write its dependency cache.
+# Without these, every spark-submit with --packages crashes with
+# FileNotFoundException when Ivy tries to write the resolved module descriptor.
+RUN mkdir -p /home/spark/.ivy2/cache /home/spark/.ivy2/jars && \
+    chown -R 185:185 /home/spark
+
+# Pre-download Spark packages into the image so runtime launches are instant
+# and don't need internet access. Uses --master local[1] (no cluster needed).
+USER 185
+RUN echo "from pyspark.sql import SparkSession; SparkSession.builder.getOrCreate().stop()" > /tmp/_pkg_seed.py && \
+    /opt/spark/bin/spark-submit \
+        --master local[1] \
+        --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0 \
+        /tmp/_pkg_seed.py 2>&1 | tail -5 && \
+    rm /tmp/_pkg_seed.py
+
+USER root
+
 # spark-submit is at /opt/spark/bin — add to PATH
 ENV PATH="/opt/spark/bin:$PATH"
 
