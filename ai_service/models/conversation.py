@@ -147,6 +147,18 @@ class ProjectKnowledgeBase(SQLModel, table=True):
     accepts_grievances:  bool = Field(default=True)
     accepts_suggestions: bool = Field(default=True)
     accepts_applause:    bool = Field(default=True)
+    sector:               Optional[str]       = Field(default=None, max_length=100)
+    category:             Optional[str]       = Field(default=None, max_length=100)
+    code:                 Optional[str]       = Field(default=None, max_length=50)
+    background:           Optional[str]       = Field(default=None, sa_column=Column(Text))
+    objectives:           Optional[str]       = Field(default=None, sa_column=Column(Text))
+    expected_outcomes:    Optional[str]       = Field(default=None, sa_column=Column(Text))
+    target_beneficiaries: Optional[str]       = Field(default=None, sa_column=Column(Text))
+    location_description: Optional[str]       = Field(default=None, sa_column=Column(Text))
+    funding_source:       Optional[str]       = Field(default=None, max_length=500)
+    branch_id:            Optional[uuid.UUID] = Field(default=None)
+    org_service_id:       Optional[uuid.UUID] = Field(default=None)
+    org_display_name:     Optional[str]       = Field(default=None, max_length=255)
     # Flag that this project is indexed in Qdrant vector store
     vector_indexed:  bool = Field(default=False)
     synced_at:       datetime = Field(default_factory=datetime.utcnow)
@@ -164,15 +176,35 @@ class ProjectKnowledgeBase(SQLModel, table=True):
     def get_searchable_text(self) -> str:
         """Combine all textual fields for embedding."""
         parts = [self.name]
+        if self.code:
+            parts.append(self.code)
+        if self.sector:
+            parts.append(self.sector)
+        if self.category:
+            parts.append(self.category)
         if self.description:
             parts.append(self.description)
+        if self.background:
+            parts.append(self.background[:300])
+        if self.objectives:
+            parts.append(self.objectives[:300])
+        if self.expected_outcomes:
+            parts.append(self.expected_outcomes[:200])
+        if self.target_beneficiaries:
+            parts.append(self.target_beneficiaries[:200])
+        if self.location_description:
+            parts.append(self.location_description)
+        if self.funding_source:
+            parts.append(self.funding_source)
         if self.region:
             parts.append(self.region)
         if self.primary_lga:
             parts.append(self.primary_lga)
+        if self.org_display_name:
+            parts.append(self.org_display_name)
         parts.extend(self.get_wards())
         parts.extend(self.get_keywords())
-        return " ".join(parts)
+        return " ".join(p for p in parts if p)
 
 
 class StakeholderCache(SQLModel, table=True):

@@ -156,19 +156,49 @@ class RAGService:
         lines = []
         for p in projects_data:
             name    = p.get("name", "Unknown")
+            pid     = p.get("project_id", "")
+            sector  = p.get("sector", "")
+            category = p.get("category", "")
             region  = p.get("region", "")
             lga     = p.get("primary_lga", "")
-            wards   = ", ".join(p.get("wards", []))
+            wards   = ", ".join(p.get("wards", []) if isinstance(p.get("wards"), list) else [])
             stage   = p.get("active_stage_name", "")
             status  = p.get("status", "")
-            pid     = p.get("project_id", "")
-            line = f"- PROJECT: {name} | ID: {pid} | Region: {region} | LGA: {lga}"
+            desc    = p.get("description", "")
+            obj     = p.get("objectives", "")
+            loc     = p.get("location_description", "")
+            funding = p.get("funding_source", "")
+            org     = p.get("org_display_name", "")
+            code    = p.get("code", "")
+
+            line = f"- PROJECT: {name}"
+            if code:
+                line += f" ({code})"
+            line += f" | ID: {pid}"
+            if org:
+                line += f" | Org: {org}"
+            if sector:
+                line += f" | Sector: {sector}"
+            if category:
+                line += f" | Category: {category}"
+            if region:
+                line += f" | Region: {region}"
+            if lga:
+                line += f" | LGA: {lga}"
             if wards:
                 line += f" | Wards: {wards}"
+            if loc:
+                line += f" | Location: {loc}"
             if stage:
                 line += f" | Stage: {stage}"
             if status:
                 line += f" | Status: {status}"
+            if funding:
+                line += f" | Funding: {funding}"
+            if desc:
+                line += f"\n  Description: {desc[:200]}"
+            if obj:
+                line += f"\n  Objectives: {obj[:200]}"
             lines.append(line)
         return "\n".join(lines)
 

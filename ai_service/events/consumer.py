@@ -32,47 +32,74 @@ _consumer_task: Optional[asyncio.Task] = None
 async def _upsert_project(payload: dict, status: str) -> None:
     project_id = uuid.UUID(payload["id"])
     data = {
-        "organisation_id": uuid.UUID(payload["organisation_id"]),
-        "name":            payload["name"],
-        "slug":            payload.get("slug", ""),
-        "description":     payload.get("description"),
-        "region":          payload.get("region"),
-        "primary_lga":     payload.get("primary_lga"),
-        "status":          status,
+        "organisation_id":    uuid.UUID(payload["organisation_id"]),
+        "name":               payload["name"],
+        "slug":               payload.get("slug", ""),
+        "description":        payload.get("description"),
+        "sector":             payload.get("sector"),
+        "category":           payload.get("category"),
+        "code":               payload.get("code"),
+        "background":         payload.get("background"),
+        "objectives":         payload.get("objectives"),
+        "expected_outcomes":  payload.get("expected_outcomes"),
+        "target_beneficiaries": payload.get("target_beneficiaries"),
+        "location_description": payload.get("location_description"),
+        "funding_source":     payload.get("funding_source"),
+        "branch_id":          uuid.UUID(payload["branch_id"]) if payload.get("branch_id") else None,
+        "org_service_id":     uuid.UUID(payload["org_service_id"]) if payload.get("org_service_id") else None,
+        "org_display_name":   payload.get("org_display_name"),
+        "region":             payload.get("region"),
+        "primary_lga":        payload.get("primary_lga"),
+        "status":             status,
         "accepts_grievances":  payload.get("accepts_grievances", True),
         "accepts_suggestions": payload.get("accepts_suggestions", True),
         "accepts_applause":    payload.get("accepts_applause", True),
-        "synced_at":       datetime.now(timezone.utc),
+        "synced_at":          datetime.now(timezone.utc),
     }
     async with AsyncSessionLocal() as db:
         repo = ProjectKBRepository(db)
-        kb = await repo.upsert(project_id, data)
+        kb   = await repo.upsert(project_id, data)
         await db.commit()
 
-    # Index into Qdrant
-    searchable = (
-        f"{payload['name']} {payload.get('description', '')} "
-        f"{payload.get('region', '')} {payload.get('primary_lga', '')}"
-    )
+    # Build rich searchable text for embedding
+    parts = [payload["name"]]
+    for field in ("code", "sector", "category", "description", "background",
+                  "objectives", "expected_outcomes", "target_beneficiaries",
+                  "location_description", "funding_source", "region", "primary_lga",
+                  "org_display_name"):
+        val = payload.get(field, "")
+        if val:
+            parts.append(str(val)[:300])
+    searchable = " ".join(p for p in parts if p).strip()
+
+    # Rich Qdrant payload — everything the AI needs to explain its match
+    qdrant_payload = {
+        "name":               payload["name"],
+        "code":               payload.get("code", ""),
+        "sector":             payload.get("sector", ""),
+        "category":           payload.get("category", ""),
+        "description":        payload.get("description", ""),
+        "objectives":         (payload.get("objectives") or "")[:300],
+        "location_description": payload.get("location_description", ""),
+        "funding_source":     payload.get("funding_source", ""),
+        "region":             payload.get("region", ""),
+        "primary_lga":        payload.get("primary_lga", ""),
+        "org_display_name":   payload.get("org_display_name", ""),
+        "organisation_id":    payload["organisation_id"],
+        "branch_id":          payload.get("branch_id", ""),
+        "status":             status,
+    }
+
     rag = get_rag()
-    ok  = rag.index_project(
-        project_id,
-        searchable.strip(),
-        {
-            "name":         payload["name"],
-            "region":       payload.get("region", ""),
-            "primary_lga":  payload.get("primary_lga", ""),
-            "organisation_id": payload["organisation_id"],
-            "status":       status,
-        },
-    )
+    ok  = rag.index_project(project_id, searchable, qdrant_payload)
     if ok:
         async with AsyncSessionLocal() as db:
             repo = ProjectKBRepository(db)
             await repo.mark_vector_indexed(project_id)
             await db.commit()
 
-    log.info("ai.consumer.project_synced", project_id=str(project_id), name=payload["name"], status=status)
+    log.info("ai.consumer.project_synced", project_id=str(project_id),
+             name=payload["name"], status=status)
 
 
 async def _update_project_status(payload: dict, status: str) -> None:

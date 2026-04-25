@@ -91,3 +91,65 @@ async def force_submit(conversation_id: uuid.UUID, db: DbDep, _: StaffDep) -> di
         conv.completed_at = datetime.now(timezone.utc)
         await svc.conv_repo.save(conv)
     return {"submitted": submitted, "results": results}
+
+
+@router.post(
+    "/reindex-projects",
+    summary="Re-index all projects from DB into Qdrant (staff only)",
+    status_code=status.HTTP_200_OK,
+)
+async def reindex_projects(db: DbDep, _: StaffDep) -> dict:
+    """
+    Reads all projects from ai_project_kb and re-indexes them into Qdrant
+    with the current enriched text. Run this after deploying richer indexing logic.
+    """
+    from sqlmodel import select
+    from models.conversation import ProjectKnowledgeBase
+    from services.rag_service import get_rag
+
+    rows = (await db.execute(select(ProjectKnowledgeBase))).scalars().all()
+    rag = get_rag()
+    indexed = 0
+    failed = 0
+    for kb in rows:
+        searchable = kb.get_searchable_text()
+        payload = {
+            "name":               kb.name,
+            "code":               kb.code or "",
+            "sector":             kb.sector or "",
+            "category":           kb.category or "",
+            "description":        kb.description or "",
+            "objectives":         (kb.objectives or "")[:300],
+            "location_description": kb.location_description or "",
+            "funding_source":     kb.funding_source or "",
+            "region":             kb.region or "",
+            "primary_lga":        kb.primary_lga or "",
+            "org_display_name":   kb.org_display_name or "",
+            "organisation_id":    str(kb.organisation_id),
+            "branch_id":          str(kb.branch_id) if kb.branch_id else "",
+            "status":             kb.status,
+        }
+        ok = rag.index_project(kb.project_id, searchable, payload)
+        if ok:
+            kb.vector_indexed = True
+            db.add(kb)
+            indexed += 1
+        else:
+            failed += 1
+    await db.commit()
+    return {"indexed": indexed, "failed": failed, "total": len(rows)}
+
+
+@router.post(
+    "/index-vault",
+    summary="Index Obsidian vault .md files into Qdrant knowledge base (staff only)",
+    status_code=status.HTTP_200_OK,
+)
+async def index_vault(_: StaffDep) -> dict:
+    """
+    Scans OBSIDIAN_VAULT_PATH for .md files, chunks them, embeds and upserts to
+    Qdrant 'riviwa_knowledge' collection. Safe to run multiple times (upsert).
+    """
+    from services.obsidian_rag_service import get_obsidian_rag
+    chunks = get_obsidian_rag().index_vault()
+    return {"chunks_indexed": chunks}

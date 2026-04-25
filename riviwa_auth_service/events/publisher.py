@@ -832,6 +832,15 @@ class EventPublisher:
             "org_logo_url":        None,  # populated by org.events logo upload
             # ── Org identity — consumers can cache org name without extra calls
             "org_display_name":    getattr(project, "organisation", None) and getattr(project.organisation, "display_name", None),
+            "background":           getattr(project, "background", None),
+            "objectives":           getattr(project, "objectives", None),
+            "expected_outcomes":    getattr(project, "expected_outcomes", None),
+            "target_beneficiaries": getattr(project, "target_beneficiaries", None),
+            "location_description": getattr(project, "location_description", None),
+            "funding_source":       getattr(project, "funding_source", None),
+            "code":                 getattr(project, "code", None),
+            "branch_id":            str(project.branch_id) if getattr(project, "branch_id", None) else None,
+            "org_service_id":       str(project.org_service_id) if getattr(project, "org_service_id", None) else None,
         }
 
     def _stage_payload(self, stage, project, status_override: str | None = None) -> dict:
