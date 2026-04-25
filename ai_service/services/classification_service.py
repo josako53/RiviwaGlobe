@@ -244,33 +244,41 @@ class ClassificationService:
         self, ollama_suggestion: Optional[str], feedback_data: dict
     ) -> Optional[uuid.UUID]:
         """
-        Validate Ollama's project_id suggestion.
-        Falls back to Qdrant semantic search if suggestion is invalid.
+        Resolve project_id using Qdrant semantic search as the authoritative source.
+        Ollama's raw UUID suggestion is NEVER trusted directly — it hallucinates.
+        Only return a project_id when Qdrant finds a confident match (score >= 0.55).
         """
-        # Try Ollama's suggestion first
-        if ollama_suggestion:
-            try:
-                return uuid.UUID(str(ollama_suggestion))
-            except (ValueError, AttributeError):
-                pass
-
-        # Qdrant semantic search fallback
         query_parts = []
-        for field in ("issue_location_description", "issue_lga", "issue_ward", "issue_region"):
+        for field in ("issue_location_description", "issue_lga", "issue_ward", "issue_region", "description"):
             val = feedback_data.get(field, "")
             if val:
-                query_parts.append(str(val))
+                query_parts.append(str(val)[:100])
         if not query_parts:
             return None
 
-        results = get_rag().search_projects(" ".join(query_parts), top_k=1, score_threshold=0.45)
-        if results:
-            project_id_str, score, _ = results[0]
-            log.info("classification.project_from_rag",
-                     feedback_id=feedback_data.get("id"),
-                     project_id=project_id_str, score=score)
-            return uuid.UUID(project_id_str)
-        return None
+        results = get_rag().search_projects(" ".join(query_parts), top_k=3, score_threshold=0.55)
+        if not results:
+            return None
+
+        # If Ollama also suggested a project_id, prefer that UUID if it appears in results
+        if ollama_suggestion:
+            try:
+                ollama_uuid = str(uuid.UUID(str(ollama_suggestion)))
+                for pid, score, _ in results:
+                    if pid == ollama_uuid:
+                        log.info("classification.project_confirmed_by_qdrant",
+                                 feedback_id=feedback_data.get("id"),
+                                 project_id=pid, score=score)
+                        return uuid.UUID(pid)
+            except (ValueError, AttributeError):
+                pass
+
+        # Use top Qdrant result
+        project_id_str, score, _ = results[0]
+        log.info("classification.project_from_rag",
+                 feedback_id=feedback_data.get("id"),
+                 project_id=project_id_str, score=score)
+        return uuid.UUID(project_id_str)
 
     async def classify_new_feedback(
         self,

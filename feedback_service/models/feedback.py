@@ -501,8 +501,9 @@ class Feedback(SQLModel, table=True):
     )
 
     # ── Project context ────────────────────────────────────────────────────────
-    project_id: uuid.UUID = Field(
-        sa_column=Column(ForeignKey("fb_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(ForeignKey("fb_projects.id", ondelete="SET NULL"), nullable=True, index=True)
     )
     # Which project stage was active when feedback was submitted (for reporting)
     stage_id: Optional[uuid.UUID] = Field(
@@ -886,7 +887,7 @@ class Feedback(SQLModel, table=True):
     )
 
     # ── Relationships ──────────────────────────────────────────────────────────
-    project:     ProjectCache                 = Relationship(back_populates="feedbacks")
+    project:     Optional[ProjectCache]       = Relationship(back_populates="feedbacks")
     category_def: "FeedbackCategoryDef" = Relationship(
         back_populates="feedbacks",
         sa_relationship_kwargs={"foreign_keys": "[Feedback.category_def_id]"},

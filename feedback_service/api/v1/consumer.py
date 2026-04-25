@@ -75,7 +75,7 @@ def _tracking_view(f, now):
         "category": f.category.value, "subject": f.subject, "description": f.description,
         "channel": f.channel.value,
         "submission_method": f.submission_method.value if f.submission_method else None,
-        "is_anonymous": f.is_anonymous, "project_id": str(f.project_id),
+        "is_anonymous": f.is_anonymous, "project_id": str(f.project_id) if f.project_id else None,
         "current_level": f.current_level.value if f.current_level else None,
         "priority": f.priority.value if f.priority else None,
         "status": f.status.value, "status_label": _status_label(f.status),
@@ -120,7 +120,7 @@ async def my_feedback_list(
             "priority": f.priority.value if f.priority else None,
             "submitted_at": f.submitted_at.isoformat(),
             "resolved_at": f.resolved_at.isoformat() if f.resolved_at else None,
-            "project_id": str(f.project_id),
+            "project_id": str(f.project_id) if f.project_id else None,
         } for f in items],
         "count": len(items),
     }

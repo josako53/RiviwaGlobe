@@ -116,7 +116,7 @@ class ProjectCache(SQLModel, table=True):
     )
     feedbacks: List["Feedback"] = Relationship(
         back_populates="project",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"cascade": "all"},
     )
 
     def is_active(self) -> bool:

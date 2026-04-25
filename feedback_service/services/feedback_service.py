@@ -52,6 +52,7 @@ from models.feedback import (
     ResponseMethod,
     SubmissionMethod,
 )
+from models.project import ProjectCache
 from repositories.feedback_repository import FeedbackRepository
 from repositories.category_repository import CategoryRepository
 
@@ -376,6 +377,9 @@ class FeedbackService:
     ) -> Feedback:
         project_id = self._to_uuid(data.get("project_id"))
 
+        # Track whether consumer originally provided project_id (before AI may override).
+        original_project_id = data.get("project_id")
+
         # ── AI auto-classification: fill missing project_id and/or category ──
         # Only call AI when project_id is missing (need project identification)
         # or category is missing AND project_id was not explicitly provided by Consumer.
@@ -394,17 +398,28 @@ class FeedbackService:
         # If AI couldn't identify the project, continue with project_id=None
         # (the feedback will be submitted without a project and can be enriched later)
 
-        project = await self.repo.get_project(project_id)
-        if not project:
-            raise ValidationError("Project not found or not active.")
+        # Validate project_id against local cache.
+        # AI may return a UUID not in fb_projects (stale Qdrant index) — drop it silently
+        # and allow the submission as org-level (project_id=None).
+        project: Optional[ProjectCache] = None
+        if project_id:
+            project = await self.repo.get_project(project_id)
+            if not project:
+                if original_project_id:
+                    # Consumer explicitly chose a project that doesn't exist
+                    raise ValidationError("Project not found. Please select a valid project.")
+                log.warning("submit_from_consumer.ai_project_not_in_cache",
+                            project_id=str(project_id))
+                project_id = None
 
         fb_type = FeedbackType(data["feedback_type"])
-        if fb_type == FeedbackType.GRIEVANCE and not project.accepts_grievances:
-            raise ValidationError("This project is not currently accepting grievances.")
-        if fb_type == FeedbackType.SUGGESTION and not project.accepts_suggestions:
-            raise ValidationError("This project is not currently accepting suggestions.")
-        if fb_type == FeedbackType.APPLAUSE and not project.accepts_applause:
-            raise ValidationError("This project is not currently accepting applause.")
+        if project:
+            if fb_type == FeedbackType.GRIEVANCE and not project.accepts_grievances:
+                raise ValidationError("This project is not currently accepting grievances.")
+            if fb_type == FeedbackType.SUGGESTION and not project.accepts_suggestions:
+                raise ValidationError("This project is not currently accepting suggestions.")
+            if fb_type == FeedbackType.APPLAUSE and not project.accepts_applause:
+                raise ValidationError("This project is not currently accepting applause.")
 
         prefix = _PREFIX[fb_type]
         _year  = datetime.now().year
