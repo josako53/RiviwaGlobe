@@ -13,7 +13,6 @@ Two computations:
 """
 
 import sys
-import json
 import logging
 from datetime import datetime, timezone, timedelta
 
@@ -182,19 +181,11 @@ def compute_staff_logins(spark: SparkSession) -> DataFrame:
     """
     since_ts = int((datetime.now(timezone.utc) - timedelta(hours=24)).timestamp() * 1000)
 
-    # Build custom offsets to read only last 24 h
-    # Use timestamp-based startingOffsets json
-    starting_offsets = json.dumps({"riviwa.auth.events": {str(p): since_ts for p in range(3)}})
-
     try:
         raw_df = (
             spark.read.format("kafka")
-            .options(
-                **{
-                    **kafka_batch_read_options(TOPIC_AUTH_EVENTS),
-                    "startingOffsets": "earliest",  # fallback; scheduler ensures 24h window
-                }
-            )
+            .options(**kafka_batch_read_options(TOPIC_AUTH_EVENTS))
+            .option("startingTimestamp", str(since_ts))
             .load()
         )
     except Exception as exc:

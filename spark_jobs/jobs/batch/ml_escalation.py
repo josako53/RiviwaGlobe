@@ -209,8 +209,8 @@ def build_pipeline(categorical_cols: list[str], numeric_cols: list[str]) -> Pipe
     gbt = GBTClassifier(
         labelCol="label",
         featuresCol="features",
-        maxIter=50,
-        maxDepth=5,
+        maxIter=20,
+        maxDepth=4,
         stepSize=0.1,
         seed=42,
     )
@@ -372,6 +372,8 @@ def main() -> None:
             )
         )
 
+        output_df.cache()
+        row_count = output_df.count()
         jdbc_write(
             output_df,
             ANALYTICS_JDBC_URL,
@@ -379,7 +381,8 @@ def main() -> None:
             "feedback_ml_scores",
             mode="overwrite",
         )
-        logger.info("feedback_ml_scores written (%d rows)", output_df.count())
+        output_df.unpersist()
+        logger.info("feedback_ml_scores written (%d rows)", row_count)
     except Exception as exc:
         logger.error("Scoring or write failed: %s", exc)
 

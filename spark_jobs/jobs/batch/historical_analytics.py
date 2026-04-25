@@ -201,18 +201,6 @@ def compute_daily_trend(feedbacks_df: DataFrame) -> DataFrame:
         .agg(F.count("*").alias("submitted_count"))
     )
 
-    resolved = (
-        feedbacks_df.filter(F.col("resolved_at").isNotNull())
-        .withColumn("resolved_date", F.to_date("resolved_at"))
-        .groupBy("project_id", "feedback_type")
-        .agg(
-            F.to_date("resolved_at").alias("resolved_date"),
-            F.count("*").alias("resolved_count"),
-        )
-        # Re-aggregate properly
-    )
-
-    # Simpler approach: pivot on resolved_date
     resolved2 = (
         feedbacks_df.filter(F.col("resolved_at").isNotNull())
         .withColumn("submitted_date", F.to_date("resolved_at"))
@@ -221,19 +209,15 @@ def compute_daily_trend(feedbacks_df: DataFrame) -> DataFrame:
     )
 
     trend_df = submitted.join(
-        resolved2.withColumnRenamed("submitted_date", "submitted_date2"),
-        on=[
-            submitted["project_id"] == resolved2["project_id"],
-            submitted["feedback_type"] == resolved2["feedback_type"],
-            submitted["submitted_date"] == resolved2["submitted_date"],
-        ],
+        resolved2,
+        on=["project_id", "feedback_type", "submitted_date"],
         how="left",
     ).select(
         submitted["project_id"],
         submitted["feedback_type"],
         submitted["submitted_date"],
-        F.col("submitted_count"),
-        F.coalesce(F.col("resolved_count"), F.lit(0)).alias("resolved_count"),
+        submitted["submitted_count"],
+        F.coalesce(resolved2["resolved_count"], F.lit(0)).alias("resolved_count"),
     ).withColumn("computed_at", F.lit(datetime.now(timezone.utc)).cast(TimestampType()))
 
     return trend_df
@@ -291,8 +275,8 @@ def update_days_unresolved(
         logger.warning("Could not read existing feedback_sla_status: %s", exc)
         merged_df = open_df
 
-    jdbc_write(merged_df, ANALYTICS_JDBC_URL, ANALYTICS_JDBC_PROPS, "feedback_sla_status", mode="append")
-    logger.info("Updated days_unresolved for %d open feedbacks", open_df.count())
+    jdbc_write(merged_df, ANALYTICS_JDBC_URL, ANALYTICS_JDBC_PROPS, "feedback_sla_status", mode="overwrite")
+    logger.info("Updated days_unresolved for open feedbacks.")
 
 
 # ---------------------------------------------------------------------------
