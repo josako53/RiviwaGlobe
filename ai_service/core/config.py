@@ -75,8 +75,8 @@ class Settings(BaseSettings):
 
     # ── Translation service ───────────────────────────────────────────────────
     TRANSLATION_SERVICE_URL: str = Field(
-        default="http://translation_service:8050",
-        description="Internal URL for language detection and translation",
+        default="http://translation_service:8050/api/v1",
+        description="Internal base URL for language detection and translation (includes /api/v1)",
     )
 
     # ── Twilio Programmable Voice (phone call channel) ────────────────────────
