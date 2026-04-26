@@ -79,8 +79,8 @@ class VoiceAIService:
         without persisted audio rather than blocking the user interaction.
         """
         ext    = _MIME_TO_EXT.get(content_type.split(";")[0].strip(), "webm")
-        bucket = "ai-voice"
-        key    = f"conversations/{conversation_id}/turn_{turn_index:04d}.{ext}"
+        bucket = settings.VOICE_STORAGE_BUCKET
+        key    = f"ai-conversations/{conversation_id}/turn_{turn_index:04d}.{ext}"
         try:
             import aiobotocore.session as aio_session  # type: ignore
             session = aio_session.get_session()
@@ -107,7 +107,8 @@ class VoiceAIService:
                     Body=audio_bytes,
                     ContentType=content_type,
                 )
-            audio_url = f"{settings.MINIO_ENDPOINT}/{bucket}/{key}"
+            endpoint  = settings.MINIO_ENDPOINT.rstrip("/")
+            audio_url = f"{endpoint}/{bucket}/{key}"
             log.info("voice_ai.audio_stored", key=key, bytes=len(audio_bytes))
             return audio_url
         except Exception as exc:

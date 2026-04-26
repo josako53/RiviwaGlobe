@@ -102,9 +102,10 @@ class Settings(BaseSettings):
     GOOGLE_STT_API_KEY: str = Field(default="")
 
     # ── Object storage (voice note downloads from WhatsApp) ───────────────────
-    MINIO_ENDPOINT:   str = Field(default="http://minio:9000")
-    MINIO_ACCESS_KEY: str = Field(default="minioadmin")
-    MINIO_SECRET_KEY: str = Field(default="minioadmin")
+    MINIO_ENDPOINT:        str = Field(default="http://minio:9000")
+    MINIO_ACCESS_KEY:      str = Field(default="minioadmin")
+    MINIO_SECRET_KEY:      str = Field(default="minioadmin")
+    VOICE_STORAGE_BUCKET:  str = Field(default="riviwa-voice")
 
     @property
     def SYNC_DATABASE_URL(self) -> str:

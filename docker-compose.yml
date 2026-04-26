@@ -766,9 +766,10 @@ services:
       # STT
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # MinIO
-      MINIO_ENDPOINT:   http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_ENDPOINT:        http://minio:9000
+      MINIO_ACCESS_KEY:      ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY:      ${MINIO_SECRET_KEY:-minioadmin}
+      VOICE_STORAGE_BUCKET:  ${VOICE_STORAGE_BUCKET:-riviwa-voice}
       # Groq LLM (optional — replaces local Ollama for chat if key is set)
       GROQ_API_KEY:  ${GROQ_API_KEY:-}
       GROQ_MODEL:    ${GROQ_MODEL:-llama-3.3-70b-versatile}
