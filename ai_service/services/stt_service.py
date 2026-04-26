@@ -71,23 +71,25 @@ class STTService:
         """
         Transcribe audio and auto-detect language in a single Whisper call.
 
-        Uses verbose_json format which returns both transcript and detected language.
-        Language hint (e.g. 'sw') is passed to Whisper for better accuracy when known.
-        When hint is omitted, Whisper auto-detects the language.
+        Provider priority:
+          1. OpenAI Whisper API  (if OPENAI_API_KEY is set)
+          2. Groq Whisper API    (if GROQ_API_KEY is set — whisper-large-v3-turbo,
+                                  same verbose_json format, 10-100x faster, free tier)
 
         Returns: (transcript, bcp47_language_code, confidence)
-          - confidence is approximate (Whisper does not expose per-token confidence
-            externally; we use avg_logprob from the first segment as a proxy)
         """
-        if not settings.OPENAI_API_KEY:
-            log.warning("stt.openai_key_missing")
+        # Resolve provider
+        api_key, base_url, model = self._resolve_stt_provider()
+        if not api_key:
+            log.warning("stt.no_provider_configured",
+                        hint="Set OPENAI_API_KEY or GROQ_API_KEY in .env")
             return ("", "sw", 0.0)
 
-        ext = _MIME_TO_EXT.get(content_type.split(";")[0].strip(), "webm")
+        ext      = _MIME_TO_EXT.get(content_type.split(";")[0].strip(), "webm")
         filename = f"audio.{ext}"
 
         form_data: dict = {
-            "model":           "whisper-1",
+            "model":           model,
             "response_format": "verbose_json",
         }
         if language_hint:
@@ -96,33 +98,51 @@ class STTService:
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 r = await client.post(
-                    "https://api.openai.com/v1/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+                    f"{base_url}/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {api_key}"},
                     files={"file": (filename, audio_bytes, content_type)},
                     data=form_data,
                 )
                 r.raise_for_status()
                 data = r.json()
 
-            transcript    = data.get("text", "").strip()
-            whisper_lang  = data.get("language", "swahili").lower()
-            bcp47         = _WHISPER_LANG_TO_BCP47.get(whisper_lang, whisper_lang[:2])
+            transcript   = data.get("text", "").strip()
+            whisper_lang = data.get("language", "swahili").lower()
+            bcp47        = _WHISPER_LANG_TO_BCP47.get(whisper_lang, whisper_lang[:2])
 
-            # Extract avg_logprob from first segment as confidence proxy
-            # avg_logprob is negative; 0.0 = perfect, -1.0 = poor
-            segments     = data.get("segments", [])
-            avg_logprob  = segments[0].get("avg_logprob", -0.5) if segments else -0.5
-            # Convert to 0-1 range: logprob of -0.3 ≈ 0.74 confidence
-            confidence   = max(0.0, min(1.0, 1.0 + avg_logprob))
+            # avg_logprob proxy: -0.0 = perfect, -1.0 = noisy; map to [0, 1]
+            segments    = data.get("segments", [])
+            avg_logprob = segments[0].get("avg_logprob", -0.5) if segments else -0.5
+            confidence  = max(0.0, min(1.0, 1.0 + avg_logprob))
 
             log.info("stt.transcribed_with_detection",
+                     provider=base_url.split("//")[1].split("/")[0],
                      lang=bcp47, confidence=round(confidence, 2),
-                     length=len(transcript))
+                     chars=len(transcript))
             return (transcript, bcp47, confidence)
 
         except Exception as exc:
             log.error("stt.transcribe_failed", error=str(exc))
             return ("", "sw", 0.0)
+
+    def _resolve_stt_provider(self) -> tuple[str, str, str]:
+        """
+        Return (api_key, base_url, model_name) for the first configured STT provider.
+        Priority: OpenAI → Groq (whisper-large-v3-turbo).
+        """
+        if settings.OPENAI_API_KEY:
+            return (
+                settings.OPENAI_API_KEY,
+                "https://api.openai.com/v1",
+                "whisper-1",
+            )
+        if settings.GROQ_API_KEY:
+            return (
+                settings.GROQ_API_KEY,
+                "https://api.groq.com/openai/v1",
+                "whisper-large-v3-turbo",   # fastest, multilingual, free tier
+            )
+        return ("", "", "")
 
     # ── Source-specific download helpers ─────────────────────────────────────
 
