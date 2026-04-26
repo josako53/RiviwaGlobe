@@ -47,10 +47,30 @@ class Settings(BaseSettings):
     DETECTION_CACHE_TTL:    int = Field(default=3600)    # 1 h
 
     # ── Translation provider ─────────────────────────────────────────────────
-    # Set TRANSLATION_PROVIDER to "google", "deepl", or "libre"
+    # Set TRANSLATION_PROVIDER to select a specific provider, or leave as "auto"
+    # to use the first configured provider in the cascade:
+    #   google → deepl → microsoft → libretranslate → groq → nllb
     TRANSLATION_PROVIDER: str = Field(
-        default="google",
-        description="Active translation provider: google | deepl | libre",
+        default="auto",
+        description=(
+            "Active translation provider: auto | google | deepl | "
+            "microsoft | libretranslate | groq | nllb. "
+            "'auto' selects the first configured provider in the cascade."
+        ),
+    )
+
+    # ── Groq LLM API (translation + AI chat fallback) ─────────────────────────
+    GROQ_API_KEY: str = Field(
+        default="",
+        description="Groq API key — enables Groq LLM translation (llama-3.3-70b-versatile)",
+    )
+    GROQ_TRANSLATION_MODEL: str = Field(
+        default="llama-3.3-70b-versatile",
+        description="Groq model used for translation",
+    )
+    GROQ_BASE_URL: str = Field(
+        default="https://api.groq.com/openai/v1",
+        description="Groq API base URL",
     )
 
     # ── Google Cloud Translation API ──────────────────────────────────────────

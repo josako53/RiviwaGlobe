@@ -31,62 +31,79 @@ from providers.base import BaseTranslationProvider, TranslationResult
 log = structlog.get_logger(__name__)
 
 
-def _get_provider() -> BaseTranslationProvider:
-    provider = settings.TRANSLATION_PROVIDER.lower()
-    if provider == "google":
+def _build_provider(name: str) -> BaseTranslationProvider:
+    """Instantiate a provider by name string."""
+    n = name.lower()
+    if n == "google":
         from providers.google_translate import GoogleTranslateProvider
-        p = GoogleTranslateProvider()
-    elif provider == "deepl":
+        return GoogleTranslateProvider()
+    if n == "deepl":
         from providers.deepl import DeepLProvider
-        p = DeepLProvider()
-    elif provider == "nllb":
-        from providers.nllb import NLLBProvider
-        p = NLLBProvider()
-    elif provider == "libretranslate":
-        from providers.libretranslate import LibreTranslateProvider
-        p = LibreTranslateProvider()
-    elif provider == "microsoft":
+        return DeepLProvider()
+    if n == "microsoft":
         from providers.microsoft import MicrosoftTranslatorProvider
-        p = MicrosoftTranslatorProvider()
-    else:
-        raise ProviderNotConfiguredError(
-            f"Unknown TRANSLATION_PROVIDER: '{provider}'. "
-            f"Must be: google | deepl | nllb | libretranslate | microsoft."
-        )
-    if not p.is_configured():
-        raise ProviderNotConfiguredError(
-            f"Translation provider '{provider}' is not configured. "
-            f"Check the required environment variables."
-        )
-    return p
+        return MicrosoftTranslatorProvider()
+    if n in ("libretranslate", "libre"):
+        from providers.libretranslate import LibreTranslateProvider
+        return LibreTranslateProvider()
+    if n == "groq":
+        from providers.groq import GroqTranslationProvider
+        return GroqTranslationProvider()
+    if n == "nllb":
+        from providers.nllb import NLLBProvider
+        return NLLBProvider()
+    raise ProviderNotConfiguredError(
+        f"Unknown translation provider: '{name}'. "
+        f"Must be: auto | google | deepl | microsoft | libretranslate | groq | nllb."
+    )
+
+
+# Ordered cascade — first configured provider wins
+_CASCADE = ["google", "deepl", "microsoft", "libretranslate", "groq", "nllb"]
+
+
+def _get_provider() -> BaseTranslationProvider:
+    """
+    Return the active translation provider.
+    TRANSLATION_PROVIDER=auto  → try each in cascade order, use first configured.
+    TRANSLATION_PROVIDER=<name> → use that provider, raise if not configured.
+    """
+    setting = settings.TRANSLATION_PROVIDER.lower()
+
+    if setting != "auto":
+        p = _build_provider(setting)
+        if not p.is_configured():
+            raise ProviderNotConfiguredError(
+                f"Translation provider '{setting}' is not configured. "
+                f"Check the required environment variables."
+            )
+        return p
+
+    # Auto-cascade
+    for name in _CASCADE:
+        try:
+            p = _build_provider(name)
+            if p.is_configured():
+                log.debug("translation.provider_selected", provider=name)
+                return p
+        except Exception:
+            continue
+
+    raise ProviderNotConfiguredError(
+        "No translation provider is configured. "
+        "Set GROQ_API_KEY (recommended) or configure Google/DeepL/Microsoft."
+    )
 
 
 def _get_named_provider(name: str) -> BaseTranslationProvider:
-    """Return a specific provider by name, falling back to default if not configured."""
-    name = name.lower()
+    """Return a specific provider by name, falling back to auto-cascade if not configured."""
     try:
-        if name == "google":
-            from providers.google_translate import GoogleTranslateProvider
-            p = GoogleTranslateProvider()
-        elif name == "deepl":
-            from providers.deepl import DeepLProvider
-            p = DeepLProvider()
-        elif name == "nllb":
-            from providers.nllb import NLLBProvider
-            p = NLLBProvider()
-        elif name == "libretranslate":
-            from providers.libretranslate import LibreTranslateProvider
-            p = LibreTranslateProvider()
-        elif name == "microsoft":
-            from providers.microsoft import MicrosoftTranslatorProvider
-            p = MicrosoftTranslatorProvider()
-        else:
-            return _get_provider()
+        p = _build_provider(name)
         if p.is_configured():
             return p
     except Exception:
         pass
-    return _get_provider()  # fallback to default
+    return _get_provider()
 
 
 def _cache_key(text: str, target: str, source: Optional[str]) -> str:

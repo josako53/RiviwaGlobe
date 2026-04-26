@@ -233,6 +233,9 @@ async def health() -> HealthResponse:
             elif name == "libretranslate":
                 from providers.libretranslate import LibreTranslateProvider
                 return LibreTranslateProvider().is_configured()
+            elif name == "groq":
+                from providers.groq import GroqTranslationProvider
+                return GroqTranslationProvider().is_configured()
             elif name == "nllb":
                 return NLLBProvider().is_configured()
         except Exception:
@@ -241,7 +244,7 @@ async def health() -> HealthResponse:
 
     providers = {
         name: _check(name)
-        for name in ("google", "deepl", "microsoft", "libretranslate", "nllb")
+        for name in ("google", "deepl", "microsoft", "libretranslate", "groq", "nllb")
     }
     nllb_loaded = _model_state.get("loaded", False)
     all_ok = any(providers.values())
