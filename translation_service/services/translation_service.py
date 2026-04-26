@@ -61,6 +61,34 @@ def _get_provider() -> BaseTranslationProvider:
     return p
 
 
+def _get_named_provider(name: str) -> BaseTranslationProvider:
+    """Return a specific provider by name, falling back to default if not configured."""
+    name = name.lower()
+    try:
+        if name == "google":
+            from providers.google_translate import GoogleTranslateProvider
+            p = GoogleTranslateProvider()
+        elif name == "deepl":
+            from providers.deepl import DeepLProvider
+            p = DeepLProvider()
+        elif name == "nllb":
+            from providers.nllb import NLLBProvider
+            p = NLLBProvider()
+        elif name == "libretranslate":
+            from providers.libretranslate import LibreTranslateProvider
+            p = LibreTranslateProvider()
+        elif name == "microsoft":
+            from providers.microsoft import MicrosoftTranslatorProvider
+            p = MicrosoftTranslatorProvider()
+        else:
+            return _get_provider()
+        if p.is_configured():
+            return p
+    except Exception:
+        pass
+    return _get_provider()  # fallback to default
+
+
 def _cache_key(text: str, target: str, source: Optional[str]) -> str:
     raw = f"{text}|{target}|{source or 'auto'}"
     return "trans:" + hashlib.sha256(raw.encode()).hexdigest()
@@ -87,6 +115,7 @@ class TranslationOrchestrator:
         text:            str,
         target_language: str,
         source_language: Optional[str] = None,
+        provider:        Optional[str] = None,
     ) -> dict:
         """Returns dict matching TranslateResponse schema."""
         cache_key = _cache_key(text, target_language, source_language)
@@ -103,8 +132,8 @@ class TranslationOrchestrator:
             except Exception:
                 pass  # Redis unavailable — proceed without cache
 
-        provider = _get_provider()
-        result   = await provider.translate(text, target_language, source_language)
+        prov   = _get_named_provider(provider) if provider else _get_provider()
+        result = await prov.translate(text, target_language, source_language)
 
         response = {
             "translated_text": result.translated_text,
@@ -152,6 +181,7 @@ class TranslationOrchestrator:
         texts:           list[str],
         target_language: str,
         source_language: Optional[str] = None,
+        provider:        Optional[str] = None,
     ) -> list[dict]:
         """Returns list of dicts matching TranslateResponse schema."""
         results = []
@@ -180,8 +210,8 @@ class TranslationOrchestrator:
 
         # Translate uncached texts in one provider call
         if uncached_texts:
-            provider       = _get_provider()
-            provider_results: list[TranslationResult] = await provider.translate_batch(
+            _prov          = _get_named_provider(provider) if provider else _get_provider()
+            provider_results: list[TranslationResult] = await _prov.translate_batch(
                 uncached_texts, target_language, source_language
             )
             for idx, (orig_i, pr) in enumerate(zip(uncached_indices, provider_results)):

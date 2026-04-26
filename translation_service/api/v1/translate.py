@@ -131,7 +131,7 @@ async def translate(body: TranslateRequest) -> TranslateResponse:
             text=body.text,
             target_language=body.target_language,
             source_language=body.source_language,
-            explicit_provider=body.provider,
+            provider=body.provider,
         )
         return TranslateResponse(**result)
     except (TranslationFailedError, ProviderNotConfiguredError) as exc:
@@ -157,7 +157,7 @@ async def translate_batch(body: BatchTranslateRequest) -> BatchTranslateResponse
             texts=body.texts,
             target_language=body.target_language,
             source_language=body.source_language,
-            explicit_provider=body.provider,
+            provider=body.provider,
         )
         return BatchTranslateResponse(
             results=[TranslateResponse(**r) for r in results],
