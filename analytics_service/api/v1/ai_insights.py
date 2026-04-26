@@ -210,6 +210,21 @@ async def _build_org_context(context_type, org_id, fb_db) -> Dict[str, Any]:
         context["by_project"] = by_project
         by_channel = await fb_repo.get_org_by_channel(org_id)
         context["by_channel"] = by_channel
+        by_branch = await fb_repo.get_org_by_branch(org_id)
+        if by_branch:
+            context["by_branch"] = by_branch
+        by_dept = await fb_repo.get_org_by_dimension(org_id, "department_id")
+        if by_dept:
+            context["by_department"] = by_dept
+        by_service = await fb_repo.get_org_by_dimension(org_id, "service_id")
+        if by_service:
+            context["by_service"] = by_service
+        by_product = await fb_repo.get_org_by_dimension(org_id, "product_id")
+        if by_product:
+            context["by_product"] = by_product
+        by_category = await fb_repo.get_org_by_category(org_id)
+        if by_category:
+            context["by_category"] = by_category
 
     return context
 

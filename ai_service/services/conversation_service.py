@@ -483,17 +483,79 @@ class ConversationService:
             return "No active projects."
         data = [
             {
-                "project_id": str(p.project_id),
-                "name": p.name,
-                "region": p.region or "",
-                "primary_lga": p.primary_lga or "",
-                "wards": p.get_wards(),
+                "project_id":        str(p.project_id),
+                "name":              p.name,
+                "region":            p.region or "",
+                "primary_lga":       p.primary_lga or "",
+                "wards":             p.get_wards(),
                 "active_stage_name": p.active_stage_name or "",
-                "status": p.status,
+                "status":            p.status,
+                "sector":            p.sector or "",
+                "category":          p.category or "",
+                "description":       p.description or "",
+                "objectives":        p.objectives or "",
+                "location_description": p.location_description or "",
+                "org_display_name":  p.org_display_name or "",
+                "code":              p.code or "",
             }
-            for p in projects[:10]  # cap at 10 to keep prompt size manageable
+            for p in projects[:10]
         ]
-        return self.rag.build_project_context(data)
+        context = self.rag.build_project_context(data)
+
+        # Append org structure (branches, departments, services, products with UUIDs)
+        # so the LLM can match Consumer mentions to real IDs without asking.
+        org_id = conv.org_id or (projects[0].organisation_id if projects else None)
+        if org_id:
+            org_struct = await self._fetch_org_structure(org_id)
+            if org_struct:
+                context += "\n\n" + org_struct
+        return context
+
+    async def _fetch_org_structure(self, org_id) -> str:
+        """
+        Fetch branches, departments, services, products from auth_service
+        and format them as a compact context block for the LLM.
+        Returns empty string on any failure — org structure is best-effort.
+        """
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/{org_id}/ai-context",
+                    headers={
+                        "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                        "X-Service-Name": "ai_service",
+                    },
+                )
+            if r.status_code != 200:
+                return ""
+            raw = r.json()
+        except Exception:
+            return ""
+
+        lines = ["ORG STRUCTURE (use these UUIDs when Consumer mentions a branch/dept/service/product):"]
+        branches = raw.get("branches", [])
+        if branches:
+            lines.append("BRANCHES: " + "; ".join(
+                f"{b['name']} (id={b['id']})" for b in branches[:15]
+            ))
+        depts = raw.get("departments", [])
+        if depts:
+            lines.append("DEPARTMENTS: " + "; ".join(
+                f"{d['name']} (id={d['id']})" for d in depts[:20]
+            ))
+        all_svcs = raw.get("services", [])
+        services = [s for s in all_svcs if s.get("service_type", "").upper() != "PRODUCT"]
+        products = [s for s in all_svcs if s.get("service_type", "").upper() == "PRODUCT"]
+        if services:
+            lines.append("SERVICES: " + "; ".join(
+                f"{s['title']} (id={s['id']})" for s in services[:20]
+            ))
+        if products:
+            lines.append("PRODUCTS: " + "; ".join(
+                f"{p['title']} (id={p['id']})" for p in products[:20]
+            ))
+        return "\n".join(lines) if len(lines) > 1 else ""
 
     async def _submit_feedback(
         self, conv: AIConversation

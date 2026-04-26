@@ -58,18 +58,20 @@ class FeedbackProducer:
                                   department_id: Optional[uuid.UUID] = None,
                                   service_id: Optional[uuid.UUID] = None,
                                   product_id: Optional[uuid.UUID] = None,
+                                  category_def_id: Optional[uuid.UUID] = None,
                                   stakeholder_engagement_id: Optional[uuid.UUID] = None,
                                   distribution_id: Optional[uuid.UUID] = None) -> None:
         await self.publish(FeedbackEvents.SUBMITTED, {
-            "feedback_id":   str(feedback_id),
-            "project_id":    str(project_id),
-            "feedback_type": feedback_type,
-            "category":      category,
-            "org_id":        str(org_id)        if org_id        else None,
-            "branch_id":     str(branch_id)     if branch_id     else None,
-            "department_id": str(department_id) if department_id else None,
-            "service_id":    str(service_id)    if service_id    else None,
-            "product_id":    str(product_id)    if product_id    else None,
+            "feedback_id":     str(feedback_id),
+            "project_id":      str(project_id),
+            "feedback_type":   feedback_type,
+            "category":        category,
+            "org_id":          str(org_id)          if org_id          else None,
+            "branch_id":       str(branch_id)       if branch_id       else None,
+            "department_id":   str(department_id)   if department_id   else None,
+            "service_id":      str(service_id)      if service_id      else None,
+            "product_id":      str(product_id)      if product_id      else None,
+            "category_def_id": str(category_def_id) if category_def_id else None,
             "stakeholder_engagement_id": str(stakeholder_engagement_id) if stakeholder_engagement_id else None,
             "distribution_id":           str(distribution_id)           if distribution_id           else None,
         }, key=str(project_id))
@@ -79,15 +81,17 @@ class FeedbackProducer:
                                      branch_id: Optional[uuid.UUID] = None,
                                      department_id: Optional[uuid.UUID] = None,
                                      service_id: Optional[uuid.UUID] = None,
-                                     product_id: Optional[uuid.UUID] = None) -> None:
+                                     product_id: Optional[uuid.UUID] = None,
+                                     category_def_id: Optional[uuid.UUID] = None) -> None:
         await self.publish(FeedbackEvents.ACKNOWLEDGED, {
-            "feedback_id":   str(feedback_id),
-            "project_id":    str(project_id),
-            "priority":      priority,
-            "branch_id":     str(branch_id)     if branch_id     else None,
-            "department_id": str(department_id) if department_id else None,
-            "service_id":    str(service_id)    if service_id    else None,
-            "product_id":    str(product_id)    if product_id    else None,
+            "feedback_id":     str(feedback_id),
+            "project_id":      str(project_id),
+            "priority":        priority,
+            "branch_id":       str(branch_id)       if branch_id       else None,
+            "department_id":   str(department_id)   if department_id   else None,
+            "service_id":      str(service_id)      if service_id      else None,
+            "product_id":      str(product_id)      if product_id      else None,
+            "category_def_id": str(category_def_id) if category_def_id else None,
         }, key=str(project_id))
 
     async def feedback_escalated(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
@@ -95,31 +99,35 @@ class FeedbackProducer:
                                   branch_id: Optional[uuid.UUID] = None,
                                   department_id: Optional[uuid.UUID] = None,
                                   service_id: Optional[uuid.UUID] = None,
-                                  product_id: Optional[uuid.UUID] = None) -> None:
+                                  product_id: Optional[uuid.UUID] = None,
+                                  category_def_id: Optional[uuid.UUID] = None) -> None:
         await self.publish(FeedbackEvents.ESCALATED, {
-            "feedback_id":   str(feedback_id),
-            "project_id":    str(project_id),
-            "from_level":    from_level,
-            "to_level":      to_level,
-            "reason":        reason,
-            "branch_id":     str(branch_id)     if branch_id     else None,
-            "department_id": str(department_id) if department_id else None,
-            "service_id":    str(service_id)    if service_id    else None,
-            "product_id":    str(product_id)    if product_id    else None,
+            "feedback_id":     str(feedback_id),
+            "project_id":      str(project_id),
+            "from_level":      from_level,
+            "to_level":        to_level,
+            "reason":          reason,
+            "branch_id":       str(branch_id)       if branch_id       else None,
+            "department_id":   str(department_id)   if department_id   else None,
+            "service_id":      str(service_id)      if service_id      else None,
+            "product_id":      str(product_id)      if product_id      else None,
+            "category_def_id": str(category_def_id) if category_def_id else None,
         }, key=str(project_id))
 
     async def feedback_resolved(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
                                  branch_id: Optional[uuid.UUID] = None,
                                  department_id: Optional[uuid.UUID] = None,
                                  service_id: Optional[uuid.UUID] = None,
-                                 product_id: Optional[uuid.UUID] = None) -> None:
+                                 product_id: Optional[uuid.UUID] = None,
+                                 category_def_id: Optional[uuid.UUID] = None) -> None:
         await self.publish(FeedbackEvents.RESOLVED, {
-            "feedback_id":   str(feedback_id),
-            "project_id":    str(project_id),
-            "branch_id":     str(branch_id)     if branch_id     else None,
-            "department_id": str(department_id) if department_id else None,
-            "service_id":    str(service_id)    if service_id    else None,
-            "product_id":    str(product_id)    if product_id    else None,
+            "feedback_id":     str(feedback_id),
+            "project_id":      str(project_id),
+            "branch_id":       str(branch_id)       if branch_id       else None,
+            "department_id":   str(department_id)   if department_id   else None,
+            "service_id":      str(service_id)      if service_id      else None,
+            "product_id":      str(product_id)      if product_id      else None,
+            "category_def_id": str(category_def_id) if category_def_id else None,
         }, key=str(project_id))
 
     async def feedback_appealed(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
@@ -127,15 +135,17 @@ class FeedbackProducer:
                                  branch_id: Optional[uuid.UUID] = None,
                                  department_id: Optional[uuid.UUID] = None,
                                  service_id: Optional[uuid.UUID] = None,
-                                 product_id: Optional[uuid.UUID] = None) -> None:
+                                 product_id: Optional[uuid.UUID] = None,
+                                 category_def_id: Optional[uuid.UUID] = None) -> None:
         await self.publish(FeedbackEvents.APPEALED, {
-            "feedback_id":   str(feedback_id),
-            "project_id":    str(project_id),
-            "grounds":       grounds,
-            "branch_id":     str(branch_id)     if branch_id     else None,
-            "department_id": str(department_id) if department_id else None,
-            "service_id":    str(service_id)    if service_id    else None,
-            "product_id":    str(product_id)    if product_id    else None,
+            "feedback_id":     str(feedback_id),
+            "project_id":      str(project_id),
+            "grounds":         grounds,
+            "branch_id":       str(branch_id)       if branch_id       else None,
+            "department_id":   str(department_id)   if department_id   else None,
+            "service_id":      str(service_id)      if service_id      else None,
+            "product_id":      str(product_id)      if product_id      else None,
+            "category_def_id": str(category_def_id) if category_def_id else None,
         }, key=str(project_id))
 
 

@@ -298,6 +298,7 @@ class FeedbackService:
             department_id=f.department_id,
             service_id=f.service_id,
             product_id=f.product_id,
+            category_def_id=f.category_def_id,
             stakeholder_engagement_id=f.stakeholder_engagement_id,
             distribution_id=f.distribution_id,
         )
@@ -486,6 +487,7 @@ class FeedbackService:
             department_id=f.department_id,
             service_id=f.service_id,
             product_id=f.product_id,
+            category_def_id=f.category_def_id,
         )
 
         # Notify Consumer (self-service portal submission)
@@ -552,7 +554,8 @@ class FeedbackService:
         await self.db.commit()
         await self.producer.feedback_acknowledged(f.id, f.project_id, f.priority.value,
                                                    branch_id=f.branch_id, department_id=f.department_id,
-                                                   service_id=f.service_id, product_id=f.product_id)
+                                                   service_id=f.service_id, product_id=f.product_id,
+                                                   category_def_id=f.category_def_id)
 
         # Notify Consumer that their submission has been acknowledged
         if not f.is_anonymous:
@@ -628,7 +631,8 @@ class FeedbackService:
         await self.db.commit()
         await self.producer.feedback_escalated(f.id, f.project_id, from_level.value, next_level.value, reason,
                                                 branch_id=f.branch_id, department_id=f.department_id,
-                                                service_id=f.service_id, product_id=f.product_id)
+                                                service_id=f.service_id, product_id=f.product_id,
+                                                category_def_id=f.category_def_id)
         return f
 
     async def resolve(
@@ -662,7 +666,8 @@ class FeedbackService:
         await self.db.commit()
         await self.producer.feedback_resolved(f.id, f.project_id,
                                                branch_id=f.branch_id, department_id=f.department_id,
-                                               service_id=f.service_id, product_id=f.product_id)
+                                               service_id=f.service_id, product_id=f.product_id,
+                                               category_def_id=f.category_def_id)
 
         # Notify Consumer that their submission has been resolved
         if not f.is_anonymous:
@@ -719,7 +724,8 @@ class FeedbackService:
         await self.db.commit()
         await self.producer.feedback_appealed(f.id, f.project_id, grounds,
                                                branch_id=f.branch_id, department_id=f.department_id,
-                                               service_id=f.service_id, product_id=f.product_id)
+                                               service_id=f.service_id, product_id=f.product_id,
+                                               category_def_id=f.category_def_id)
         return f
 
     async def close(

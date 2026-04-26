@@ -1308,7 +1308,7 @@ class FeedbackAnalyticsRepository:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
-        allowed = {"department_id", "service_id", "product_id"}
+        allowed = {"department_id", "service_id", "product_id", "category_def_id"}
         if dimension not in allowed:
             return []
         params: Dict[str, Any] = {"org_id": str(org_id)}

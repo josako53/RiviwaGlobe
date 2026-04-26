@@ -71,8 +71,8 @@ class OrgContextService:
         branches: List[Dict] = raw.get("branches", [])
         if branches:
             out["branches"] = [
-                f"{b['name']} ({b.get('branch_type', 'branch')})"
-                for b in branches[:20]  # cap at 20 for token budget
+                {"id": b["id"], "name": b["name"], "type": b.get("branch_type", "branch")}
+                for b in branches[:20]
             ]
             out["branch_count"] = len(branches)
 
@@ -80,26 +80,28 @@ class OrgContextService:
         if faqs:
             out["faqs"] = [
                 {"q": f["question"], "a": f["answer"]}
-                for f in faqs[:15]  # cap at 15 FAQs
+                for f in faqs[:15]
             ]
 
         depts: List[Dict] = raw.get("departments", [])
         if depts:
             out["departments"] = [
-                {"id": d["id"], "name": d["name"]}
+                {"id": d["id"], "name": d["name"], "code": d.get("code")}
                 for d in depts
             ]
 
-        services: List[Dict] = raw.get("services", [])
+        all_services: List[Dict] = raw.get("services", [])
+        services  = [s for s in all_services if s.get("service_type", "").upper() != "PRODUCT"]
+        products  = [s for s in all_services if s.get("service_type", "").upper() == "PRODUCT"]
         if services:
             out["services"] = [
-                {
-                    "id":    s["id"],
-                    "name":  s["title"],
-                    "type":  s.get("service_type"),
-                    "cat":   s.get("category"),
-                }
+                {"id": s["id"], "name": s["title"], "type": s.get("service_type"), "cat": s.get("category")}
                 for s in services[:30]
+            ]
+        if products:
+            out["products"] = [
+                {"id": p["id"], "name": p["title"], "cat": p.get("category")}
+                for p in products[:30]
             ]
 
         return {k: v for k, v in out.items() if v is not None}
