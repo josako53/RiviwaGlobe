@@ -90,11 +90,16 @@ class VoiceAIService:
                 aws_access_key_id=settings.MINIO_ACCESS_KEY,
                 aws_secret_access_key=settings.MINIO_SECRET_KEY,
             ) as client:
-                # Create bucket if it doesn't exist
+                # Ensure bucket exists
                 try:
                     await client.head_bucket(Bucket=bucket)
                 except Exception:
-                    await client.create_bucket(Bucket=bucket)
+                    try:
+                        await client.create_bucket(Bucket=bucket)
+                        log.info("voice_ai.bucket_created", bucket=bucket)
+                    except Exception as be:
+                        # Bucket may have been created concurrently — ignore
+                        log.debug("voice_ai.bucket_create_skip", error=str(be))
 
                 await client.put_object(
                     Bucket=bucket,
@@ -106,7 +111,7 @@ class VoiceAIService:
             log.info("voice_ai.audio_stored", key=key, bytes=len(audio_bytes))
             return audio_url
         except Exception as exc:
-            log.warning("voice_ai.audio_store_failed", error=str(exc))
+            log.warning("voice_ai.audio_store_failed", key=key, error=str(exc))
             return ""
 
     def _current_turn_index(self, db_conv) -> int:

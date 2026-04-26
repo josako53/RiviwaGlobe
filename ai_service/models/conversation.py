@@ -102,7 +102,11 @@ class AIConversation(SQLModel, table=True):
         content:   str,
         audio_url: str | None = None,
     ) -> None:
-        existing = self.get_turns()
+        # Create a COPY of the existing list — critical for SQLAlchemy JSONB tracking.
+        # get_turns() returns a reference to the list inside self.turns["turns"].
+        # Mutating it in-place and then reassigning leaves both old and new value
+        # pointing at the same object, so SQLAlchemy sees no change and skips the UPDATE.
+        existing = list(self.get_turns())
         turn: dict = {
             "role":      role,
             "content":   content,
@@ -111,9 +115,17 @@ class AIConversation(SQLModel, table=True):
         if audio_url:
             turn["audio_url"] = audio_url
         existing.append(turn)
+        # Assign a completely new dict so SQLAlchemy's attribute history detects a change
         self.turns = {"turns": existing}
         self.turn_count = len(existing)
         self.last_active_at = datetime.utcnow()
+        # flag_modified ensures the ORM marks this JSONB column dirty even if
+        # Python's == comparison would consider old and new equal
+        try:
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(self, "turns")
+        except Exception:
+            pass
 
     def get_extracted(self) -> dict:
         if isinstance(self.extracted_data, dict):
