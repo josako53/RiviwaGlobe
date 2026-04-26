@@ -1,5 +1,7 @@
 """
 services/voice_ai_service.py — Voice input pipeline for AI conversations.
+Integrates MinIO object storage so every audio turn is persisted before
+transcription — matching the feedback_service VoiceService pattern.
 
 Full pipeline:
   audio bytes
@@ -23,6 +25,7 @@ Design decisions:
 """
 from __future__ import annotations
 
+import io
 import uuid
 from typing import Optional
 import httpx
@@ -30,7 +33,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from services.stt_service import STTService
+from services.stt_service import STTService, _MIME_TO_EXT
 from services.conversation_service import ConversationService
 
 log = structlog.get_logger(__name__)
@@ -58,6 +61,59 @@ class VoiceAIService:
     def __init__(self) -> None:
         self.stt = STTService()
 
+    # ─── MinIO storage ────────────────────────────────────────────────────────
+
+    async def _store_audio(
+        self,
+        audio_bytes:     bytes,
+        content_type:    str,
+        conversation_id: uuid.UUID,
+        turn_index:      int,
+    ) -> str:
+        """
+        Upload audio bytes to MinIO and return a permanent object URL.
+
+        Path: ai-voice/conversations/{conv_id}/turn_{n:04d}.{ext}
+
+        Returns empty string on any storage failure — voice pipeline continues
+        without persisted audio rather than blocking the user interaction.
+        """
+        ext    = _MIME_TO_EXT.get(content_type.split(";")[0].strip(), "webm")
+        bucket = "ai-voice"
+        key    = f"conversations/{conversation_id}/turn_{turn_index:04d}.{ext}"
+        try:
+            import aiobotocore.session as aio_session  # type: ignore
+            session = aio_session.get_session()
+            async with session.create_client(
+                "s3",
+                endpoint_url=settings.MINIO_ENDPOINT,
+                aws_access_key_id=settings.MINIO_ACCESS_KEY,
+                aws_secret_access_key=settings.MINIO_SECRET_KEY,
+            ) as client:
+                # Create bucket if it doesn't exist
+                try:
+                    await client.head_bucket(Bucket=bucket)
+                except Exception:
+                    await client.create_bucket(Bucket=bucket)
+
+                await client.put_object(
+                    Bucket=bucket,
+                    Key=key,
+                    Body=audio_bytes,
+                    ContentType=content_type,
+                )
+            audio_url = f"{settings.MINIO_ENDPOINT}/{bucket}/{key}"
+            log.info("voice_ai.audio_stored", key=key, bytes=len(audio_bytes))
+            return audio_url
+        except Exception as exc:
+            log.warning("voice_ai.audio_store_failed", error=str(exc))
+            return ""
+
+    def _current_turn_index(self, db_conv) -> int:
+        """Return the 0-based index for the next user turn."""
+        turns = db_conv.get_turns() if db_conv else []
+        return sum(1 for t in turns if t.get("role") == "user")
+
     # ─── Public entry point ───────────────────────────────────────────────────
 
     async def process_voice_turn(
@@ -77,7 +133,13 @@ class VoiceAIService:
           translated        — True if the transcript was translated before AI
           original_reply    — English/Swahili AI reply (before back-translation)
         """
-        # 1. Transcribe + detect language
+        # 1. Persist audio to MinIO before transcribing (audit trail + replay)
+        from repositories.conversation_repo import ConversationRepository
+        conv_for_index = await ConversationRepository(db).get(conversation_id)
+        turn_idx  = self._current_turn_index(conv_for_index)
+        audio_url = await self._store_audio(audio_bytes, content_type, conversation_id, turn_idx)
+
+        # 2. Transcribe + detect language
         transcript, whisper_lang, stt_conf = await self.stt.transcribe_with_detection(
             audio_bytes, content_type
         )
@@ -89,13 +151,14 @@ class VoiceAIService:
                 "transcript":        "",
                 "detected_language": whisper_lang or "sw",
                 "stt_confidence":    0.0,
+                "audio_url":         audio_url,
             }
 
         # 2. Confirm language via translation_service text detection
         #    (more reliable than Whisper for short audio)
         confirmed_lang = await self._confirm_language(transcript, whisper_lang, stt_conf)
 
-        # 3. Translate to processing language if not native
+        # 4. Translate to processing language if not native
         processing_text = transcript
         translated      = False
         if confirmed_lang not in _NATIVE_LANGUAGES:
@@ -106,15 +169,16 @@ class VoiceAIService:
                 log.info("voice_ai.translated_input",
                          from_lang=confirmed_lang, chars=len(processing_text))
 
-        # 4. Feed into AI conversation
+        # 5. Feed into AI conversation (audio_url stored in the turn record)
         conv_svc = ConversationService(db=db)
         conv, reply, submitted, feedback_list = await conv_svc.process_message(
             conversation_id=conversation_id,
             message=processing_text,
+            audio_url=audio_url or None,
         )
         original_reply = reply
 
-        # 5. Translate reply back if input was translated
+        # 6. Translate reply back if input was translated
         final_reply = reply
         if translated and confirmed_lang not in _NATIVE_LANGUAGES:
             back = await self._translate(reply, source="en", target=confirmed_lang)
@@ -153,6 +217,7 @@ class VoiceAIService:
             "stt_confidence":     round(stt_conf, 3),
             "translated":         translated,
             "original_reply":     original_reply,
+            "audio_url":          audio_url or None,
         }
 
     async def download_twilio_recording(self, recording_url: str) -> Optional[bytes]:

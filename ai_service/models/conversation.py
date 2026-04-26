@@ -96,13 +96,21 @@ class AIConversation(SQLModel, table=True):
             return self.turns
         return []
 
-    def add_turn(self, role: str, content: str) -> None:
+    def add_turn(
+        self,
+        role:      str,
+        content:   str,
+        audio_url: str | None = None,
+    ) -> None:
         existing = self.get_turns()
-        existing.append({
-            "role": role,
-            "content": content,
+        turn: dict = {
+            "role":      role,
+            "content":   content,
             "timestamp": datetime.utcnow().isoformat(),
-        })
+        }
+        if audio_url:
+            turn["audio_url"] = audio_url
+        existing.append(turn)
         self.turns = {"turns": existing}
         self.turn_count = len(existing)
         self.last_active_at = datetime.utcnow()

@@ -190,8 +190,9 @@ class ConversationService:
     async def process_message(
         self,
         conversation_id: uuid.UUID,
-        message: str,
+        message:    str,
         media_urls: Optional[List[str]] = None,
+        audio_url:  Optional[str]       = None,
     ) -> Tuple[AIConversation, str, bool, List[dict]]:
         """
         Process a Consumer message. Returns (conv, reply, submitted, submitted_feedback_list).
@@ -227,8 +228,8 @@ class ConversationService:
             await self.conv_repo.save(conv)
             return conv, timeout_msg, False, []
 
-        # Add Consumer's turn
-        conv.add_turn("user", message)
+        # Add Consumer's turn (with optional audio URL for voice messages)
+        conv.add_turn("user", message, audio_url=audio_url)
 
         # Check follow-up pattern (reference number like GRV-2025-0042)
         if self._is_followup_query(message):
