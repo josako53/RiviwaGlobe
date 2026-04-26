@@ -58,8 +58,11 @@ def _build_provider(name: str) -> BaseTranslationProvider:
     )
 
 
-# Ordered cascade — first configured provider wins
-_CASCADE = ["google", "deepl", "microsoft", "libretranslate", "groq", "nllb"]
+# Ordered cascade — first configured provider wins.
+# Groq comes before LibreTranslate because LibreTranslate.is_configured() returns
+# True as long as a URL string is set, regardless of whether the container is running.
+# Groq requires an actual API key so it's a reliable liveness signal.
+_CASCADE = ["google", "deepl", "microsoft", "groq", "libretranslate", "nllb"]
 
 
 def _get_provider() -> BaseTranslationProvider:
