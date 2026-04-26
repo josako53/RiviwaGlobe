@@ -73,6 +73,21 @@ class Settings(BaseSettings):
     GROQ_MODEL:    str = Field(default="llama-3.3-70b-versatile", description="Groq model name")
     GROQ_BASE_URL: str = Field(default="https://api.groq.com/openai/v1")
 
+    # ── Translation service ───────────────────────────────────────────────────
+    TRANSLATION_SERVICE_URL: str = Field(
+        default="http://translation_service:8050",
+        description="Internal URL for language detection and translation",
+    )
+
+    # ── Twilio Programmable Voice (phone call channel) ────────────────────────
+    TWILIO_ACCOUNT_SID:   str = Field(default="", description="Twilio Account SID")
+    TWILIO_AUTH_TOKEN:    str = Field(default="", description="Twilio Auth Token (used for webhook signature validation)")
+    TWILIO_PHONE_NUMBER:  str = Field(default="", description="Twilio phone number in E.164 format, e.g. +255700000000")
+    AI_WEBHOOK_BASE_URL:  str = Field(
+        default="https://riviwa.com",
+        description="Public base URL for Twilio webhook callbacks, e.g. https://riviwa.com",
+    )
+
     # ── Obsidian vault RAG (knowledge base from .md files) ───────────────────
     OBSIDIAN_VAULT_PATH: str = Field(
         default="/opt/riviwa/obsidian_vault",
