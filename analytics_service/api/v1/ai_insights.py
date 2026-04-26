@@ -13,9 +13,11 @@ import statistics
 from typing import Any, Dict, Optional
 from uuid import UUID
 
+import httpx
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from core.config import settings
 from core.dependencies import AnalyticsDbDep, CurrentUser, FeedbackDbDep
 from repositories.analytics_repo import AnalyticsRepository
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
@@ -347,3 +349,165 @@ async def ask_ai_insight(
         context_used = context_data,
         model        = ai_insights_service.model_name,
     )
+
+
+# ── POST /analytics/ai/ask-voice ──────────────────────────────────────────────
+
+_VOICE_ALLOWED = {
+    "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp3",
+    "audio/wav", "audio/wave", "audio/x-wav", "audio/mp4",
+    "audio/m4a", "audio/aac", "audio/amr", "audio/opus", "video/webm",
+}
+_VOICE_EXT = {
+    "audio/webm": "webm", "audio/ogg": "ogg", "audio/mpeg": "mp3",
+    "audio/mp3": "mp3", "audio/wav": "wav", "audio/wave": "wav",
+    "audio/x-wav": "wav", "audio/mp4": "mp4", "audio/m4a": "m4a",
+    "audio/aac": "aac", "audio/amr": "amr", "audio/opus": "opus",
+    "video/webm": "webm",
+}
+
+
+async def _transcribe_audio(audio_bytes: bytes, content_type: str) -> str:
+    """
+    Transcribe audio via Groq Whisper (primary) or OpenAI Whisper (fallback).
+    Returns the transcript string, or raises HTTPException on failure.
+    """
+    api_key  = settings.GROQ_API_KEY or getattr(settings, "OPENAI_API_KEY", "")
+    base_url = (
+        "https://api.groq.com/openai/v1"
+        if settings.GROQ_API_KEY
+        else "https://api.openai.com/v1"
+    )
+    model = "whisper-large-v3-turbo" if settings.GROQ_API_KEY else "whisper-1"
+
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="No STT provider configured. Set GROQ_API_KEY or OPENAI_API_KEY.",
+        )
+
+    ext      = _VOICE_EXT.get(content_type.split(";")[0].strip(), "webm")
+    filename = f"audio.{ext}"
+
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(
+                f"{base_url}/audio/transcriptions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                files={"file": (filename, audio_bytes, content_type)},
+                data={"model": model, "response_format": "json"},
+            )
+            r.raise_for_status()
+            return r.json().get("text", "").strip()
+    except Exception as exc:
+        log.error("analytics.ask_voice.stt_failed", error=str(exc))
+        raise HTTPException(status_code=502, detail=f"Transcription failed: {exc}")
+
+
+@router.post(
+    "/ask-voice",
+    response_model=AIInsightResponse,
+    summary="Ask an analytics question by voice (audio upload)",
+    description="""
+Upload an audio recording and ask an analytics question by speaking.
+
+The audio is transcribed via Whisper STT (Groq or OpenAI), then the
+transcript is sent to the AI insights LLM with the requested analytics
+context — exactly the same pipeline as `/ask` but with audio input.
+
+**Accepted formats:** WebM, OGG, WAV, MP3, M4A, AAC — up to 25 MB.
+
+**Form fields:**
+- `audio` — audio file (required)
+- `scope` — `project` | `org` | `platform` (default: `project`)
+- `context_type` — same values as `/ask`
+- `project_id` — required when scope=project
+- `org_id` — required when scope=org
+- `language` — hint for STT: `sw` or `en` (default: `sw`)
+
+**Response extras beyond `/ask`:**
+- `transcript` — what Whisper heard
+- `detected_language` — BCP-47 code from Whisper
+
+**Browser example:**
+```js
+const fd = new FormData();
+fd.append('audio', audioBlob, 'question.webm');
+fd.append('scope', 'org');
+fd.append('org_id', orgId);
+fd.append('context_type', 'org_general');
+const res = await fetch('/api/v1/analytics/ai/ask-voice', { method: 'POST', body: fd });
+```
+""",
+)
+async def ask_ai_insight_voice(
+    audio:        UploadFile  = File(..., description="Audio file — WebM/OGG/WAV/MP3/M4A/AAC, max 25 MB"),
+    scope:        str         = Form(default="project"),
+    context_type: str         = Form(default="general"),
+    project_id:   Optional[UUID] = Form(default=None),
+    org_id:       Optional[UUID] = Form(default=None),
+    language:     str         = Form(default="sw", description="STT language hint: sw | en"),
+    _token:       CurrentUser = None,
+    fb_db:        FeedbackDbDep = None,
+    an_db:        AnalyticsDbDep = None,
+) -> dict:
+    # Validate MIME
+    raw_ct       = (audio.content_type or "audio/webm").lower()
+    content_type = raw_ct.split(";")[0].strip()
+    if content_type not in _VOICE_ALLOWED:
+        raise HTTPException(
+            status_code=415,
+            detail={"error": "UNSUPPORTED_AUDIO_FORMAT", "received": audio.content_type,
+                    "supported": sorted(_VOICE_ALLOWED)},
+        )
+
+    audio_bytes = await audio.read()
+    if len(audio_bytes) > 25 * 1024 * 1024:
+        raise HTTPException(413, {"error": "AUDIO_TOO_LARGE", "max_mb": 25})
+    if len(audio_bytes) < 512:
+        raise HTTPException(400, {"error": "AUDIO_TOO_SHORT",
+                                  "message": "Recording is too short. Speak for at least 1 second."})
+
+    # Transcribe
+    transcript = await _transcribe_audio(audio_bytes, content_type)
+    if not transcript:
+        raise HTTPException(422, {"error": "STT_EMPTY", "message": "Could not transcribe audio."})
+
+    log.info("analytics.ask_voice.transcribed",
+             chars=len(transcript), lang=language, scope=scope)
+
+    # Build context (same as /ask)
+    scope_key = scope.lower()
+    ctx_type  = context_type.lower()
+
+    if scope_key == "platform":
+        if ctx_type not in _PLATFORM_CONTEXT_TYPES:
+            ctx_type = "platform_general"
+        context_data = await _build_platform_context(ctx_type, fb_db)
+
+    elif scope_key == "org":
+        if not org_id:
+            raise HTTPException(422, "org_id is required for scope=org")
+        if ctx_type not in _ORG_CONTEXT_TYPES:
+            ctx_type = "org_general"
+        context_data = await _build_org_context(ctx_type, org_id, fb_db)
+
+    else:
+        if not project_id:
+            raise HTTPException(422, "project_id is required for scope=project")
+        if ctx_type not in _PROJECT_CONTEXT_TYPES:
+            ctx_type = "general"
+        context_data = await _build_project_context(ctx_type, project_id, fb_db, an_db)
+
+    answer = await ai_insights_service.ask(
+        question=transcript,
+        context_data=context_data,
+    )
+
+    return {
+        "answer":            answer,
+        "context_used":      context_data,
+        "model":             ai_insights_service.model_name,
+        "transcript":        transcript,
+        "detected_language": language,
+    }
