@@ -293,6 +293,9 @@ class FeedbackService:
 
         await self.producer.feedback_submitted(
             f.id, f.project_id, f.feedback_type.value, f.category.value,
+            org_id=project.organisation_id if project else None,
+            branch_id=f.branch_id,
+            department_id=f.department_id,
             stakeholder_engagement_id=f.stakeholder_engagement_id,
             distribution_id=f.distribution_id,
         )
@@ -470,16 +473,26 @@ class FeedbackService:
 
         await self.db.commit()
 
+        # Fetch project once — used for both Kafka event and notification
+        _project = await self.repo.get_project(f.project_id) if f.project_id else None
+
+        # Publish feedback.submitted Kafka event (consumed by ai_service + stakeholder_service)
+        await self.producer.feedback_submitted(
+            f.id, f.project_id, f.feedback_type.value, f.category.value,
+            org_id=_project.organisation_id if _project else None,
+            branch_id=f.branch_id,
+            department_id=f.department_id,
+        )
+
         # Notify Consumer (self-service portal submission)
         if not f.is_anonymous:
             try:
-                project = await self.repo.get_project(f.project_id)
                 await self.producer.notifications.grm_feedback_submitted(
                     feedback_id      = str(f.id),
                     consumer_user_id = str(user_id),
                     consumer_phone   = f.submitter_phone,
                     feedback_ref     = f.unique_ref,
-                    project_name     = project.name if project else "the project",
+                    project_name     = _project.name if _project else "the project",
                     feedback_type    = f.feedback_type.value,
                     language         = "sw",
                 )
@@ -533,7 +546,8 @@ class FeedbackService:
         await self.repo.save(f)
         await self.repo.create_action(action)
         await self.db.commit()
-        await self.producer.feedback_acknowledged(f.id, f.project_id, f.priority.value)
+        await self.producer.feedback_acknowledged(f.id, f.project_id, f.priority.value,
+                                                   branch_id=f.branch_id, department_id=f.department_id)
 
         # Notify Consumer that their submission has been acknowledged
         if not f.is_anonymous:
@@ -607,7 +621,8 @@ class FeedbackService:
             is_internal=False, performed_by_user_id=by,
         ))
         await self.db.commit()
-        await self.producer.feedback_escalated(f.id, f.project_id, from_level.value, next_level.value, reason)
+        await self.producer.feedback_escalated(f.id, f.project_id, from_level.value, next_level.value, reason,
+                                                branch_id=f.branch_id, department_id=f.department_id)
         return f
 
     async def resolve(
@@ -639,7 +654,8 @@ class FeedbackService:
             is_internal=False, performed_by_user_id=by,
         ))
         await self.db.commit()
-        await self.producer.feedback_resolved(f.id, f.project_id)
+        await self.producer.feedback_resolved(f.id, f.project_id,
+                                               branch_id=f.branch_id, department_id=f.department_id)
 
         # Notify Consumer that their submission has been resolved
         if not f.is_anonymous:
@@ -694,7 +710,8 @@ class FeedbackService:
             is_internal=False, performed_by_user_id=by,
         ))
         await self.db.commit()
-        await self.producer.feedback_appealed(f.id, f.project_id, grounds)
+        await self.producer.feedback_appealed(f.id, f.project_id, grounds,
+                                               branch_id=f.branch_id, department_id=f.department_id)
         return f
 
     async def close(

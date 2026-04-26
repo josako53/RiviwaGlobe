@@ -53,37 +53,69 @@ class FeedbackProducer:
 
     async def feedback_submitted(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
                                   feedback_type: str, category: str,
+                                  org_id: Optional[uuid.UUID] = None,
+                                  branch_id: Optional[uuid.UUID] = None,
+                                  department_id: Optional[uuid.UUID] = None,
                                   stakeholder_engagement_id: Optional[uuid.UUID] = None,
                                   distribution_id: Optional[uuid.UUID] = None) -> None:
         await self.publish(FeedbackEvents.SUBMITTED, {
-            "feedback_id": str(feedback_id), "project_id": str(project_id),
-            "feedback_type": feedback_type, "category": category,
+            "feedback_id":   str(feedback_id),
+            "project_id":    str(project_id),
+            "feedback_type": feedback_type,
+            "category":      category,
+            "org_id":        str(org_id)        if org_id        else None,
+            "branch_id":     str(branch_id)     if branch_id     else None,
+            "department_id": str(department_id) if department_id else None,
             "stakeholder_engagement_id": str(stakeholder_engagement_id) if stakeholder_engagement_id else None,
-            "distribution_id": str(distribution_id) if distribution_id else None,
+            "distribution_id":           str(distribution_id)           if distribution_id           else None,
         }, key=str(project_id))
 
     async def feedback_acknowledged(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
-                                     priority: str) -> None:
-        await self.publish(FeedbackEvents.ACKNOWLEDGED,
-            {"feedback_id": str(feedback_id), "project_id": str(project_id), "priority": priority},
-            key=str(project_id))
-
-    async def feedback_escalated(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
-                                  from_level: str, to_level: str, reason: str) -> None:
-        await self.publish(FeedbackEvents.ESCALATED, {
-            "feedback_id": str(feedback_id), "project_id": str(project_id),
-            "from_level": from_level, "to_level": to_level, "reason": reason,
+                                     priority: str,
+                                     branch_id: Optional[uuid.UUID] = None,
+                                     department_id: Optional[uuid.UUID] = None) -> None:
+        await self.publish(FeedbackEvents.ACKNOWLEDGED, {
+            "feedback_id":   str(feedback_id),
+            "project_id":    str(project_id),
+            "priority":      priority,
+            "branch_id":     str(branch_id)     if branch_id     else None,
+            "department_id": str(department_id) if department_id else None,
         }, key=str(project_id))
 
-    async def feedback_resolved(self, feedback_id: uuid.UUID, project_id: uuid.UUID) -> None:
-        await self.publish(FeedbackEvents.RESOLVED,
-            {"feedback_id": str(feedback_id), "project_id": str(project_id)},
-            key=str(project_id))
+    async def feedback_escalated(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
+                                  from_level: str, to_level: str, reason: str,
+                                  branch_id: Optional[uuid.UUID] = None,
+                                  department_id: Optional[uuid.UUID] = None) -> None:
+        await self.publish(FeedbackEvents.ESCALATED, {
+            "feedback_id":   str(feedback_id),
+            "project_id":    str(project_id),
+            "from_level":    from_level,
+            "to_level":      to_level,
+            "reason":        reason,
+            "branch_id":     str(branch_id)     if branch_id     else None,
+            "department_id": str(department_id) if department_id else None,
+        }, key=str(project_id))
+
+    async def feedback_resolved(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
+                                 branch_id: Optional[uuid.UUID] = None,
+                                 department_id: Optional[uuid.UUID] = None) -> None:
+        await self.publish(FeedbackEvents.RESOLVED, {
+            "feedback_id":   str(feedback_id),
+            "project_id":    str(project_id),
+            "branch_id":     str(branch_id)     if branch_id     else None,
+            "department_id": str(department_id) if department_id else None,
+        }, key=str(project_id))
 
     async def feedback_appealed(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
-                                 grounds: str) -> None:
+                                 grounds: str,
+                                 branch_id: Optional[uuid.UUID] = None,
+                                 department_id: Optional[uuid.UUID] = None) -> None:
         await self.publish(FeedbackEvents.APPEALED, {
-            "feedback_id": str(feedback_id), "project_id": str(project_id), "grounds": grounds,
+            "feedback_id":   str(feedback_id),
+            "project_id":    str(project_id),
+            "grounds":       grounds,
+            "branch_id":     str(branch_id)     if branch_id     else None,
+            "department_id": str(department_id) if department_id else None,
         }, key=str(project_id))
 
 
