@@ -55,16 +55,17 @@ import base64
 import hashlib
 import hmac
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
 import structlog
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.dependencies import DbDep
+from models.conversation import ConversationStatus
 from services.voice_ai_service import VoiceAIService
 from services.conversation_service import ConversationService
 
@@ -432,13 +433,17 @@ async def call_status(
     if call_state in terminal and conv_id_str:
         try:
             from repositories.conversation_repo import ConversationRepository
-            from models.conversation import ConversationStatus
-            from datetime import datetime, timezone
 
             repo = ConversationRepository(db)
             conv = await repo.get(uuid.UUID(conv_id_str))
-            if conv and conv.status.value not in ("submitted", "closed"):
-                conv.status       = ConversationStatus.CLOSED
+            terminal_statuses = (
+                ConversationStatus.SUBMITTED,
+                ConversationStatus.ABANDONED,
+                ConversationStatus.TIMED_OUT,
+                ConversationStatus.FAILED,
+            )
+            if conv and conv.status not in terminal_statuses:
+                conv.status       = ConversationStatus.ABANDONED
                 conv.completed_at = datetime.now(timezone.utc)
                 await repo.save(conv)
                 await db.commit()
