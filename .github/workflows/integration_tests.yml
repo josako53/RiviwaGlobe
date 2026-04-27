@@ -1,0 +1,95 @@
+name: Riviwa Integration Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose-v2
+
+      - name: Create Dummy .env if missing
+        run: |
+          # This ensures docker-compose doesn't fail if variables aren't set in the environment
+          if [ ! -f .env ]; then
+            echo "Creating placeholder .env for GitHub Actions"
+            touch .env
+            echo "AUTH_DB_USER=auth_admin" >> .env
+            echo "AUTH_DB_PASSWORD=auth_pass_123" >> .env
+            echo "AUTH_DB_NAME=auth_db" >> .env
+            echo "FEEDBACK_DB_USER=fb_admin" >> .env
+            echo "FEEDBACK_DB_PASSWORD=fb_pass_456" >> .env
+            echo "FEEDBACK_DB_NAME=feedback_db" >> .env
+            echo "STAKEHOLDER_DB_USER=stk_admin" >> .env
+            echo "STAKEHOLDER_DB_PASSWORD=stk_pass_789" >> .env
+            echo "STAKEHOLDER_DB_NAME=stakeholder_db" >> .env
+            echo "PAYMENT_DB_USER=pay_admin" >> .env
+            echo "PAYMENT_DB_PASSWORD=pay_pass_321" >> .env
+            echo "PAYMENT_DB_NAME=payment_db" >> .env
+            echo "AUTH_DB_HOST=riviwa_auth_db" >> .env
+            echo "FEEDBACK_DB_HOST=feedback_db" >> .env
+            echo "STAKEHOLDER_DB_HOST=stakeholder_db" >> .env
+            echo "PAYMENT_DB_HOST=payment_db" >> .env
+            echo "DB_PORT=5432" >> .env
+            echo "SECRET_KEY=test_secret_key_for_github_actions_12345" >> .env
+            echo "ALGORITHM=HS256" >> .env
+            echo "KAFKA_BOOTSTRAP_SERVERS=kafka-1:9092" >> .env
+            echo "INTERNAL_SERVICE_KEY=test_internal_key" >> .env
+            echo "ENVIRONMENT=testing" >> .env
+            echo "DEBUG=true" >> .env
+          fi
+
+      - name: Build and Start Services
+        run: |
+          # Build all services and start them in detached mode
+          docker compose up -d --build
+
+      - name: Wait for Services to be Healthy
+        run: |
+          echo "Waiting for core services (Auth, Feedback, Kafka) to be ready..."
+          # We check the health of the Nginx gateway and main databases
+          MAX_RETRIES=60
+          COUNT=0
+          until [ $COUNT -ge $MAX_RETRIES ] || (docker inspect -f {{.State.Health.Status}} nginx | grep -q "healthy"); do
+            echo "Waiting for Nginx healthcheck... ($COUNT/$MAX_RETRIES)"
+            docker compose ps
+            sleep 10
+            COUNT=$((COUNT+1))
+          done
+          
+          if [ $COUNT -ge $MAX_RETRIES ]; then
+            echo "ERROR: Services failed to become healthy in time."
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Run Integration Tests
+        run: |
+          # Run the test script from the host against the mapped ports
+          python scripts/test_endpoints.py
+
+      - name: Collect Logs on Failure
+        if: failure()
+        run: |
+          docker compose logs
+
+      - name: Shutdown Services
+        if: always()
+        run: |
+          docker compose down -v
