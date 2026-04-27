@@ -55,6 +55,19 @@ jobs:
             echo "DEBUG=true" >> .env
           fi
 
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are necessary, 
+          # so we only remove the largest ones we definitely don't need
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Build and Start Services
         run: |
           # Build all services and start them in detached mode
