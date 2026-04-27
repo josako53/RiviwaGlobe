@@ -205,8 +205,8 @@ class RiviwaTestRunner:
         # Step 2 — verify OTP
         print(f"\n  {YELLOW}►{RESET} OTP sent via {otp_channel} to {otp_dest}")
         if self.auto:
-            print(f"  {INFO} Auto-mode: using default OTP '123456'")
-            otp = "123456"
+            print(f"  {INFO} Auto-mode: using default OTP '000000'")
+            otp = "000000"
         else:
             otp = input(f"  {BOLD}Enter OTP code:{RESET} ").strip()
         
