@@ -52,11 +52,12 @@ INFO = f"{CYAN}ℹ{RESET}"
 # ══════════════════════════════════════════════════════════════════════════════
 
 class RiviwaTestRunner:
-    def __init__(self, base_url: str, access_token: Optional[str] = None):
+    def __init__(self, base_url: str, access_token: Optional[str] = None, auto: bool = False):
         self.base = base_url.rstrip("/")
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/json"})
         self.results: list[tuple[str, bool, int]] = []
+        self.auto = auto
 
         # ── IDs accumulated during the run ─────────────────────────────────
         self.access_token:    Optional[str] = None
@@ -203,7 +204,12 @@ class RiviwaTestRunner:
 
         # Step 2 — verify OTP
         print(f"\n  {YELLOW}►{RESET} OTP sent via {otp_channel} to {otp_dest}")
-        otp = input(f"  {BOLD}Enter OTP code:{RESET} ").strip()
+        if self.auto:
+            print(f"  {INFO} Auto-mode: using default OTP '123456'")
+            otp = "123456"
+        else:
+            otp = input(f"  {BOLD}Enter OTP code:{RESET} ").strip()
+        
         r = self._call("POST", "/auth/register/verify-otp",
                        {"session_token": session_token, "otp_code": otp},
                        label="[2] POST /auth/register/verify-otp")
@@ -726,11 +732,16 @@ def main():
         "--skip-verify", action="store_true",
         help="Skip POST /orgs/{id}/verify (requires platform-admin token)",
     )
+    parser.add_argument(
+        "--auto", action="store_true",
+        help="Non-interactive mode for CI (bypasses OTP prompts)",
+    )
     args = parser.parse_args()
 
     runner = RiviwaTestRunner(
         base_url=args.base_url,
         access_token=args.token,
+        auto=args.auto,
     )
     runner.run(
         skip_auth=bool(args.token),

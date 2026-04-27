@@ -94,8 +94,8 @@ jobs:
 
       - name: Run Integration Tests
         run: |
-          # Run the test script from the host against the mapped ports
-          python scripts/test_endpoints.py
+          # Run the test script against the local Nginx gateway with auto-OTP enabled
+          python scripts/test_endpoints.py --auto --base-url http://localhost:80/api/v1
 
       - name: Collect Logs on Failure
         if: failure()
