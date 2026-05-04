@@ -13,7 +13,7 @@ from schemas.product import (
     BulletPointIn,
     ProductAttributeIn,
     ProductAttributeOut,
-    ProductBulletPointOut,
+    BulletPointOut,
     ProductCreate,
     ProductImageIn,
     ProductImageOut,
