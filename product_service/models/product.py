@@ -219,6 +219,24 @@ def generate_rsin() -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ORG CACHE
+# Local cache of organisation records populated by consuming
+# riviwa.organisation.events from auth_service Kafka topic.
+# Prevents cross-service HTTP calls for org validation.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class OrgCache(SQLModel, table=True):
+    __tablename__ = "org_cache"
+
+    org_id: UUID = Field(primary_key=True)
+    name: str = Field(max_length=300)
+    slug: Optional[str] = Field(default=None, max_length=200)
+    is_active: bool = Field(default=True)
+    is_verified: bool = Field(default=False)
+    synced_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # CORE PRODUCT TABLE
 # ══════════════════════════════════════════════════════════════════════════════
 

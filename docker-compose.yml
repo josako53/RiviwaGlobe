@@ -974,6 +974,64 @@ services:
       redis:
         condition: service_healthy
 
+  # ── PRODUCT DB ───────────────────────────────────────────────────────────────
+  product_db:
+    image: postgres:15-alpine
+    container_name: product_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${PRODUCT_DB_USER:-product_admin}
+      POSTGRES_PASSWORD: ${PRODUCT_DB_PASSWORD:-product_pass_123}
+      POSTGRES_DB:       ${PRODUCT_DB_NAME:-product_db}
+    ports: ["5443:5432"]
+    volumes: [product_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PRODUCT_DB_USER:-product_admin} -d ${PRODUCT_DB_NAME:-product_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # ── PRODUCT SERVICE ───────────────────────────────────────────────────────────
+  # Product catalogue: RSIN, product types, category attributes, org-scoped listings,
+  # variation parent-child, flexible name-value attributes, Kafka lifecycle events.
+  product_service:
+    build:
+      context: ./product_service
+      dockerfile: Dockerfile
+    container_name: product_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8110:8110"]
+    environment:
+      PRODUCT_DB_HOST:      product_db
+      DB_PORT:              5432
+      PRODUCT_DB_USER:      ${PRODUCT_DB_USER:-product_admin}
+      PRODUCT_DB_PASSWORD:  ${PRODUCT_DB_PASSWORD:-product_pass_123}
+      PRODUCT_DB_NAME:      ${PRODUCT_DB_NAME:-product_db}
+      AUTH_SECRET_KEY:      ${SECRET_KEY}
+      AUTH_ALGORITHM:       ${ALGORITHM:-HS256}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      AUTH_SERVICE_URL:     http://riviwa_auth_service:8000
+      REDIS_URL:            redis://redis:6379/8
+      MINIO_ENDPOINT:       minio:9000
+      MINIO_ACCESS_KEY:     ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY:     ${MINIO_SECRET_KEY:-minioadmin}
+      IMAGES_BUCKET:        riviwa-images
+      ENVIRONMENT:          ${ENVIRONMENT}
+      DEBUG:                ${DEBUG:-false}
+    depends_on:
+      product_db:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ── Nginx reverse proxy + SSL termination ─────────────────────────────────
   nginx:
     image: nginx:1.27-alpine
@@ -998,6 +1056,7 @@ services:
       - notification_service
       - analytics_service
       - integration_service
+      - product_service
     healthcheck:
       test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:80/ || exit 0"]
       interval: 30s
@@ -1143,4 +1202,5 @@ volumes:
   spark_checkpoints:
   obsidian_vault_data:
   integration_db_data:
+  product_db_data:
   certbot_certs:
