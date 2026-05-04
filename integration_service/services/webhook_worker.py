@@ -82,7 +82,7 @@ async def deliver_webhook(db: AsyncSession, delivery: WebhookDelivery) -> bool:
             log.info("webhook.delivered",
                      delivery_id=str(delivery.id),
                      client_id=str(client.id),
-                     event=delivery.event_type,
+                     webhook_event=delivery.event_type,
                      status_code=resp.status_code)
             return True
 
@@ -111,7 +111,7 @@ async def deliver_webhook(db: AsyncSession, delivery: WebhookDelivery) -> bool:
         log.error("webhook.delivery_failed_permanently",
                   delivery_id=str(delivery.id),
                   client_id=str(client.id),
-                  event=delivery.event_type,
+                  webhook_event=delivery.event_type,
                   attempts=delivery.attempt_count)
 
     return False
