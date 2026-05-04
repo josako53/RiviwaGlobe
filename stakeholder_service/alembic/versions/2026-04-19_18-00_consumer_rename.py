@@ -31,22 +31,41 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ── 1. Rename enum value "PAP" → "consumer" ───────────────────────────────
-    # PostgreSQL supports ALTER TYPE … RENAME VALUE since v10.
-    # DB stores uppercase labels (PAP, INTERESTED_PARTY, etc.)
-    op.execute("ALTER TYPE stakeholder_type RENAME VALUE 'PAP' TO 'consumer'")
+    # ── 1. Rename enum value "PAP" → "consumer" (idempotent) ─────────────────
+    op.execute("""
+        DO $$ BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid
+                WHERE t.typname = 'stakeholder_type' AND e.enumlabel = 'PAP'
+            ) THEN
+                ALTER TYPE stakeholder_type RENAME VALUE 'PAP' TO 'consumer';
+            END IF;
+        END $$;
+    """)
 
-    # ── 2. Rename column is_pap → is_consumer on stakeholder_projects ─────────
-    op.alter_column(
-        "stakeholder_projects",
-        "is_pap",
-        new_column_name="is_consumer",
-        existing_type=sa.Boolean(),
-        existing_nullable=False,
-    )
+    # ── 2. Rename column is_pap → is_consumer on stakeholder_projects ────────
+    op.execute("""
+        DO $$ BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'stakeholder_projects' AND column_name = 'is_pap'
+            ) THEN
+                ALTER TABLE stakeholder_projects RENAME COLUMN is_pap TO is_consumer;
+            END IF;
+        END $$;
+    """)
 
-    # ── 3. Rename focal_person_org_type enum value "PIU" → "grm_unit" ─────────
-    op.execute("ALTER TYPE focal_person_org_type RENAME VALUE 'PIU' TO 'grm_unit'")
+    # ── 3. Rename focal_person_org_type enum value "PIU" → "grm_unit" ────────
+    op.execute("""
+        DO $$ BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid
+                WHERE t.typname = 'focal_person_org_type' AND e.enumlabel = 'PIU'
+            ) THEN
+                ALTER TYPE focal_person_org_type RENAME VALUE 'PIU' TO 'grm_unit';
+            END IF;
+        END $$;
+    """)
 
 
 def downgrade() -> None:
