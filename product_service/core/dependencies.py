@@ -48,11 +48,11 @@ def _decode(token: str) -> TokenClaims:
 
 
 def _is_platform_admin(claims: TokenClaims) -> bool:
-    return _PLATFORM_ROLE_RANK.get(claims.platform_role or "", -1) >= 2
+    return _PLATFORM_ROLE_RANK.get((claims.platform_role or "").lower(), -1) >= 2
 
 
 def _org_rank(claims: TokenClaims) -> int:
-    return _ORG_ROLE_RANK.get(claims.org_role or "", -1)
+    return _ORG_ROLE_RANK.get((claims.org_role or "").lower(), -1)
 
 
 async def get_current_user(

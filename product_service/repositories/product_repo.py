@@ -83,8 +83,9 @@ _CATEGORY_ATTR_MAP: Dict[str, Any] = {
 }
 
 
-def get_category_attr_model(product_type: ProductType) -> Optional[Any]:
-    return _CATEGORY_ATTR_MAP.get(product_type.value)
+def get_category_attr_model(product_type) -> Optional[Any]:
+    key = product_type.value if hasattr(product_type, "value") else product_type
+    return _CATEGORY_ATTR_MAP.get(key)
 
 
 class ProductRepository:
@@ -140,9 +141,9 @@ class ProductRepository:
     ) -> Tuple[List[Product], int]:
         q = select(Product).where(Product.organisation_id == org_id)
         if product_type:
-            q = q.where(Product.product_type == product_type)
+            q = q.where(Product.product_type == (product_type.value if hasattr(product_type, "value") else product_type))
         if listing_status:
-            q = q.where(Product.listing_status == listing_status)
+            q = q.where(Product.listing_status == (listing_status.value if hasattr(listing_status, "value") else listing_status))
         if is_active is not None:
             q = q.where(Product.is_active == is_active)
         if search:
@@ -166,9 +167,9 @@ class ProductRepository:
     ) -> Tuple[List[Product], int]:
         q = select(Product).where(Product.is_active == True)
         if product_type:
-            q = q.where(Product.product_type == product_type)
+            q = q.where(Product.product_type == (product_type.value if hasattr(product_type, "value") else product_type))
         if listing_status:
-            q = q.where(Product.listing_status == listing_status)
+            q = q.where(Product.listing_status == (listing_status.value if hasattr(listing_status, "value") else listing_status))
 
         count_q = select(func.count()).select_from(q.subquery())
         total = (await self.db.execute(count_q)).scalar_one()
@@ -185,7 +186,7 @@ class ProductRepository:
 
     async def soft_delete(self, product: Product) -> None:
         product.is_active = False
-        product.listing_status = ListingStatus.INACTIVE
+        product.listing_status = "INACTIVE"
         self.db.add(product)
         await self.db.flush()
 

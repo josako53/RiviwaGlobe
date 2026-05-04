@@ -73,10 +73,15 @@ class ProductService:
         if await self.repo.get_by_org_and_sku(org_id, data.seller_sku):
             raise DuplicateSkuError(detail={"seller_sku": data.seller_sku})
 
+        raw = data.model_dump(exclude={"bullet_points", "images", "attributes"})
+        # Convert enum values to strings so asyncpg doesn't try to cast to non-existent PG enum types
+        for field in ("product_type", "condition", "fulfillment_method", "listing_status", "variation_theme"):
+            if field in raw and raw[field] is not None and hasattr(raw[field], "value"):
+                raw[field] = raw[field].value
         product = Product(
             rsin=generate_rsin(),
             organisation_id=org_id,
-            **data.model_dump(exclude={"bullet_points", "images", "attributes"}),
+            **raw,
         )
         product = await self.repo.create(product)
 
@@ -171,7 +176,7 @@ class ProductService:
 
         now = datetime.utcnow()
         await self.repo.update(product, {
-            "listing_status": ListingStatus.BUYABLE,
+            "listing_status": "BUYABLE",
             "published_at": now,
             "updated_at": now,
         })
@@ -186,7 +191,10 @@ class ProductService:
         if not product or not product.is_active:
             raise ProductNotFoundError()
         await self._assert_product_belongs_to_org(product, org_id, is_platform_admin)
-        await self.repo.soft_delete(product)
+        product.is_active = False
+        product.listing_status = "INACTIVE"
+        self.repo.db.add(product)
+        await self.repo.db.flush()
         await self.producer.product_deactivated(product, org_id=org_id)
 
     # ── Bullet Points ─────────────────────────────────────────────────────────

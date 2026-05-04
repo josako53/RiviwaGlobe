@@ -22,7 +22,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, JSON, Numeric, Text, UniqueConstraint
+from sqlalchemy import Column, JSON, Numeric, String, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -299,7 +299,9 @@ class Product(SQLModel, table=True):
     )
 
     # ── Classification (IMMUTABLE after publish) ─────────────────────────────
-    product_type: ProductType = Field(index=True)
+    # sa_column=Column(String) prevents asyncpg from trying to cast to a
+    # non-existent PostgreSQL enum type (the DB column is VARCHAR).
+    product_type: str = Field(sa_column=Column(String(50), nullable=False, index=True))
     # Customer-facing category tree leaf node, e.g. "Electronics > Computers > Laptops"
     browse_node_id: Optional[str] = Field(default=None, max_length=50)
     browse_node_path: Optional[str] = Field(
@@ -351,9 +353,9 @@ class Product(SQLModel, table=True):
     # ── Offer Details ────────────────────────────────────────────────────────
     price: Decimal = Field(sa_column=Column(Numeric(14, 2)))
     currency: str = Field(default="TZS", max_length=3)
-    condition: ProductCondition = Field(default=ProductCondition.NEW)
+    condition: str = Field(default="NEW", sa_column=Column(String(30), nullable=False))
     quantity: int = Field(default=0, ge=0)
-    fulfillment_method: FulfillmentMethod = Field(default=FulfillmentMethod.MERCHANT)
+    fulfillment_method: str = Field(default="MERCHANT", sa_column=Column(String(20), nullable=False))
     # FBA-equivalent shelf life (days). Required for consumables sent to Riviwa centres.
     fulfillment_center_shelf_life_days: Optional[int] = Field(default=None, ge=0, le=1825)
 
@@ -374,14 +376,14 @@ class Product(SQLModel, table=True):
     # Children share the parent's product_type and browse classification.
     is_parent: bool = Field(default=False)
     parent_product_id: Optional[UUID] = Field(default=None, index=True)
-    variation_theme: Optional[VariationTheme] = Field(default=None)
+    variation_theme: Optional[str] = Field(default=None, sa_column=Column(String(30), nullable=True))
     # e.g. {"color": "Red", "size": "L"} for a child variant
     variation_values: Optional[Dict[str, Any]] = Field(
         default=None, sa_column=Column(JSON)
     )
 
     # ── Listing Status & Flags ───────────────────────────────────────────────
-    listing_status: ListingStatus = Field(default=ListingStatus.DRAFT, index=True)
+    listing_status: str = Field(default="DRAFT", sa_column=Column(String(20), nullable=False, index=True))
     is_active: bool = Field(default=True, index=True)
     is_gated: bool = Field(default=False, description="Requires platform approval before selling")
     suppression_reason: Optional[str] = Field(default=None, max_length=500)
@@ -418,7 +420,7 @@ class ProductImage(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     product_id: UUID = Field(index=True, foreign_key="products.product_id")
-    role: ImageRole = Field(default=ImageRole.ALTERNATE)
+    role: str = Field(default="ALTERNATE", sa_column=Column(String(30), nullable=False))
     position: int = Field(default=1, ge=1, description="Display order among same role")
     url: str = Field(max_length=1000)
     alt_text: Optional[str] = Field(default=None, max_length=200)

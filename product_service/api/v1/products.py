@@ -17,6 +17,7 @@ from schemas.product import (
     ProductCreate,
     ProductImageIn,
     ProductImageOut,
+    ProductListItem,
     ProductListResponse,
     ProductResponse,
     ProductUpdate,
@@ -263,7 +264,7 @@ async def upsert_category_attrs(
 
 # ── Variants ──────────────────────────────────────────────────────────────────
 
-@router.get("/{product_id}/variants", response_model=List[ProductListResponse])
+@router.get("/{product_id}/variants", response_model=List[ProductListItem])
 async def list_variants(product_id: UUID, db: DbDep, kafka: KafkaDep, claims: StaffDep):
     """List child variants of a parent product."""
     org_id = UUID(claims.org_id) if claims.org_id else None
