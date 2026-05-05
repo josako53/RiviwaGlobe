@@ -1,7 +1,8 @@
-# Riviwa QR & Verification API Reference
+# Riviwa Product, QR & Verification API Reference
 
+> Document: `RIVIWA_PRODUCT_QR_VERICATION.md`  
 > Generated: 2026-05-05  
-> Services: **qr_service** (port 8120) · **verification_service** (port 8125) · **ai_service** (port 8085) · **auth_service** (port 8000)  
+> Services: **product_service** (8110) · **qr_service** (8120) · **verification_service** (8125) · **ai_service** (8085) · **auth_service** (8000)  
 > Base URL (production): `https://api.riviwa.com`  
 > Direct (dev/server): `http://77.237.241.13:{port}`
 
@@ -9,23 +10,25 @@
 
 ## Table of Contents
 
-1. [Authentication](#1-authentication)
-2. [QR Service — Authenticated Endpoints](#2-qr-service--authenticated-endpoints)
-3. [QR Service — Internal Endpoints](#3-qr-service--internal-endpoints)
-4. [QR Service — Public Endpoint](#4-qr-service--public-endpoint)
-5. [Verification Service — Consumer Endpoints](#5-verification-service--consumer-endpoints)
-6. [Verification Service — Staff / Admin Endpoints](#6-verification-service--staff--admin-endpoints)
-7. [Verification Service — Analytics Endpoints](#7-verification-service--analytics-endpoints)
-8. [AI Service — Image Intelligence Endpoints](#8-ai-service--image-intelligence-endpoints)
-9. [Auth Service — SMS Code (Organisation)](#9-auth-service--sms-code-organisation)
-10. [End-to-End Flows](#10-end-to-end-flows)
-11. [Code Formats & Rules](#11-code-formats--rules)
-12. [Error Responses](#12-error-responses)
-13. [Product Service Endpoints](#13-product-service-endpoints)
+1. [Authentication — Login & Registration](#1-authentication--login--registration)
+2. [Organisation Setup — Prerequisites for Products](#2-organisation-setup--prerequisites-for-products)
+3. [Product Creation — Step-by-Step Flow](#3-product-creation--step-by-step-flow)
+4. [Product Service Endpoints](#4-product-service-endpoints)
+5. [QR Service — Authenticated Endpoints](#5-qr-service--authenticated-endpoints)
+6. [QR Service — Internal Endpoints](#6-qr-service--internal-endpoints)
+7. [QR Service — Public Endpoint](#7-qr-service--public-endpoint)
+8. [Verification Service — Consumer Endpoints](#8-verification-service--consumer-endpoints)
+9. [Verification Service — Staff / Admin Endpoints](#9-verification-service--staff--admin-endpoints)
+10. [Verification Service — Analytics Endpoints](#10-verification-service--analytics-endpoints)
+11. [AI Service — Image Intelligence Endpoints](#11-ai-service--image-intelligence-endpoints)
+12. [Auth Service — SMS Code](#12-auth-service--sms-code)
+13. [End-to-End Flows](#13-end-to-end-flows)
+14. [Code Formats & Rules](#14-code-formats--rules)
+15. [Error Responses](#15-error-responses)
 
 ---
 
-## 1. Authentication
+## 1. Authentication — Login & Registration
 
 ### JWT (Consumer/Staff endpoints)
 
@@ -74,7 +77,485 @@ The key is shared across all Riviwa microservices and is set in the environment 
 
 ---
 
-## 2. QR Service — Authenticated Endpoints
+## 2. Organisation Setup — Prerequisites for Products
+
+> Every product in Riviwa belongs to an **Organisation**. A user cannot create products in their personal (consumer) view — they must first create an organisation, have it verified by a platform admin, then switch their session into the org dashboard. Only then will the JWT carry an `org_id`, which all product endpoints require.
+
+### 2.1 The Prerequisite Chain
+
+```
+ ┌─────────────────────────────────────────────────────────────┐
+ │  STEP 1 — Register a user account                          │
+ │  POST /api/v1/auth/register/init                            │
+ │  POST /api/v1/auth/register/verify-otp                      │
+ │  POST /api/v1/auth/register/complete   (set password)       │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+ ┌────────────────────────────▼────────────────────────────────┐
+ │  STEP 2 — Login                                             │
+ │  POST /api/v1/auth/login                                    │
+ │  POST /api/v1/auth/login/verify-otp                         │
+ │  → JWT:  { sub, org_id: null, org_role: null }              │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+ ┌────────────────────────────▼────────────────────────────────┐
+ │  STEP 3 — Create an Organisation                            │
+ │  POST /api/v1/orgs                                          │
+ │  → status: PENDING_VERIFICATION                             │
+ │  → caller becomes org OWNER automatically                   │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+ ┌────────────────────────────▼────────────────────────────────┐
+ │  STEP 4 — Platform Admin verifies the Organisation          │
+ │  POST /api/v1/orgs/{org_id}/verify   [admin JWT required]   │
+ │  → status: ACTIVE, is_verified: true                        │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+ ┌────────────────────────────▼────────────────────────────────┐
+ │  STEP 5 — Switch into the Org Dashboard                     │
+ │  POST /api/v1/auth/switch-org  { "org_id": "..." }          │
+ │  → NEW JWT: { sub, org_id: "...", org_role: "OWNER" }       │
+ │  Use this new token for ALL product & QR endpoints          │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+ ┌────────────────────────────▼────────────────────────────────┐
+ │  STEP 6 — (Recommended) Set Org SMS Code                    │
+ │  PATCH /api/v1/orgs/{org_id}  { "sms_code": "TARURA" }      │
+ │  → All QR codes will use TARURA-{SHORT_CODE} format         │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+ ┌────────────────────────────▼────────────────────────────────┐
+ │  STEP 7 — Create & Publish Products                         │
+ │  POST /api/v1/products/                                     │
+ │  PATCH /api/v1/products/{id}/publish                        │
+ │  → Product images auto-indexed into AI Qdrant collection    │
+ └─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 2.2 Register a User Account (3-Step Flow)
+
+#### Step 1A — Initiate Registration
+```http
+POST /api/v1/auth/register/init
+Content-Type: application/json
+
+{
+  "email": "owner@company.com"
+}
+```
+> Provide **exactly one** of `email` or `phone_number`. An OTP is dispatched.
+
+Response: `{ "session_token": "...", "otp_channel": "email", "expires_in_seconds": 600 }`
+
+#### Step 1B — Verify OTP
+```http
+POST /api/v1/auth/register/verify-otp
+Content-Type: application/json
+
+{
+  "session_token": "<from step 1A>",
+  "otp_code": "000000"
+}
+```
+Response: `{ "continuation_token": "...", "expires_in_seconds": 600 }`
+
+#### Step 1C — Complete Registration (set password)
+```http
+POST /api/v1/auth/register/complete
+Content-Type: application/json
+
+{
+  "continuation_token": "<from step 1B>",
+  "password": "SecurePass@2026!",
+  "password_confirm": "SecurePass@2026!",
+  "full_name": "John Komba"
+}
+```
+Response: `{ "access_token": "...", "refresh_token": "...", "user_id": "..." }`
+
+> In dev mode the OTP is always `000000`.
+
+---
+
+### 2.3 Login (2-Step Flow)
+
+#### Step 2A — Submit Credentials
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "identifier": "owner@company.com",
+  "password": "SecurePass@2026!"
+}
+```
+Response: `{ "login_token": "...", "otp_channel": "email", "expires_in_seconds": 300 }`
+
+#### Step 2B — Verify OTP
+```http
+POST /api/v1/auth/login/verify-otp
+Content-Type: application/json
+
+{
+  "login_token": "<from step 2A>",
+  "otp_code": "000000"
+}
+```
+Response: `{ "access_token": "eyJ...", "refresh_token": "...", "expires_in": 1800 }`
+
+> This JWT has `org_id: null` — the caller is in **personal/consumer view**. Products cannot be created yet.
+
+---
+
+### 2.4 Create Organisation
+
+```http
+POST /api/v1/orgs
+Authorization: Bearer <personal-jwt>
+Content-Type: application/json
+```
+
+**Requirement:** The user's email must be verified (`is_email_verified: true`). The caller automatically becomes the org `OWNER`.
+
+```json
+{
+  "legal_name": "Tanzania Roads Authority",
+  "display_name": "TARURA",
+  "slug": "tarura",
+  "org_type": "GOVERNMENT",
+  "sms_code": "TARURA",
+  "country_code": "TZ",
+  "timezone": "Africa/Dar_es_Salaam",
+  "website_url": "https://tarura.go.tz",
+  "support_email": "grm@tarura.go.tz",
+  "support_phone": "+255222123456",
+  "registration_number": "GOV-TZ-TARURA-2026",
+  "description": "Public Infrastructure Unit managing GRM for rural roads"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `legal_name` | string | ✅ | Official registered name (max 200 chars) |
+| `display_name` | string | ✅ | Short UI name (max 100 chars) |
+| `slug` | string | ✅ | URL-safe unique handle, lowercase alphanumeric + hyphens (e.g. `tarura`) |
+| `org_type` | enum | ✅ | `BUSINESS` · `CORPORATE` · `GOVERNMENT` · `NGO` · `INDIVIDUAL_PRO` |
+| `sms_code` | string | — | 2–10 uppercase alphanumeric SMS prefix (e.g. `TARURA`, `CRDB`, `NMB`) |
+| `country_code` | string | — | ISO 2-letter country code |
+| `timezone` | string | — | e.g. `Africa/Dar_es_Salaam` |
+| `website_url` | string | — | Organisation website |
+| `support_email` | string | — | Public support email |
+| `support_phone` | string | — | Public support phone |
+| `registration_number` | string | — | Company/charity/govt registration number |
+| `tax_id` | string | — | VAT / tax identification |
+| `description` | string | — | Max 1000 chars |
+| `max_members` | int | — | Team size limit (0 = unlimited) |
+
+**Response `201`:**
+```json
+{
+  "id": "32f183b3-c09d-4824-b61f-d32e693ad30e",
+  "slug": "tarura",
+  "legal_name": "Tanzania Roads Authority",
+  "display_name": "TARURA",
+  "org_type": "GOVERNMENT",
+  "status": "PENDING_VERIFICATION",
+  "is_verified": false,
+  "sms_code": "TARURA",
+  "country_code": "TZ",
+  "created_at": "2026-05-05T10:00:00Z"
+}
+```
+
+> Status is `PENDING_VERIFICATION`. The org is **not yet operational** — it cannot transact, create QR codes, or have products published until a platform admin verifies it.
+
+---
+
+### 2.5 Platform Admin Verifies Organisation
+
+```http
+POST /api/v1/orgs/{org_id}/verify
+Authorization: Bearer <platform-admin-jwt>
+```
+
+**Requirement:** Caller must hold `platform_role = admin` or `super_admin`.  
+No request body.
+
+**Response `200`:**
+```json
+{
+  "id": "32f183b3-...",
+  "status": "ACTIVE",
+  "is_verified": true,
+  ...
+}
+```
+
+> After this call the org transitions to `ACTIVE`. The owner can now switch into the org dashboard and start creating products.
+
+**Other admin-only org status endpoints:**
+
+| Endpoint | Effect |
+|----------|--------|
+| `POST /api/v1/orgs/{id}/suspend` | Temporarily disables org — `{ "reason": "..." }` |
+| `POST /api/v1/orgs/{id}/ban` | Permanently bans org — `{ "reason": "..." }` |
+
+---
+
+### 2.6 Switch Into Org Dashboard
+
+```http
+POST /api/v1/auth/switch-org
+Authorization: Bearer <personal-jwt>
+Content-Type: application/json
+
+{
+  "org_id": "32f183b3-c09d-4824-b61f-d32e693ad30e"
+}
+```
+
+**Purpose:** Switches the caller's active dashboard context from personal/consumer view to an org view. Returns a **new JWT** scoped to that org. **Replace your stored token immediately.**
+
+**Requirement:** The caller must be an active member of the org.
+
+**Response `200`:**
+```json
+{
+  "tokens": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh_token": "...",
+    "token_type": "bearer",
+    "expires_in": 1800
+  },
+  "org_id": "32f183b3-c09d-4824-b61f-d32e693ad30e",
+  "org_role": "OWNER"
+}
+```
+
+**JWT payload after switch:**
+```json
+{
+  "sub": "24513388-1822-486e-bec4-15c843172a3d",
+  "org_id": "32f183b3-c09d-4824-b61f-d32e693ad30e",
+  "org_role": "OWNER",
+  "iat": 1746450000,
+  "exp": 1746451800
+}
+```
+
+> This org-scoped JWT is **required** for all product, QR (authenticated), and org management endpoints. Without `org_id` in the JWT, product endpoints return `403`.
+
+**Switch back to personal view:**
+```json
+{ "org_id": null }
+```
+
+---
+
+### 2.7 List / Get / Update Organisation
+
+#### List My Organisations
+```http
+GET /api/v1/orgs?is_verified=true&org_type=GOVERNMENT&page=1&limit=20
+Authorization: Bearer <jwt>
+```
+Returns organisations created by the authenticated user.
+
+#### Get Organisation
+```http
+GET /api/v1/orgs/{org_id}
+Authorization: Bearer <jwt>
+```
+
+#### Update Organisation Profile
+```http
+PATCH /api/v1/orgs/{org_id}
+Authorization: Bearer <org-jwt>      (must be ADMIN or OWNER in this org)
+Content-Type: application/json
+
+{
+  "display_name": "TARURA Updated",
+  "support_email": "newgrm@tarura.go.tz",
+  "sms_code": "TARURA"
+}
+```
+All fields optional. Returns updated org object.
+
+#### Deactivate Organisation (Owner only)
+```http
+DELETE /api/v1/orgs/{org_id}?reason=Closing+operations
+Authorization: Bearer <org-jwt>      (must be OWNER)
+```
+
+---
+
+### 2.8 Org Membership Management
+
+#### Add Member Directly
+```http
+POST /api/v1/orgs/{org_id}/members
+Authorization: Bearer <org-jwt>      (ADMIN or OWNER required)
+Content-Type: application/json
+
+{
+  "user_id": "24513388-...",
+  "org_role": "MANAGER"
+}
+```
+
+**Org Roles:**
+| Role | Permissions |
+|------|-------------|
+| `OWNER` | Full control — can delete org, transfer ownership |
+| `ADMIN` | Manage members, settings, billing, analytics |
+| `MANAGER` | Create/update products, manage listings, images |
+| `MEMBER` | Read-only access, limited task actions |
+
+#### Remove Member
+```http
+DELETE /api/v1/orgs/{org_id}/members/{user_id}
+Authorization: Bearer <org-jwt>      (ADMIN or OWNER required)
+```
+
+#### Change Member Role
+```http
+PATCH /api/v1/orgs/{org_id}/members/{user_id}/role
+Authorization: Bearer <org-jwt>
+
+{ "org_role": "ADMIN" }
+```
+
+#### Invite by Email
+```http
+POST /api/v1/orgs/{org_id}/invites
+Authorization: Bearer <org-jwt>      (ADMIN or OWNER required)
+
+{
+  "invited_role": "MANAGER",
+  "invited_email": "colleague@company.com",
+  "message": "Join our TARURA team on Riviwa"
+}
+```
+
+---
+
+## 3. Product Creation — Step-by-Step Flow
+
+> This section describes the complete journey from a new user to a published product with AI image indexing.
+
+### Step-by-Step Summary
+
+| Step | Action | Endpoint | JWT context |
+|------|--------|----------|-------------|
+| 1 | Register account | `POST /api/v1/auth/register/init` → `verify-otp` → `complete` | — |
+| 2 | Login | `POST /api/v1/auth/login` → `verify-otp` | Personal JWT |
+| 3 | Create org | `POST /api/v1/orgs` | Personal JWT |
+| 4 | Admin verifies org | `POST /api/v1/orgs/{id}/verify` | Admin JWT |
+| 5 | Switch to org | `POST /api/v1/auth/switch-org` | Personal JWT → Org JWT |
+| 6 | Set org SMS code | `PATCH /api/v1/orgs/{id}` | Org JWT (ADMIN+) |
+| 7 | Create product | `POST /api/v1/products/` | Org JWT (MANAGER+) |
+| 8 | Add images | `POST /api/v1/products/{id}/images` | Org JWT (MANAGER+) |
+| 9 | Add bullet points | `PUT /api/v1/products/{id}/bullet-points` | Org JWT (MANAGER+) |
+| 10 | Set category attrs | `PUT /api/v1/products/{id}/category-attrs` | Org JWT (MANAGER+) |
+| 11 | Publish product | `PATCH /api/v1/products/{id}/publish` | Org JWT (ADMIN+) |
+| 12 | Generate product QR batch | `POST /api/v1/qr/bulk` | Org JWT (any) |
+
+### Required Fields Before Publish
+
+A product **cannot be published** unless all four of these are set:
+
+| Field | How to set |
+|-------|-----------|
+| `title` | Set on create or via `PATCH /products/{id}` |
+| `brand` | Set on create or via `PATCH /products/{id}` |
+| `price` | Set on create or via `PATCH /products/{id}` |
+| `main_image_url` | Set on create, or add a MAIN image via `POST /products/{id}/images` |
+
+> If any are missing, publish returns `400 PRODUCT_NOT_PUBLISHABLE` with a list of the missing fields.
+
+### What Happens on Publish
+
+When `PATCH /api/v1/products/{id}/publish` succeeds:
+
+1. `listing_status` → `BUYABLE` (product is now live)
+2. `published_at` timestamp is recorded
+3. `rsin` is generated if not already set (Riviwa Standard Identification Number)
+4. Kafka event `product.published` is emitted
+5. **Background:** all product images are downloaded, CLIP ViT-B/32 embedded, and indexed into the Qdrant `product_images` collection via `ai_service` — this powers counterfeit detection when consumers report suspected fakes
+
+### Minimum Working Example (cURL)
+
+```bash
+# Step 5 — switch to org (assume org is already verified)
+ORG_JWT=$(curl -s -X POST https://api.riviwa.com/api/v1/auth/switch-org \
+  -H "Authorization: Bearer $PERSONAL_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"org_id":"32f183b3-c09d-4824-b61f-d32e693ad30e"}' \
+  | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+
+# Step 7 — create product
+PRODUCT=$(curl -s -X POST https://api.riviwa.com/api/v1/products/ \
+  -H "Authorization: Bearer $ORG_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_type": "WEARABLE",
+    "seller_sku": "WATCH-PRO-001",
+    "title": "Smart Watch Pro",
+    "brand": "TechBrand",
+    "price": 250000,
+    "currency": "TZS",
+    "main_image_url": "https://images.example.com/watch.jpg"
+  }')
+PRODUCT_ID=$(echo $PRODUCT | grep -o '"product_id":"[^"]*"' | cut -d'"' -f4)
+
+# Step 8 — add images
+curl -s -X POST "https://api.riviwa.com/api/v1/products/$PRODUCT_ID/images" \
+  -H "Authorization: Bearer $ORG_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"role":"ALTERNATE","position":2,"url":"https://images.example.com/watch-side.jpg"}'
+
+# Step 11 — publish (indexes images to AI)
+curl -s -X PATCH "https://api.riviwa.com/api/v1/products/$PRODUCT_ID/publish" \
+  -H "Authorization: Bearer $ORG_JWT"
+
+# Step 12 — generate 100 product QR codes for packaging
+curl -s -X POST "https://api.riviwa.com/api/v1/qr/bulk" \
+  -H "Authorization: Bearer $ORG_JWT" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"organisation_id\": \"32f183b3-c09d-4824-b61f-d32e693ad30e\",
+    \"product_id\": \"$PRODUCT_ID\",
+    \"count\": 100,
+    \"qr_type\": \"PRODUCT\",
+    \"rsin\": \"RTEST00001\"
+  }"
+```
+
+---
+
+## 4. Product Service Endpoints
+
+Base path: `/api/v1/products`  
+Auth: **JWT** (org dashboard context required — caller must have switched into an org)  
+Service: `product_service:8110`  
+Nginx route: `/api/v1/products`
+
+### Role Requirements
+
+| Role | Can do |
+|------|--------|
+| `MEMBER` / `STAFF` | Read products, images, attributes, variants |
+| `MANAGER` | Create, update, manage images, attributes, bullet points |
+| `ADMIN` / `OWNER` | + Publish, deactivate |
+| Platform `admin` / `super_admin` | All orgs, all products |
+
+> **New in this session:** `PATCH /{product_id}/publish` now also fires a background call to `POST /api/v1/ai/internal/image/index` (ai_service) to index all the product's images into Qdrant. This builds the genuine product image database used by the counterfeit detection pipeline automatically on every publish.
+
+---
+
+## 5. QR Service — Authenticated Endpoints
 
 Base path: `/api/v1/qr`  
 Auth: **JWT**  
@@ -307,7 +788,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 3. QR Service — Internal Endpoints
+## 6. QR Service — Internal Endpoints
 
 Base path: `/api/v1/internal/qr`  
 Auth: **Internal** (`X-Service-Key` header)  
@@ -489,7 +970,7 @@ X-Service-Key: <INTERNAL_SERVICE_KEY>
 
 ---
 
-## 4. QR Service — Public Endpoint
+## 7. QR Service — Public Endpoint
 
 Auth: **None** (consumer-facing, browser/mobile hit)
 
@@ -520,7 +1001,7 @@ Location: https://app.riviwa.com/feedback?qr=E2GVG8PT&session=TrtWUP2b...
 
 ---
 
-## 5. Verification Service — Consumer Endpoints
+## 8. Verification Service — Consumer Endpoints
 
 Base path: `/api/v1/verify`  
 Auth: **None** (consumer-facing)  
@@ -705,7 +1186,7 @@ Content-Type: multipart/form-data
 
 ---
 
-## 6. Verification Service — Staff / Admin Endpoints
+## 9. Verification Service — Staff / Admin Endpoints
 
 Base path: `/api/v1/verify/reports`  
 Auth: **JWT**
@@ -908,7 +1389,7 @@ Content-Type: application/json
 
 ---
 
-## 7. Verification Service — Analytics Endpoints
+## 10. Verification Service — Analytics Endpoints
 
 Auth: **JWT**
 
@@ -971,7 +1452,7 @@ Authorization: Bearer <token>
 
 ---
 
-## 8. AI Service — Image Intelligence Endpoints
+## 11. AI Service — Image Intelligence Endpoints
 
 Base path: `/api/v1/ai/internal/image`  
 Auth: **Internal** (`X-Service-Key`)  
@@ -1193,9 +1674,9 @@ X-Service-Key: <INTERNAL_SERVICE_KEY>
 
 ---
 
-## 9. Auth Service — SMS Code (Organisation)
+## 12. Auth Service — SMS Code
 
-### 9.1 Set Organisation SMS Code
+### 12.1 Set Organisation SMS Code
 
 ```http
 PATCH /api/v1/orgs/{org_id}
@@ -1232,7 +1713,7 @@ Once set, all new QR/SMS codes for this org use the format: `TARURA-{SHORT_CODE}
 
 ---
 
-### 9.2 Internal — Get Org SMS Code
+### 12.2 Internal — Get Org SMS Code
 
 ```http
 GET /api/v1/internal/orgs/{org_id}/sms-code
@@ -1254,7 +1735,7 @@ If `sms_code` is null, `qr_service` derives a fallback from the org's `slug` (fi
 
 ---
 
-## 10. End-to-End Flows
+## 13. End-to-End Flows
 
 ### Flow A — Consumer Scans Receipt QR (Bus Ticket)
 
@@ -1415,7 +1896,7 @@ If `sms_code` is null, `qr_service` derives a fallback from the org's `slug` (fi
 
 ---
 
-## 11. Code Formats & Rules
+## 14. Code Formats & Rules
 
 ### SMS Code Format
 
@@ -1466,7 +1947,7 @@ Codes **never expire on time**. `expires_at` is always `null` unless explicitly 
 
 ---
 
-## 12. Error Responses
+## 15. Error Responses
 
 All error responses follow the structure:
 ```json
@@ -1495,441 +1976,4 @@ All error responses follow the structure:
 
 ---
 
----
-
-## 13. Product Service Endpoints
-
-Base path: `/api/v1/products`  
-Auth: **JWT** (org dashboard context required — caller must be switched into an org)  
-Service: `product_service:8110`  
-Nginx route: `/api/v1/products`
-
-### Role Requirements
-
-| Role | Can do |
-|------|--------|
-| `MEMBER` / `STAFF` | Read products, images, attributes, variants |
-| `MANAGER` | Create, update, manage images, attributes, bullet points |
-| `ADMIN` / `OWNER` | + Publish, deactivate |
-| Platform `admin` / `super_admin` | All orgs, all products |
-
-> **New in this session:** `PATCH /{product_id}/publish` now also fires a background call to `POST /api/v1/ai/internal/image/index` (ai_service) to index all the product's images into Qdrant. This builds the genuine product image database used by the counterfeit detection pipeline automatically on every publish.
-
----
-
-### 13.1 Create Product
-
-```http
-POST /api/v1/products/
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-**Purpose:** Create a new product listing under the caller's active organisation. The listing starts in `DRAFT` status. All fields can be provided at creation or filled in later via PATCH. Product type (`product_type`) is **immutable after first publish**.
-
-**Request Body:**
-```json
-{
-  "product_type": "SMARTPHONE",
-  "seller_sku": "TECHBRAND-WATCH-001",
-  "title": "Smart Watch Pro",
-  "brand": "TechBrand",
-  "price": 250000,
-  "currency": "TZS",
-  "condition": "NEW",
-  "quantity": 500,
-  "fulfillment_method": "MERCHANT",
-  "description": "Premium smart watch with heart rate monitor.",
-  "main_image_url": "https://images.example.com/watch-main.jpg",
-  "bullet_points": [
-    { "position": 1, "content": "Heart rate & SpO2 monitoring" },
-    { "position": 2, "content": "5-day battery life" }
-  ],
-  "images": [
-    { "role": "MAIN", "position": 1, "url": "https://images.example.com/watch-main.jpg" },
-    { "role": "ALTERNATE", "position": 1, "url": "https://images.example.com/watch-side.jpg" }
-  ],
-  "attributes": [
-    { "attribute_name": "Display", "attribute_value": "1.4 inch AMOLED", "group": "Technical" }
-  ]
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `product_type` | enum | ✅ | Immutable. Determines category-attribute schema. See Product Types below. |
-| `seller_sku` | string | ✅ | Your internal SKU (unique per org) |
-| `title` | string | ✅ | Product title (max 500 chars) |
-| `brand` | string | ✅ | Brand name |
-| `price` | decimal | ✅ | Unit price (> 0) |
-| `currency` | string | — | Default: `TZS` |
-| `condition` | enum | — | `NEW` · `USED_LIKE_NEW` · `USED_GOOD` · `USED_ACCEPTABLE` · `REFURBISHED` · `OPEN_BOX` · `PARTS_ONLY` |
-| `quantity` | int | — | Available stock |
-| `fulfillment_method` | enum | — | `MERCHANT` · `RIVIWA` · `PICKUP` · `DIGITAL` |
-| `main_image_url` | string | — | Required before publishing |
-| `description` | string | — | Max 2000 chars |
-| `bullet_points` | array | — | Max 5 items. Each: `{ position: 1–5, content: string }` |
-| `images` | array | — | `{ role: MAIN/ALTERNATE, position, url, alt_text }` |
-| `attributes` | array | — | `{ attribute_name, attribute_value, unit, group, position }` |
-| `upc` / `ean` / `gtin` / `isbn` | string | — | Industry barcode identifiers |
-| `is_parent` | bool | — | `true` if this is a variation parent |
-| `parent_product_id` | UUID | — | Parent product for variant child |
-| `variation_theme` | enum | — | `COLOR` · `SIZE` · `COLOR_SIZE` · `FLAVOR` · `STYLE` · etc. |
-
-**Product Types (partial list):**
-Electronics: `LAPTOP` `DESKTOP` `TABLET` `SMARTPHONE` `CAMERA` `TV` `WEARABLE`  
-Apparel: `SHIRT` `PANTS` `DRESS` `JACKET` `SUIT` `TRADITIONAL_WEAR`  
-Footwear: `SHOES` `SANDALS` `BOOTS` `SNEAKERS`  
-Home: `COOKWARE` `FURNITURE` `SMALL_APPLIANCE` `LARGE_APPLIANCE`  
-Food: `FOOD_AND_BEVERAGE` `GROCERY` `BEVERAGE`  
-Health: `MEDICATION` `SUPPLEMENT` `PERSONAL_CARE` `MEDICAL_DEVICE`  
-Vehicles: `CAR_NEW` `CAR_USED` `MOTORCYCLE` `BUS` `ELECTRIC_VEHICLE`  
-Other: `JEWELRY` `WATCH` `TOOL` `AGRICULTURAL` `INDUSTRIAL`
-
-**Response `201`:** Full `ProductResponse` (see §13.3).
-
----
-
-### 13.2 List Products
-
-```http
-GET /api/v1/products/?product_type=SMARTPHONE&listing_status=BUYABLE&search=watch&page=1&page_size=20
-Authorization: Bearer <token>
-```
-
-**Purpose:** Paginated list of products for the caller's org. Platform admins see all orgs.
-
-**Query Parameters:**
-| Param | Type | Description |
-|-------|------|-------------|
-| `product_type` | enum | Filter by type |
-| `listing_status` | enum | `DRAFT` · `PENDING_REVIEW` · `BUYABLE` · `DISCOVERABLE` · `SUPPRESSED` · `INCOMPLETE` · `INACTIVE` · `REJECTED` |
-| `search` | string | Full-text search on title/brand/SKU |
-| `page` | int | Default: 1 |
-| `page_size` | int | Default: 20, max: 100 |
-
-**Response `200`:**
-```json
-{
-  "total": 42,
-  "page": 1,
-  "page_size": 20,
-  "pages": 3,
-  "items": [
-    {
-      "product_id": "aaaaaaaa-0000-0000-0000-000000000001",
-      "rsin": "RTEST00001",
-      "organisation_id": "32f183b3-...",
-      "product_type": "WEARABLE",
-      "seller_sku": "TECHBRAND-WATCH-001",
-      "title": "Smart Watch Pro",
-      "brand": "TechBrand",
-      "price": 250000,
-      "currency": "TZS",
-      "listing_status": "BUYABLE",
-      "main_image_url": "https://...",
-      "published_at": "2026-05-05T12:00:00"
-    }
-  ]
-}
-```
-
----
-
-### 13.3 Get Product
-
-```http
-GET /api/v1/products/{product_id}
-Authorization: Bearer <token>
-```
-
-**Purpose:** Full product detail including all images, bullet points, and flexible attributes.
-
-**Response `200`:**
-```json
-{
-  "product_id": "aaaaaaaa-0000-0000-0000-000000000001",
-  "rsin": "RTEST00001",
-  "organisation_id": "32f183b3-...",
-  "product_type": "WEARABLE",
-  "seller_sku": "TECHBRAND-WATCH-001",
-  "title": "Smart Watch Pro",
-  "brand": "TechBrand",
-  "price": 250000.00,
-  "currency": "TZS",
-  "condition": "NEW",
-  "quantity": 500,
-  "fulfillment_method": "MERCHANT",
-  "description": "Premium smart watch.",
-  "main_image_url": "https://...",
-  "listing_status": "BUYABLE",
-  "is_active": true,
-  "is_gated": false,
-  "suppression_reason": null,
-  "published_at": "2026-05-05T12:00:00",
-  "created_at": "2026-05-05T10:00:00",
-  "updated_at": "2026-05-05T12:00:00",
-  "bullet_points": [
-    { "id": "...", "position": 1, "content": "Heart rate & SpO2 monitoring" }
-  ],
-  "images": [
-    { "id": "...", "role": "MAIN", "position": 1, "url": "https://...", "alt_text": null }
-  ],
-  "attributes": [
-    { "id": "...", "attribute_name": "Display", "attribute_value": "1.4 inch AMOLED", "group": "Technical" }
-  ]
-}
-```
-
----
-
-### 13.4 Update Product
-
-```http
-PATCH /api/v1/products/{product_id}
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-**Purpose:** Update any product field (PATCH semantics — only fields present in the body are changed). `product_type` cannot be changed after first publish.
-
-**Request Body:** Any subset of `ProductCreate` fields (all optional). Example:
-```json
-{
-  "title": "Smart Watch Pro X",
-  "price": 275000,
-  "quantity": 450,
-  "description": "Updated description with new features."
-}
-```
-
-**Response `200`:** Full `ProductResponse`.
-
----
-
-### 13.5 Publish Product ⭐ AI-enhanced
-
-```http
-PATCH /api/v1/products/{product_id}/publish
-Authorization: Bearer <token>
-```
-
-**Purpose:** Move the product listing to `BUYABLE` status (live and purchasable). Requires at minimum: `title`, `brand`, `price`, and `main_image_url`.
-
-**New behaviour added in this session:** After publishing, automatically fires a background call to index all product images into the Qdrant `product_images` collection via `POST /api/v1/ai/internal/image/index`. This makes the product's genuine images immediately available for the counterfeit detection pipeline — when a consumer later submits a suspected fake photo, the AI can compare it against this product's indexed images.
-
-**No request body.**
-
-**Response `200`:**
-```json
-{
-  "product_id": "aaaaaaaa-0000-0000-0000-000000000001",
-  "rsin": "RTEST00001",
-  "listing_status": "BUYABLE",
-  "published_at": "2026-05-05T12:00:00"
-}
-```
-
-**Errors:**
-- `400 PRODUCT_NOT_PUBLISHABLE` — missing required fields (lists which fields are missing)
-- `403 FORBIDDEN` — not the product's org, or insufficient role
-
-**Background flow triggered on publish:**
-```
-publish_product()
-    │  fire-and-forget
-    ▼
-POST /api/v1/ai/internal/image/index
-{
-  product_id, org_id,
-  image_urls: [all images from product_images table],
-  title, brand, rsin,
-  image_roles: [MAIN, ALTERNATE, ...]
-}
-    ▼
-Qdrant product_images collection updated
-```
-
----
-
-### 13.6 Deactivate Product
-
-```http
-DELETE /api/v1/products/{product_id}
-Authorization: Bearer <token>
-```
-
-**Purpose:** Soft-delete the product (`is_active=False`, `listing_status=INACTIVE`). The product remains in the database and can be reactivated. Does not delete images or attributes.
-
-**Response `204`:** No content.
-
----
-
-### 13.7 Manage Images
-
-#### Add Image
-```http
-POST /api/v1/products/{product_id}/images
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-```json
-{
-  "role": "ALTERNATE",
-  "position": 2,
-  "url": "https://images.example.com/watch-back.jpg",
-  "alt_text": "Back view of Smart Watch Pro"
-}
-```
-
-**Image roles:** `MAIN` · `ALTERNATE` · `DETAIL` · `LIFESTYLE` · `INFOGRAPHIC` · `SWATCH` · `PACKAGE` · `CERTIFICATION`
-
-**Response `201`:** `{ "id": "...", "role": "ALTERNATE", "position": 2, "url": "...", "alt_text": "..." }`
-
-#### List Images
-```http
-GET /api/v1/products/{product_id}/images
-Authorization: Bearer <token>
-```
-**Response `200`:** Array of image objects.
-
-#### Delete Image
-```http
-DELETE /api/v1/products/{product_id}/images/{image_id}
-Authorization: Bearer <token>
-```
-**Response `204`:** No content.
-
----
-
-### 13.8 Manage Bullet Points
-
-```http
-PUT /api/v1/products/{product_id}/bullet-points
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-**Purpose:** Replace all bullet points (full replacement, not merge). Maximum 5.
-
-```json
-[
-  { "position": 1, "content": "Heart rate & SpO2 monitoring" },
-  { "position": 2, "content": "5-day battery life" },
-  { "position": 3, "content": "Water resistant IP68" }
-]
-```
-
-**Response `200`:** Array of bullet point objects with IDs.
-
-#### Get Bullet Points
-```http
-GET /api/v1/products/{product_id}/bullet-points
-Authorization: Bearer <token>
-```
-
----
-
-### 13.9 Manage Flexible Attributes
-
-```http
-PUT /api/v1/products/{product_id}/attributes
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-**Purpose:** Replace all name-value attributes. Used for any custom or industry-specific fields not covered by the typed category-attribute tables.
-
-```json
-[
-  { "attribute_name": "Display", "attribute_value": "1.4 inch AMOLED", "group": "Technical", "position": 1 },
-  { "attribute_name": "Battery", "attribute_value": "300 mAh", "group": "Technical", "position": 2 },
-  { "attribute_name": "Warranty", "attribute_value": "12 months", "group": "Compliance", "position": 1, "is_searchable": true }
-]
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `attribute_name` | string | Key name (max 200 chars) |
-| `attribute_value` | string | Value (max 1000 chars) |
-| `unit` | string | e.g. `kg`, `cm`, `mAh` |
-| `group` | string | Grouping label (Technical, Physical, Compliance, etc.) |
-| `position` | int | Sort order within group |
-| `is_searchable` | bool | Whether this attribute is indexed for search |
-
-**Response `200`:** Array of attribute objects with IDs.
-
-#### Get Attributes
-```http
-GET /api/v1/products/{product_id}/attributes
-Authorization: Bearer <token>
-```
-
----
-
-### 13.10 Category-Specific Attributes
-
-```http
-GET  /api/v1/products/{product_id}/category-attrs
-PUT  /api/v1/products/{product_id}/category-attrs
-Authorization: Bearer <token>
-```
-
-**Purpose:** Typed attribute tables — the schema varies by `product_type`. For example:
-- `LAPTOP` / `SMARTPHONE` / `TV` → `ElectronicsAttributes` (processor, RAM, storage, screen, etc.)
-- `SHIRT` / `DRESS` / `JACKET` → `ApparelAttributes` (size, colour, material, gender, etc.)
-- `CAR_NEW` / `CAR_USED` → `AutomotiveVehicleAttributes` (make, model, year, mileage, etc.)
-- `MEDICATION` → `HealthAttributes` (dosage form, strength, etc.)
-- `FOOD_AND_BEVERAGE` → `FoodBeverageAttributes` (ingredients, allergens, expiry, etc.)
-
-**PUT Request Body** (example for `WEARABLE`):
-```json
-{
-  "brand": "TechBrand",
-  "display_type": "AMOLED",
-  "screen_size_inches": 1.4,
-  "battery_capacity_mah": 300,
-  "water_resistance_rating": "IP68",
-  "connectivity": ["Bluetooth 5.0", "GPS"],
-  "compatible_os": ["Android", "iOS"],
-  "sensors": ["Heart Rate", "SpO2", "Accelerometer"]
-}
-```
-
-> Fields accepted depend entirely on `product_type`. Returns `{}` for types that don't have a dedicated schema.
-
----
-
-### 13.11 Variants
-
-```http
-GET /api/v1/products/{product_id}/variants
-Authorization: Bearer <token>
-```
-
-**Purpose:** List all child variant products under a variation parent.
-
-**Use case:** A "Smart Watch Pro" parent with children: Red/Small, Red/Large, Blue/Small, Blue/Large — each has its own SKU, price, and stock but shares the parent's RSIN and category attributes.
-
-**Response `200`:** Array of `ProductListItem` objects.
-
----
-
-### Product Service — Error Codes
-
-| HTTP | Error | Meaning |
-|------|-------|---------|
-| 400 | `PRODUCT_NOT_PUBLISHABLE` | Missing required fields for publish |
-| 400 | `PRODUCT_TYPE_IMMUTABLE` | Tried to change product_type after publish |
-| 409 | `DUPLICATE_SKU` | seller_sku already exists in this org |
-| 403 | `FORBIDDEN` | Product belongs to a different org |
-| 404 | `PRODUCT_NOT_FOUND` | Product does not exist or is inactive |
-| 404 | `IMAGE_NOT_FOUND` | Image does not exist for this product |
-| 422 | `VALIDATION_ERROR` | Schema validation failed |
-| 400 | `BULLET_POINT_LIMIT` | More than 5 bullet points submitted |
-| 400 | `ORG_NOT_FOUND` | Organisation does not exist |
-| 400 | `ORG_INACTIVE` | Organisation is suspended/inactive |
-
----
-
-*Riviwa QR, Verification & Product API · Built 2026-05-05*
+*Riviwa Product, QR & Verification API · Built 2026-05-05*
