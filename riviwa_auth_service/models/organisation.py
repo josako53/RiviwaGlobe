@@ -258,16 +258,7 @@ class Organisation(SQLModel, table=True):
     # Rules: 2–10 uppercase alphanumeric chars, globally unique, nullable.
     sms_code: Optional[str] = Field(
         default=None,
-        max_length=10,
-        nullable=True,
-        index=True,
-        sa_column=Column(
-            String(10),
-            nullable=True,
-            unique=True,
-            index=True,
-        ),
-        description="Short SMS prefix (UTT, CRDB, NMB …). Unique across all orgs.",
+        sa_column=Column(String(10), nullable=True, unique=True, index=True),
     )
 
     # ── Contact ───────────────────────────────────────────────────────────────
