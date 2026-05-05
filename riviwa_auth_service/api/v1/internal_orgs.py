@@ -206,3 +206,31 @@ async def get_department_internal(
         "code":      row["code"],
         "branch_id": str(row["branch_id"]) if row["branch_id"] else None,
     }
+
+
+@router.get(
+    "/orgs/{org_id}/sms-code",
+    summary="[Internal] Get org SMS code prefix for QR service",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_org_sms_code(
+    org_id: uuid.UUID,
+    db:     AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Returns the org's sms_code (UTT, CRDB, TARURA etc.) and slug.
+    Used by qr_service to derive the SMS prefix for QR codes.
+    Format: {ORG_SMS_CODE}-{SHORT_CODE}  e.g.  TARURA-E2GVG8PT
+    """
+    from sqlalchemy import text
+    row = (await db.execute(
+        text("SELECT sms_code, slug, display_name FROM organisations WHERE id = :id"),
+        {"id": str(org_id)},
+    )).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Organisation not found.")
+    return {
+        "sms_code":     row["sms_code"],
+        "slug":         row["slug"],
+        "display_name": row["display_name"],
+    }

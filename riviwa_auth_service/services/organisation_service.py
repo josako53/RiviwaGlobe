@@ -200,7 +200,7 @@ class OrganisationService:
         allowed = {
             "legal_name", "display_name", "slug", "description", "logo_url",
             "website_url", "support_email", "support_phone", "country_code",
-            "timezone", "registration_number", "tax_id", "max_members",
+            "timezone", "registration_number", "tax_id", "max_members", "sms_code",
         }
         changed_fields = [k for k in updates if k in allowed]
         if not changed_fields:

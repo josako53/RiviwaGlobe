@@ -6,6 +6,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel
+from models.qr import QRCode, QRScan, ReceiptSession, QRBatch  # noqa: ensure metadata
 
 from core.config import settings
 from db.session import engine
