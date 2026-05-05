@@ -20,6 +20,7 @@ from core.exceptions import (
     ValidationError,
 )
 from events.producer import ProductProducer
+from services.image_index_client import index_product_images as _ai_index_images
 from models.product import (
     ListingStatus,
     Product,
@@ -182,6 +183,22 @@ class ProductService:
         })
         await self.producer.product_published(product, org_id=org_id)
         log.info("product.published", product_id=str(product_id), rsin=product.rsin)
+
+        # Index product images into Qdrant for AI counterfeit detection (fire-and-forget)
+        images = await self.repo.get_images(product_id)
+        if images:
+            image_urls  = [img.url for img in images]
+            image_roles = [img.role.lower() if img.role else "main" for img in images]
+            await _ai_index_images(
+                product_id=product_id,
+                org_id=org_id,
+                image_urls=image_urls,
+                title=product.title or "",
+                brand=product.brand or "",
+                rsin=product.rsin or "",
+                image_roles=image_roles,
+            )
+
         return product
 
     async def deactivate_product(

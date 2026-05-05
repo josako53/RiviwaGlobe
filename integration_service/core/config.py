@@ -62,6 +62,10 @@ class Settings(BaseSettings):
         description="Base URL served for JS widget snippets and embed links",
     )
 
+    # ── QR Service ────────────────────────────────────────────────────────────
+    QR_SERVICE_URL:      str = Field(default="http://qr_service:8120")
+    SMS_SHORT_NUMBER:    str = Field(default="+255XXXXXXX", description="SMS short number printed on receipts")
+
     @property
     def ASYNC_DATABASE_URL(self) -> str:
         return (

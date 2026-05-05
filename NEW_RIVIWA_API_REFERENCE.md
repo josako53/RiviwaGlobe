@@ -1,6 +1,6 @@
 # NEW_RIVIWA_API_REFERENCE
 
-> New and updated endpoints from session 2026-04-26.
+> New and updated endpoints from 2026-04-26.
 > Base URL: `https://riviwa.com/api/v1`
 > Auth: `Authorization: Bearer <access_token>` unless noted.
 

@@ -849,6 +849,12 @@ services:
         mc mb --ignore-existing local/$$IMAGE_STORAGE_BUCKET;
         mc anonymous set none local/$$IMAGE_STORAGE_BUCKET;
         echo 'Bucket $$IMAGE_STORAGE_BUCKET is ready.';
+        mc mb --ignore-existing local/riviwa-qr-codes;
+        mc anonymous set none local/riviwa-qr-codes;
+        echo 'Bucket riviwa-qr-codes is ready.';
+        mc mb --ignore-existing local/riviwa-verification;
+        mc anonymous set none local/riviwa-verification;
+        echo 'Bucket riviwa-verification is ready.';
       "
     restart: "no"
 
@@ -1017,6 +1023,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
       AUTH_SERVICE_URL:     http://riviwa_auth_service:8000
+      AI_SERVICE_URL:       http://ai_service:8085
       REDIS_URL:            redis://redis:6379/8
       MINIO_ENDPOINT:       minio:9000
       MINIO_ACCESS_KEY:     ${MINIO_ACCESS_KEY:-minioadmin}
@@ -1030,6 +1037,124 @@ services:
       kafka-1:
         condition: service_healthy
       redis:
+        condition: service_healthy
+
+  # ── QR DB ────────────────────────────────────────────────────────────────
+  qr_db:
+    image: postgres:15-alpine
+    container_name: qr_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${QR_DB_USER:-qr_admin}
+      POSTGRES_PASSWORD: ${QR_DB_PASSWORD:-qr_pass_444}
+      POSTGRES_DB:       ${QR_DB_NAME:-qr_db}
+    ports: ["5444:5432"]
+    volumes: [qr_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${QR_DB_USER:-qr_admin} -d ${QR_DB_NAME:-qr_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # ── QR SERVICE ────────────────────────────────────────────────────────────
+  # QR code generation, bulk product QR batches, SMS short codes, receipt sessions.
+  # Called by integration_service (receipts), product_service (product QR).
+  # Public scan endpoint redirects to the Riviwa feedback app.
+  qr_service:
+    build:
+      context: ./qr_service
+      dockerfile: Dockerfile
+    container_name: qr_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8120:8120"]
+    environment:
+      QR_DB_HOST:     qr_db
+      DB_PORT:        5432
+      QR_DB_USER:     ${QR_DB_USER:-qr_admin}
+      QR_DB_PASSWORD: ${QR_DB_PASSWORD:-qr_pass_444}
+      QR_DB_NAME:     ${QR_DB_NAME:-qr_db}
+      AUTH_SECRET_KEY:      ${SECRET_KEY}
+      AUTH_ALGORITHM:       ${ALGORITHM:-HS256}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      MINIO_ENDPOINT:   http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      QR_BUCKET:        riviwa-qr-codes
+      FEEDBACK_APP_URL: ${FEEDBACK_APP_URL:-https://riviwa-4b0b9.web.app}
+      AI_SERVICE_URL:   http://ai_service:8085
+      ENVIRONMENT: ${ENVIRONMENT}
+      DEBUG:        ${DEBUG:-false}
+    depends_on:
+      qr_db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+
+  # ── VERIFICATION DB ────────────────────────────────────────────────────────
+  verification_db:
+    image: postgres:15-alpine
+    container_name: verification_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${VERIFICATION_DB_USER:-verification_admin}
+      POSTGRES_PASSWORD: ${VERIFICATION_DB_PASSWORD:-verification_pass_445}
+      POSTGRES_DB:       ${VERIFICATION_DB_NAME:-verification_db}
+    ports: ["5445:5432"]
+    volumes: [verification_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VERIFICATION_DB_USER:-verification_admin} -d ${VERIFICATION_DB_NAME:-verification_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # ── VERIFICATION SERVICE ──────────────────────────────────────────────────
+  # QR/SMS code authenticity checks (AUTHENTIC/ALREADY_USED/UNRECOGNIZED).
+  # Fake product reporting with GPS + photo + AI image analysis (CLIP + Llama 4 Scout).
+  # Field agent management, fake report heatmap, verification stats.
+  verification_service:
+    build:
+      context: ./verification_service
+      dockerfile: Dockerfile
+    container_name: verification_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8125:8125"]
+    environment:
+      VERIFICATION_DB_HOST:     verification_db
+      DB_PORT:                  5432
+      VERIFICATION_DB_USER:     ${VERIFICATION_DB_USER:-verification_admin}
+      VERIFICATION_DB_PASSWORD: ${VERIFICATION_DB_PASSWORD:-verification_pass_445}
+      VERIFICATION_DB_NAME:     ${VERIFICATION_DB_NAME:-verification_db}
+      AUTH_SECRET_KEY:      ${SECRET_KEY}
+      AUTH_ALGORITHM:       ${ALGORITHM:-HS256}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      QR_SERVICE_URL:       http://qr_service:8120
+      PRODUCT_SERVICE_URL:  http://product_service:8110
+      AI_SERVICE_URL:       http://ai_service:8085
+      MINIO_ENDPOINT:   http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      VERIFICATION_BUCKET: riviwa-verification
+      ENVIRONMENT: ${ENVIRONMENT}
+      DEBUG:        ${DEBUG:-false}
+    depends_on:
+      verification_db:
+        condition: service_healthy
+      qr_service:
+        condition: service_started
+      minio:
         condition: service_healthy
 
   # ── Nginx reverse proxy + SSL termination ─────────────────────────────────
@@ -1057,6 +1182,8 @@ services:
       - analytics_service
       - integration_service
       - product_service
+      - qr_service
+      - verification_service
     healthcheck:
       test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:80/ || exit 0"]
       interval: 30s
@@ -1203,4 +1330,6 @@ volumes:
   obsidian_vault_data:
   integration_db_data:
   product_db_data:
+  qr_db_data:
+  verification_db_data:
   certbot_certs:

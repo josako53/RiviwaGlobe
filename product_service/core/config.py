@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # ── Service-to-Service ───────────────────────────────────────
     INTERNAL_SERVICE_KEY: str = "change-me-in-production"
     AUTH_SERVICE_URL: str = "http://riviwa_auth_service:8000"
+    AI_SERVICE_URL: str = "http://ai_service:8085"
 
     # ── Redis ────────────────────────────────────────────────────
     REDIS_URL: str = "redis://redis:6379/8"

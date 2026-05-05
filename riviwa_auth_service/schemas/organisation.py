@@ -56,6 +56,7 @@ class OrgResponse(BaseModel):
     org_type:            str
     status:              str
     is_verified:         bool
+    sms_code:            Optional[str]      = None
     description:         Optional[str]      = None
     logo_url:            Optional[str]      = None
     website_url:         Optional[str]      = None
@@ -118,6 +119,11 @@ class CreateOrgRequest(BaseModel):
     slug:                str           = Field(min_length=3,  max_length=80,
                                                pattern=r"^[a-z0-9-]+$")
     org_type:            OrgType
+    sms_code:            Optional[str] = Field(
+        default=None, min_length=2, max_length=10,
+        pattern=r"^[A-Z0-9]+$",
+        description="Short SMS prefix (UTT, CRDB, NMB, TESLA). Unique, 2-10 uppercase alphanumeric.",
+    )
     description:         Optional[str] = Field(default=None, max_length=1000)
     logo_url:            Optional[str] = None
     website_url:         Optional[str] = None
@@ -137,6 +143,9 @@ class UpdateOrgRequest(BaseModel):
     legal_name:          Optional[str] = None
     display_name:        Optional[str] = None
     slug:                Optional[str] = Field(default=None, pattern=r"^[a-z0-9-]+$")
+    sms_code:            Optional[str] = Field(
+        default=None, min_length=2, max_length=10, pattern=r"^[A-Z0-9]+$",
+    )
     description:         Optional[str] = None
     logo_url:            Optional[str] = None
     website_url:         Optional[str] = None

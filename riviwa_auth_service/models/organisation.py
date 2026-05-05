@@ -105,7 +105,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, Column, DateTime, Enum as SAEnum, Text, UniqueConstraint, text
+from sqlalchemy import ForeignKey, Column, DateTime, Enum as SAEnum, String, Text, UniqueConstraint, text
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -249,6 +249,25 @@ class Organisation(SQLModel, table=True):
             nullable=False,
             index=True,
         ),
+    )
+
+    # ── SMS Code ──────────────────────────────────────────────────────────────
+    # Short prefix used in Riviwa SMS codes: UTT, CRDB, NMB, TESLA, CCBRT …
+    # One Riviwa number serves all organisations; the prefix disambiguates.
+    # Format:  {SMS_CODE}-{SHORT_CODE}  e.g.  CRDB-AB3X9KPJ
+    # Rules: 2–10 uppercase alphanumeric chars, globally unique, nullable.
+    sms_code: Optional[str] = Field(
+        default=None,
+        max_length=10,
+        nullable=True,
+        index=True,
+        sa_column=Column(
+            String(10),
+            nullable=True,
+            unique=True,
+            index=True,
+        ),
+        description="Short SMS prefix (UTT, CRDB, NMB …). Unique across all orgs.",
     )
 
     # ── Contact ───────────────────────────────────────────────────────────────
