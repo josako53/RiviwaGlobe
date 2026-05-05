@@ -21,6 +21,7 @@
 10. [End-to-End Flows](#10-end-to-end-flows)
 11. [Code Formats & Rules](#11-code-formats--rules)
 12. [Error Responses](#12-error-responses)
+13. [Product Service Endpoints](#13-product-service-endpoints)
 
 ---
 
@@ -1494,4 +1495,441 @@ All error responses follow the structure:
 
 ---
 
-*Riviwa QR & Verification API · Built 2026-05-05*
+---
+
+## 13. Product Service Endpoints
+
+Base path: `/api/v1/products`  
+Auth: **JWT** (org dashboard context required — caller must be switched into an org)  
+Service: `product_service:8110`  
+Nginx route: `/api/v1/products`
+
+### Role Requirements
+
+| Role | Can do |
+|------|--------|
+| `MEMBER` / `STAFF` | Read products, images, attributes, variants |
+| `MANAGER` | Create, update, manage images, attributes, bullet points |
+| `ADMIN` / `OWNER` | + Publish, deactivate |
+| Platform `admin` / `super_admin` | All orgs, all products |
+
+> **New in this session:** `PATCH /{product_id}/publish` now also fires a background call to `POST /api/v1/ai/internal/image/index` (ai_service) to index all the product's images into Qdrant. This builds the genuine product image database used by the counterfeit detection pipeline automatically on every publish.
+
+---
+
+### 13.1 Create Product
+
+```http
+POST /api/v1/products/
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Purpose:** Create a new product listing under the caller's active organisation. The listing starts in `DRAFT` status. All fields can be provided at creation or filled in later via PATCH. Product type (`product_type`) is **immutable after first publish**.
+
+**Request Body:**
+```json
+{
+  "product_type": "SMARTPHONE",
+  "seller_sku": "TECHBRAND-WATCH-001",
+  "title": "Smart Watch Pro",
+  "brand": "TechBrand",
+  "price": 250000,
+  "currency": "TZS",
+  "condition": "NEW",
+  "quantity": 500,
+  "fulfillment_method": "MERCHANT",
+  "description": "Premium smart watch with heart rate monitor.",
+  "main_image_url": "https://images.example.com/watch-main.jpg",
+  "bullet_points": [
+    { "position": 1, "content": "Heart rate & SpO2 monitoring" },
+    { "position": 2, "content": "5-day battery life" }
+  ],
+  "images": [
+    { "role": "MAIN", "position": 1, "url": "https://images.example.com/watch-main.jpg" },
+    { "role": "ALTERNATE", "position": 1, "url": "https://images.example.com/watch-side.jpg" }
+  ],
+  "attributes": [
+    { "attribute_name": "Display", "attribute_value": "1.4 inch AMOLED", "group": "Technical" }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `product_type` | enum | ✅ | Immutable. Determines category-attribute schema. See Product Types below. |
+| `seller_sku` | string | ✅ | Your internal SKU (unique per org) |
+| `title` | string | ✅ | Product title (max 500 chars) |
+| `brand` | string | ✅ | Brand name |
+| `price` | decimal | ✅ | Unit price (> 0) |
+| `currency` | string | — | Default: `TZS` |
+| `condition` | enum | — | `NEW` · `USED_LIKE_NEW` · `USED_GOOD` · `USED_ACCEPTABLE` · `REFURBISHED` · `OPEN_BOX` · `PARTS_ONLY` |
+| `quantity` | int | — | Available stock |
+| `fulfillment_method` | enum | — | `MERCHANT` · `RIVIWA` · `PICKUP` · `DIGITAL` |
+| `main_image_url` | string | — | Required before publishing |
+| `description` | string | — | Max 2000 chars |
+| `bullet_points` | array | — | Max 5 items. Each: `{ position: 1–5, content: string }` |
+| `images` | array | — | `{ role: MAIN/ALTERNATE, position, url, alt_text }` |
+| `attributes` | array | — | `{ attribute_name, attribute_value, unit, group, position }` |
+| `upc` / `ean` / `gtin` / `isbn` | string | — | Industry barcode identifiers |
+| `is_parent` | bool | — | `true` if this is a variation parent |
+| `parent_product_id` | UUID | — | Parent product for variant child |
+| `variation_theme` | enum | — | `COLOR` · `SIZE` · `COLOR_SIZE` · `FLAVOR` · `STYLE` · etc. |
+
+**Product Types (partial list):**
+Electronics: `LAPTOP` `DESKTOP` `TABLET` `SMARTPHONE` `CAMERA` `TV` `WEARABLE`  
+Apparel: `SHIRT` `PANTS` `DRESS` `JACKET` `SUIT` `TRADITIONAL_WEAR`  
+Footwear: `SHOES` `SANDALS` `BOOTS` `SNEAKERS`  
+Home: `COOKWARE` `FURNITURE` `SMALL_APPLIANCE` `LARGE_APPLIANCE`  
+Food: `FOOD_AND_BEVERAGE` `GROCERY` `BEVERAGE`  
+Health: `MEDICATION` `SUPPLEMENT` `PERSONAL_CARE` `MEDICAL_DEVICE`  
+Vehicles: `CAR_NEW` `CAR_USED` `MOTORCYCLE` `BUS` `ELECTRIC_VEHICLE`  
+Other: `JEWELRY` `WATCH` `TOOL` `AGRICULTURAL` `INDUSTRIAL`
+
+**Response `201`:** Full `ProductResponse` (see §13.3).
+
+---
+
+### 13.2 List Products
+
+```http
+GET /api/v1/products/?product_type=SMARTPHONE&listing_status=BUYABLE&search=watch&page=1&page_size=20
+Authorization: Bearer <token>
+```
+
+**Purpose:** Paginated list of products for the caller's org. Platform admins see all orgs.
+
+**Query Parameters:**
+| Param | Type | Description |
+|-------|------|-------------|
+| `product_type` | enum | Filter by type |
+| `listing_status` | enum | `DRAFT` · `PENDING_REVIEW` · `BUYABLE` · `DISCOVERABLE` · `SUPPRESSED` · `INCOMPLETE` · `INACTIVE` · `REJECTED` |
+| `search` | string | Full-text search on title/brand/SKU |
+| `page` | int | Default: 1 |
+| `page_size` | int | Default: 20, max: 100 |
+
+**Response `200`:**
+```json
+{
+  "total": 42,
+  "page": 1,
+  "page_size": 20,
+  "pages": 3,
+  "items": [
+    {
+      "product_id": "aaaaaaaa-0000-0000-0000-000000000001",
+      "rsin": "RTEST00001",
+      "organisation_id": "32f183b3-...",
+      "product_type": "WEARABLE",
+      "seller_sku": "TECHBRAND-WATCH-001",
+      "title": "Smart Watch Pro",
+      "brand": "TechBrand",
+      "price": 250000,
+      "currency": "TZS",
+      "listing_status": "BUYABLE",
+      "main_image_url": "https://...",
+      "published_at": "2026-05-05T12:00:00"
+    }
+  ]
+}
+```
+
+---
+
+### 13.3 Get Product
+
+```http
+GET /api/v1/products/{product_id}
+Authorization: Bearer <token>
+```
+
+**Purpose:** Full product detail including all images, bullet points, and flexible attributes.
+
+**Response `200`:**
+```json
+{
+  "product_id": "aaaaaaaa-0000-0000-0000-000000000001",
+  "rsin": "RTEST00001",
+  "organisation_id": "32f183b3-...",
+  "product_type": "WEARABLE",
+  "seller_sku": "TECHBRAND-WATCH-001",
+  "title": "Smart Watch Pro",
+  "brand": "TechBrand",
+  "price": 250000.00,
+  "currency": "TZS",
+  "condition": "NEW",
+  "quantity": 500,
+  "fulfillment_method": "MERCHANT",
+  "description": "Premium smart watch.",
+  "main_image_url": "https://...",
+  "listing_status": "BUYABLE",
+  "is_active": true,
+  "is_gated": false,
+  "suppression_reason": null,
+  "published_at": "2026-05-05T12:00:00",
+  "created_at": "2026-05-05T10:00:00",
+  "updated_at": "2026-05-05T12:00:00",
+  "bullet_points": [
+    { "id": "...", "position": 1, "content": "Heart rate & SpO2 monitoring" }
+  ],
+  "images": [
+    { "id": "...", "role": "MAIN", "position": 1, "url": "https://...", "alt_text": null }
+  ],
+  "attributes": [
+    { "id": "...", "attribute_name": "Display", "attribute_value": "1.4 inch AMOLED", "group": "Technical" }
+  ]
+}
+```
+
+---
+
+### 13.4 Update Product
+
+```http
+PATCH /api/v1/products/{product_id}
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Purpose:** Update any product field (PATCH semantics — only fields present in the body are changed). `product_type` cannot be changed after first publish.
+
+**Request Body:** Any subset of `ProductCreate` fields (all optional). Example:
+```json
+{
+  "title": "Smart Watch Pro X",
+  "price": 275000,
+  "quantity": 450,
+  "description": "Updated description with new features."
+}
+```
+
+**Response `200`:** Full `ProductResponse`.
+
+---
+
+### 13.5 Publish Product ⭐ AI-enhanced
+
+```http
+PATCH /api/v1/products/{product_id}/publish
+Authorization: Bearer <token>
+```
+
+**Purpose:** Move the product listing to `BUYABLE` status (live and purchasable). Requires at minimum: `title`, `brand`, `price`, and `main_image_url`.
+
+**New behaviour added in this session:** After publishing, automatically fires a background call to index all product images into the Qdrant `product_images` collection via `POST /api/v1/ai/internal/image/index`. This makes the product's genuine images immediately available for the counterfeit detection pipeline — when a consumer later submits a suspected fake photo, the AI can compare it against this product's indexed images.
+
+**No request body.**
+
+**Response `200`:**
+```json
+{
+  "product_id": "aaaaaaaa-0000-0000-0000-000000000001",
+  "rsin": "RTEST00001",
+  "listing_status": "BUYABLE",
+  "published_at": "2026-05-05T12:00:00"
+}
+```
+
+**Errors:**
+- `400 PRODUCT_NOT_PUBLISHABLE` — missing required fields (lists which fields are missing)
+- `403 FORBIDDEN` — not the product's org, or insufficient role
+
+**Background flow triggered on publish:**
+```
+publish_product()
+    │  fire-and-forget
+    ▼
+POST /api/v1/ai/internal/image/index
+{
+  product_id, org_id,
+  image_urls: [all images from product_images table],
+  title, brand, rsin,
+  image_roles: [MAIN, ALTERNATE, ...]
+}
+    ▼
+Qdrant product_images collection updated
+```
+
+---
+
+### 13.6 Deactivate Product
+
+```http
+DELETE /api/v1/products/{product_id}
+Authorization: Bearer <token>
+```
+
+**Purpose:** Soft-delete the product (`is_active=False`, `listing_status=INACTIVE`). The product remains in the database and can be reactivated. Does not delete images or attributes.
+
+**Response `204`:** No content.
+
+---
+
+### 13.7 Manage Images
+
+#### Add Image
+```http
+POST /api/v1/products/{product_id}/images
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+```json
+{
+  "role": "ALTERNATE",
+  "position": 2,
+  "url": "https://images.example.com/watch-back.jpg",
+  "alt_text": "Back view of Smart Watch Pro"
+}
+```
+
+**Image roles:** `MAIN` · `ALTERNATE` · `DETAIL` · `LIFESTYLE` · `INFOGRAPHIC` · `SWATCH` · `PACKAGE` · `CERTIFICATION`
+
+**Response `201`:** `{ "id": "...", "role": "ALTERNATE", "position": 2, "url": "...", "alt_text": "..." }`
+
+#### List Images
+```http
+GET /api/v1/products/{product_id}/images
+Authorization: Bearer <token>
+```
+**Response `200`:** Array of image objects.
+
+#### Delete Image
+```http
+DELETE /api/v1/products/{product_id}/images/{image_id}
+Authorization: Bearer <token>
+```
+**Response `204`:** No content.
+
+---
+
+### 13.8 Manage Bullet Points
+
+```http
+PUT /api/v1/products/{product_id}/bullet-points
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Purpose:** Replace all bullet points (full replacement, not merge). Maximum 5.
+
+```json
+[
+  { "position": 1, "content": "Heart rate & SpO2 monitoring" },
+  { "position": 2, "content": "5-day battery life" },
+  { "position": 3, "content": "Water resistant IP68" }
+]
+```
+
+**Response `200`:** Array of bullet point objects with IDs.
+
+#### Get Bullet Points
+```http
+GET /api/v1/products/{product_id}/bullet-points
+Authorization: Bearer <token>
+```
+
+---
+
+### 13.9 Manage Flexible Attributes
+
+```http
+PUT /api/v1/products/{product_id}/attributes
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Purpose:** Replace all name-value attributes. Used for any custom or industry-specific fields not covered by the typed category-attribute tables.
+
+```json
+[
+  { "attribute_name": "Display", "attribute_value": "1.4 inch AMOLED", "group": "Technical", "position": 1 },
+  { "attribute_name": "Battery", "attribute_value": "300 mAh", "group": "Technical", "position": 2 },
+  { "attribute_name": "Warranty", "attribute_value": "12 months", "group": "Compliance", "position": 1, "is_searchable": true }
+]
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `attribute_name` | string | Key name (max 200 chars) |
+| `attribute_value` | string | Value (max 1000 chars) |
+| `unit` | string | e.g. `kg`, `cm`, `mAh` |
+| `group` | string | Grouping label (Technical, Physical, Compliance, etc.) |
+| `position` | int | Sort order within group |
+| `is_searchable` | bool | Whether this attribute is indexed for search |
+
+**Response `200`:** Array of attribute objects with IDs.
+
+#### Get Attributes
+```http
+GET /api/v1/products/{product_id}/attributes
+Authorization: Bearer <token>
+```
+
+---
+
+### 13.10 Category-Specific Attributes
+
+```http
+GET  /api/v1/products/{product_id}/category-attrs
+PUT  /api/v1/products/{product_id}/category-attrs
+Authorization: Bearer <token>
+```
+
+**Purpose:** Typed attribute tables — the schema varies by `product_type`. For example:
+- `LAPTOP` / `SMARTPHONE` / `TV` → `ElectronicsAttributes` (processor, RAM, storage, screen, etc.)
+- `SHIRT` / `DRESS` / `JACKET` → `ApparelAttributes` (size, colour, material, gender, etc.)
+- `CAR_NEW` / `CAR_USED` → `AutomotiveVehicleAttributes` (make, model, year, mileage, etc.)
+- `MEDICATION` → `HealthAttributes` (dosage form, strength, etc.)
+- `FOOD_AND_BEVERAGE` → `FoodBeverageAttributes` (ingredients, allergens, expiry, etc.)
+
+**PUT Request Body** (example for `WEARABLE`):
+```json
+{
+  "brand": "TechBrand",
+  "display_type": "AMOLED",
+  "screen_size_inches": 1.4,
+  "battery_capacity_mah": 300,
+  "water_resistance_rating": "IP68",
+  "connectivity": ["Bluetooth 5.0", "GPS"],
+  "compatible_os": ["Android", "iOS"],
+  "sensors": ["Heart Rate", "SpO2", "Accelerometer"]
+}
+```
+
+> Fields accepted depend entirely on `product_type`. Returns `{}` for types that don't have a dedicated schema.
+
+---
+
+### 13.11 Variants
+
+```http
+GET /api/v1/products/{product_id}/variants
+Authorization: Bearer <token>
+```
+
+**Purpose:** List all child variant products under a variation parent.
+
+**Use case:** A "Smart Watch Pro" parent with children: Red/Small, Red/Large, Blue/Small, Blue/Large — each has its own SKU, price, and stock but shares the parent's RSIN and category attributes.
+
+**Response `200`:** Array of `ProductListItem` objects.
+
+---
+
+### Product Service — Error Codes
+
+| HTTP | Error | Meaning |
+|------|-------|---------|
+| 400 | `PRODUCT_NOT_PUBLISHABLE` | Missing required fields for publish |
+| 400 | `PRODUCT_TYPE_IMMUTABLE` | Tried to change product_type after publish |
+| 409 | `DUPLICATE_SKU` | seller_sku already exists in this org |
+| 403 | `FORBIDDEN` | Product belongs to a different org |
+| 404 | `PRODUCT_NOT_FOUND` | Product does not exist or is inactive |
+| 404 | `IMAGE_NOT_FOUND` | Image does not exist for this product |
+| 422 | `VALIDATION_ERROR` | Schema validation failed |
+| 400 | `BULLET_POINT_LIMIT` | More than 5 bullet points submitted |
+| 400 | `ORG_NOT_FOUND` | Organisation does not exist |
+| 400 | `ORG_INACTIVE` | Organisation is suspended/inactive |
+
+---
+
+*Riviwa QR, Verification & Product API · Built 2026-05-05*
