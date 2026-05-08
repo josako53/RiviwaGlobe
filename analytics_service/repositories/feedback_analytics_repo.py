@@ -3290,6 +3290,119 @@ class FeedbackAnalyticsRepository:
             "note": "Live data requires calling notification_service /api/v1/notifications endpoint.",
         }
 
+    # ── Staff-performance: Org-level feedback in a time window ───────────────
+
+    async def get_feedback_counts_in_window(
+        self,
+        org_id: uuid.UUID,
+        dt_from: datetime,
+        dt_to: datetime,
+    ) -> Dict[str, Any]:
+        """Total feedback by type submitted in a time window (for duty-window correlation)."""
+        sql = """
+            SELECT
+                COUNT(*)                                                             AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')         AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')        AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')          AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')           AS inquiries
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.submitted_at >= :dt_from
+              AND f.submitted_at <= :dt_to
+        """
+        row = await self._fetchone(sql, {
+            "org_id":  str(org_id),
+            "dt_from": dt_from,
+            "dt_to":   dt_to,
+        })
+        return row or {}
+
+    # ── Staff-performance: Feedback bucketed by period (for correlation) ──────
+
+    async def get_feedback_by_period_for_org(
+        self,
+        org_id: uuid.UUID,
+        dt_from: datetime,
+        dt_to: datetime,
+        granularity: str = "hour",
+        feedback_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Feedback volume bucketed by period for an org — used to correlate
+        against waiting-time periods from waiting_db.
+        granularity must be validated to 'hour'|'day'|'week' before calling.
+        """
+        trunc = granularity if granularity in ("hour", "day", "week") else "hour"
+        type_clause = " AND f.feedback_type::text = :ftype" if feedback_type else ""
+        params: Dict[str, Any] = {
+            "org_id":  str(org_id),
+            "dt_from": dt_from,
+            "dt_to":   dt_to,
+        }
+        if feedback_type:
+            params["ftype"] = feedback_type.upper()
+        sql = f"""
+            SELECT
+                date_trunc('{trunc}', f.submitted_at)                               AS period,
+                COUNT(*)                                                             AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')         AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')        AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')          AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')           AS inquiries
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.submitted_at >= :dt_from
+              AND f.submitted_at <= :dt_to
+              {type_clause}
+            GROUP BY period
+            ORDER BY period
+        """
+        return await self._fetchall(sql, params)
+
+    # ── Staff-performance: Feedback timing heatmap ───────────────────────────
+
+    async def get_feedback_timing_heatmap(
+        self,
+        org_id: uuid.UUID,
+        dt_from: datetime,
+        dt_to: datetime,
+        feedback_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Hour-of-day × day-of-week heatmap showing when feedback peaks.
+        Reveals: 'Most complaints arrive Monday 09:00–10:00'.
+        """
+        type_clause = " AND f.feedback_type::text = :ftype" if feedback_type else ""
+        params: Dict[str, Any] = {
+            "org_id":  str(org_id),
+            "dt_from": dt_from,
+            "dt_to":   dt_to,
+        }
+        if feedback_type:
+            params["ftype"] = feedback_type.upper()
+        sql = f"""
+            SELECT
+                EXTRACT(HOUR FROM f.submitted_at AT TIME ZONE 'UTC')::int  AS hour_of_day,
+                EXTRACT(DOW  FROM f.submitted_at AT TIME ZONE 'UTC')::int  AS day_of_week,
+                COUNT(*)                                                    AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')  AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION') AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')   AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')    AS inquiries
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.submitted_at >= :dt_from
+              AND f.submitted_at <= :dt_to
+              {type_clause}
+            GROUP BY hour_of_day, day_of_week
+            ORDER BY day_of_week, hour_of_day
+        """
+        return await self._fetchall(sql, params)
+
     # ── Summary counts for AI context ────────────────────────────────────────
 
     async def get_summary_counts(self, project_id: uuid.UUID) -> Dict[str, Any]:

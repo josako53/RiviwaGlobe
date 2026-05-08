@@ -18,7 +18,7 @@ from core.exceptions import (
     TokenInvalidError,
     UnauthorisedError,
 )
-from db.session import get_analytics_session, get_feedback_session
+from db.session import get_analytics_session, get_feedback_session, get_waiting_session
 
 log = structlog.get_logger(__name__)
 _bearer = HTTPBearer(auto_error=False)
@@ -174,6 +174,12 @@ async def get_feedback_db(
     return session
 
 
+async def get_waiting_db(
+    session: AsyncSession = Depends(get_waiting_session),
+) -> AsyncSession:
+    return session
+
+
 # ── Client IP helper ──────────────────────────────────────────────────────────
 
 async def get_client_ip(request: Request) -> str:
@@ -200,4 +206,5 @@ __all__ = [
     "AnalyticsDbDep", "FeedbackDbDep",
 ]
 FeedbackDbDep      = Annotated[AsyncSession, Depends(get_feedback_db)]
+WaitingDbDep       = Annotated[AsyncSession, Depends(get_waiting_db)]
 InternalKeyDep     = Depends(require_internal_key)

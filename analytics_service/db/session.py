@@ -63,7 +63,36 @@ async def get_feedback_session() -> AsyncGenerator[AsyncSession, None]:
     async with FeedbackROSessionLocal() as session:
         try:
             yield session
-            # Never commit on the read-only session — just rollback to release locks.
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.rollback()
+            await session.close()
+
+
+# ── Waiting DB (read-only — cross-service analytics) ─────────────────────────
+waiting_ro_engine = create_async_engine(
+    settings.ASYNC_WAITING_DATABASE_URL,
+    echo=False,
+    pool_size=5,
+    max_overflow=10,
+    execution_options={"readonly": True},
+)
+
+WaitingROSessionLocal = async_sessionmaker(
+    bind=waiting_ro_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+
+
+async def get_waiting_session() -> AsyncGenerator[AsyncSession, None]:
+    async with WaitingROSessionLocal() as session:
+        try:
+            yield session
         except Exception:
             await session.rollback()
             raise

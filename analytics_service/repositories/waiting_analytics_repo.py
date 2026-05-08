@@ -1,106 +1,88 @@
+"""
+repositories/waiting_analytics_repo.py
+────────────────────────────────────────────────────────────────────────────
+Read-only analytics repository that queries waiting_db for queue, staff
+session, and wait-time analytics used in cross-service staff performance views.
+"""
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import structlog
-from sqlalchemy import func, select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from models.queue_ticket import QueueTicket, TicketStatus
-from models.queue_ticket_stage import QueueTicketStage, StageStatus
-from models.service_point import ServicePoint
 
 log = structlog.get_logger(__name__)
 
 
-class AnalyticsRepository:
+class WaitingAnalyticsRepository:
+    """Read-only analytics against waiting_db."""
 
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def get_service_point_stats(self, org_id: uuid.UUID) -> List[dict]:
-        sp_result = await self.db.execute(
-            select(ServicePoint).where(
-                ServicePoint.org_id == org_id,
-                ServicePoint.is_active == True,  # noqa: E712
-            )
-        )
-        service_points = list(sp_result.scalars().all())
-
-        now = datetime.now(timezone.utc)
-        today = now.date()
-        seven_days_ago = now - timedelta(days=7)
-
-        stats = []
-        for sp in service_points:
-            waiting_count = await self.db.scalar(
-                select(func.count(QueueTicket.id)).where(
-                    QueueTicket.current_service_point_id == sp.id,
-                    QueueTicket.status == TicketStatus.WAITING,
-                )
-            ) or 0
-
-            attending_count = await self.db.scalar(
-                select(func.count(QueueTicket.id)).where(
-                    QueueTicket.current_service_point_id == sp.id,
-                    QueueTicket.status == TicketStatus.ATTENDING,
-                )
-            ) or 0
-
-            avg_wait_raw = await self.db.scalar(
-                select(func.avg(QueueTicketStage.wait_duration_seconds)).where(
-                    QueueTicketStage.service_point_id == sp.id,
-                    QueueTicketStage.status == StageStatus.FINISHED,
-                    QueueTicketStage.finished_at >= seven_days_ago,
-                    QueueTicketStage.wait_duration_seconds.is_not(None),
-                )
-            )
-
-            avg_svc_raw = await self.db.scalar(
-                select(func.avg(QueueTicketStage.service_duration_seconds)).where(
-                    QueueTicketStage.service_point_id == sp.id,
-                    QueueTicketStage.status == StageStatus.FINISHED,
-                    QueueTicketStage.finished_at >= seven_days_ago,
-                    QueueTicketStage.service_duration_seconds.is_not(None),
-                )
-            )
-
-            throughput_today = await self.db.scalar(
-                select(func.count(QueueTicketStage.id)).where(
-                    QueueTicketStage.service_point_id == sp.id,
-                    QueueTicketStage.status == StageStatus.FINISHED,
-                    func.date(QueueTicketStage.finished_at) == today,
-                )
-            ) or 0
-
-            stats.append({
-                "service_point_id":    sp.id,
-                "service_point_name":  sp.name,
-                "point_type":          sp.point_type,
-                "waiting_count":       waiting_count,
-                "attending_count":     attending_count,
-                "avg_wait_seconds":    float(avg_wait_raw) if avg_wait_raw is not None else None,
-                "avg_service_seconds": float(avg_svc_raw) if avg_svc_raw is not None else None,
-                "throughput_today":    throughput_today,
-            })
-
-        return stats
-
-    async def get_total_completed_today(self, org_id: uuid.UUID) -> int:
-        today = datetime.now(timezone.utc).date()
-        return await self.db.scalar(
-            select(func.count(QueueTicket.id)).where(
-                QueueTicket.org_id == org_id,
-                QueueTicket.status == TicketStatus.COMPLETED,
-                func.date(QueueTicket.completed_at) == today,
-            )
-        ) or 0
+    async def _fetchone(self, sql: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        result = await self.db.execute(text(sql), params or {})
+        row = result.mappings().first()
+        return dict(row) if row else None
 
     async def _fetchall(self, sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         result = await self.db.execute(text(sql), params or {})
         return [dict(r) for r in result.mappings().all()]
+
+    # ── Per-staff performance aggregation ────────────────────────────────────
+
+    async def get_staff_performance(
+        self,
+        org_id: uuid.UUID,
+        date_from: datetime,
+        date_to: datetime,
+        service_point_id: Optional[uuid.UUID] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Per-staff aggregate: tickets served, avg/min/max wait time, avg service time,
+        and the duty window (first_attended_at → last_finished_at).
+        """
+        extra = (
+            " AND qts.service_point_id = :sp_id"
+            if service_point_id else ""
+        )
+        params: Dict[str, Any] = {
+            "org_id":    str(org_id),
+            "date_from": date_from,
+            "date_to":   date_to,
+        }
+        if service_point_id:
+            params["sp_id"] = str(service_point_id)
+
+        sql = f"""
+            SELECT
+                qts.assigned_staff_user_id                        AS staff_user_id,
+                sp.id                                              AS service_point_id,
+                sp.name                                            AS service_point_name,
+                sp.point_type,
+                COUNT(*)                                           AS tickets_served,
+                AVG(qts.wait_duration_seconds)                     AS avg_wait_seconds,
+                AVG(qts.service_duration_seconds)                  AS avg_service_seconds,
+                MIN(qts.wait_duration_seconds)                     AS min_wait_seconds,
+                MAX(qts.wait_duration_seconds)                     AS max_wait_seconds,
+                MIN(qts.attending_started_at)                      AS first_attended_at,
+                MAX(qts.finished_at)                               AS last_finished_at
+            FROM queue_ticket_stages qts
+            JOIN queue_tickets  qt ON qt.id = qts.ticket_id
+            JOIN service_points sp ON sp.id = qts.service_point_id
+            WHERE qt.org_id = :org_id
+              AND qts.status = 'FINISHED'
+              AND qts.assigned_staff_user_id IS NOT NULL
+              AND qts.finished_at >= :date_from
+              AND qts.finished_at <= :date_to
+              {extra}
+            GROUP BY qts.assigned_staff_user_id, sp.id, sp.name, sp.point_type
+            ORDER BY tickets_served DESC
+        """
+        return await self._fetchall(sql, params)
 
     # ── Staff duty sessions ───────────────────────────────────────────────────
 
@@ -111,7 +93,9 @@ class AnalyticsRepository:
         date_to: datetime,
         is_active: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
-        """Staff sessions with counter and service point details."""
+        """
+        All staff sessions in the period with counter + service point details.
+        """
         active_clause = " AND ss.is_active = :is_active" if is_active is not None else ""
         params: Dict[str, Any] = {
             "org_id":    str(org_id),
@@ -120,6 +104,7 @@ class AnalyticsRepository:
         }
         if is_active is not None:
             params["is_active"] = is_active
+
         sql = f"""
             SELECT
                 ss.id                   AS session_id,
@@ -135,9 +120,9 @@ class AnalyticsRepository:
                 ss.is_active,
                 ss.tickets_served,
                 ss.avg_service_seconds
-            FROM staff_sessions  ss
-            JOIN service_points  sp ON sp.id = ss.service_point_id
-            JOIN staff_counters  sc ON sc.id = ss.staff_counter_id
+            FROM staff_sessions   ss
+            JOIN service_points   sp ON sp.id = ss.service_point_id
+            JOIN staff_counters   sc ON sc.id = ss.staff_counter_id
             WHERE ss.org_id = :org_id
               AND ss.opened_at >= :date_from
               AND ss.opened_at <= :date_to
@@ -155,7 +140,10 @@ class AnalyticsRepository:
         date_to: datetime,
         granularity: str = "hour",
     ) -> List[Dict[str, Any]]:
-        """Avg wait/service time bucketed by hour, day, or week."""
+        """
+        Queue wait/service times bucketed by hour, day, or week.
+        granularity must be validated to 'hour'|'day'|'week' before calling.
+        """
         trunc = granularity if granularity in ("hour", "day", "week") else "hour"
         sql = f"""
             SELECT
@@ -188,7 +176,7 @@ class AnalyticsRepository:
         date_from: datetime,
         date_to: datetime,
     ) -> List[Dict[str, Any]]:
-        """Wait and service time aggregated per service point for a period."""
+        """Wait and service time stats grouped by service point."""
         sql = """
             SELECT
                 sp.id                              AS service_point_id,

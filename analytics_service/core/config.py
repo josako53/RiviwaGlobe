@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     FEEDBACK_DB_PASSWORD: str = Field(default="feedback_pass_456")
     FEEDBACK_DB_NAME:     str = Field(default="feedback_db")
 
+    # ── Waiting DB (read-only cross-service analytics) ────────────────────────
+    WAITING_DB_HOST:     str = Field(default="waiting_db")
+    WAITING_DB_PORT:     int = Field(default=5432)
+    WAITING_DB_USER:     str = Field(default="waiting_admin")
+    WAITING_DB_PASSWORD: str = Field(default="waiting_pass_130")
+    WAITING_DB_NAME:     str = Field(default="waiting_db")
+
     # ── App ───────────────────────────────────────────────────────────────────
     API_V1_STR:              str = "/api/v1"
     ANALYTICS_SERVICE_NAME:  str = Field(default="analytics_service")
@@ -75,6 +82,13 @@ class Settings(BaseSettings):
         return (
             f"postgresql+asyncpg://{self.FEEDBACK_DB_USER}:{self.FEEDBACK_DB_PASSWORD}"
             f"@{self.FEEDBACK_DB_HOST}:{self.FEEDBACK_DB_PORT}/{self.FEEDBACK_DB_NAME}"
+        )
+
+    @property
+    def ASYNC_WAITING_DATABASE_URL(self) -> str:
+        return (
+            f"postgresql+asyncpg://{self.WAITING_DB_USER}:{self.WAITING_DB_PASSWORD}"
+            f"@{self.WAITING_DB_HOST}:{self.WAITING_DB_PORT}/{self.WAITING_DB_NAME}"
         )
 
 
