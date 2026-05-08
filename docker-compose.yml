@@ -904,6 +904,12 @@ services:
       FEEDBACK_DB_USER:     ${FEEDBACK_DB_USER}
       FEEDBACK_DB_PASSWORD: ${FEEDBACK_DB_PASSWORD}
       FEEDBACK_DB_NAME:     ${FEEDBACK_DB_NAME}
+      # waiting_db (read-only cross-service analytics — staff performance)
+      WAITING_DB_HOST:     waiting_db
+      WAITING_DB_PORT:     5432
+      WAITING_DB_USER:     ${WAITING_DB_USER:-waiting_admin}
+      WAITING_DB_PASSWORD: ${WAITING_DB_PASSWORD:-waiting_pass_130}
+      WAITING_DB_NAME:     ${WAITING_DB_NAME:-waiting_db}
       # JWT — verifies tokens issued by auth_service
       AUTH_SECRET_KEY: ${SECRET_KEY}
       AUTH_ALGORITHM:  ${ALGORITHM:-HS256}
@@ -922,6 +928,8 @@ services:
       analytics_db:
         condition: service_healthy
       feedback_db:
+        condition: service_healthy
+      waiting_db:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -1184,6 +1192,8 @@ services:
       - product_service
       - qr_service
       - verification_service
+      - waiting_service
+      - staff_service
     healthcheck:
       test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:80/ || exit 0"]
       interval: 30s
@@ -1301,6 +1311,56 @@ services:
     volumes:
       - spark_checkpoints:/tmp/spark_checkpoints
 
+  # ── WAITING DB ───────────────────────────────────────────────────────────────
+  waiting_db:
+    image: postgres:15-alpine
+    container_name: waiting_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${WAITING_DB_USER:-waiting_admin}
+      POSTGRES_PASSWORD: ${WAITING_DB_PASSWORD:-waiting_pass_130}
+      POSTGRES_DB:       ${WAITING_DB_NAME:-waiting_db}
+    ports: ["5448:5432"]
+    volumes: [waiting_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WAITING_DB_USER:-waiting_admin} -d ${WAITING_DB_NAME:-waiting_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── WAITING SERVICE ───────────────────────────────────────────────────────────
+  waiting_service:
+    build:
+      context: ./waiting_service
+      dockerfile: Dockerfile
+    container_name: waiting_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8130:8130"]
+    environment:
+      WAITING_DB_HOST:     waiting_db
+      DB_PORT:             5432
+      WAITING_DB_USER:     ${WAITING_DB_USER:-waiting_admin}
+      WAITING_DB_PASSWORD: ${WAITING_DB_PASSWORD:-waiting_pass_130}
+      WAITING_DB_NAME:     ${WAITING_DB_NAME:-waiting_db}
+      AUTH_SECRET_KEY:     ${SECRET_KEY}
+      AUTH_ALGORITHM:      ${ALGORITHM:-HS256}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      REDIS_URL:           redis://redis:6379/9
+      ENVIRONMENT:         ${ENVIRONMENT}
+      DEBUG:               ${DEBUG:-false}
+    depends_on:
+      waiting_db:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ── STAFF SERVICE ────────────────────────────────────────────────────────────
   staff_service:
     build:
@@ -1387,5 +1447,6 @@ volumes:
   product_db_data:
   qr_db_data:
   verification_db_data:
+  waiting_db_data:
   staff_db_data:
   certbot_certs:
