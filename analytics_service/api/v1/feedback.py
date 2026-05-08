@@ -12,7 +12,8 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Query
 
-from core.dependencies import FeedbackDbDep, StaffDep, assert_project_org_access
+from core.dependencies import FeedbackDbDep, StaffDep, assert_project_org_access, assert_org_access
+from core.exceptions import ValidationError as AppValidationError
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
     FeedbackBreakdownItem,
@@ -133,7 +134,8 @@ async def get_unread_feedback(
 
 @router.get("/overdue", response_model=OverdueFeedbackResponse)
 async def get_overdue_feedback(
-    project_id:      UUID          = Query(...),
+    project_id:      Optional[UUID] = Query(None, description="Project UUID (mutually exclusive with org_id)"),
+    org_id:          Optional[UUID] = Query(None, description="Organisation UUID — aggregates across all org projects"),
     feedback_type:   Optional[str] = Query(None),
     department_id:   Optional[UUID] = Query(None, description="Filter by department UUID"),
     service_id:      Optional[UUID] = Query(None, description="Filter by service UUID"),
@@ -145,14 +147,29 @@ async def get_overdue_feedback(
     """
     Feedbacks with status IN ('acknowledged','in_review') where
     target_resolution_date < now().
+    Provide either project_id (single project) or org_id (all org projects aggregated).
     """
     repo = FeedbackAnalyticsRepository(fb_db)
-    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
-    rows = await repo.get_overdue(
-        project_id, feedback_type=feedback_type,
-        department_id=department_id, service_id=service_id,
-        product_id=product_id, category_def_id=category_def_id,
-    )
+
+    if project_id:
+        assert_project_org_access(_token, await repo.get_project_org_id(project_id))
+        project_ids = [project_id]
+    elif org_id:
+        assert_org_access(_token, org_id)
+        project_ids = await repo.get_project_ids_for_org(org_id)
+        if not project_ids:
+            return OverdueFeedbackResponse(total=0, items=[])
+    else:
+        raise AppValidationError(message="Provide either project_id or org_id.")
+
+    all_rows: list = []
+    for pid in project_ids:
+        rows = await repo.get_overdue(
+            pid, feedback_type=feedback_type,
+            department_id=department_id, service_id=service_id,
+            product_id=product_id, category_def_id=category_def_id,
+        )
+        all_rows.extend(rows)
 
     items = [
         OverdueFeedbackItem(
@@ -170,7 +187,7 @@ async def get_overdue_feedback(
             product_id             = r.get("product_id"),
             category_def_id        = r.get("category_def_id"),
         )
-        for r in rows
+        for r in all_rows
     ]
     return OverdueFeedbackResponse(total=len(items), items=items)
 
@@ -342,7 +359,8 @@ async def get_feedback_by_product(
 
 @router.get("/by-category", response_model=FeedbackBreakdownResponse)
 async def get_feedback_by_category(
-    project_id:    UUID          = Query(..., description="Project UUID"),
+    project_id:    Optional[UUID] = Query(None, description="Project UUID (mutually exclusive with org_id)"),
+    org_id:        Optional[UUID] = Query(None, description="Organisation UUID — aggregates across all org projects"),
     feedback_type: Optional[str] = Query(None, description="grievance | suggestion | applause"),
     date_from:     Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
     date_to:       Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
@@ -351,28 +369,49 @@ async def get_feedback_by_category(
 ) -> FeedbackBreakdownResponse:
     """
     Feedback counts grouped by dynamic category (category_def_id).
-    Includes all feedback — rows with NULL category_def_id appear as category_name='uncategorised'.
-    Returns: category_def_id, category_name, category_slug, total, grievances,
-             suggestions, applause, resolved, avg_resolution_hours.
+    Provide either project_id (single project) or org_id (all org projects aggregated).
     """
     repo = FeedbackAnalyticsRepository(fb_db)
-    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
+
+    if project_id:
+        assert_project_org_access(_token, await repo.get_project_org_id(project_id))
+        project_ids = [project_id]
+    elif org_id:
+        assert_org_access(_token, org_id)
+        project_ids = await repo.get_project_ids_for_org(org_id)
+        if not project_ids:
+            return FeedbackBreakdownResponse(total_items=0, items=[])
+    else:
+        raise AppValidationError(message="Provide either project_id or org_id.")
+
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to   = date.fromisoformat(date_to)   if date_to   else None
-    rows = await repo.get_breakdown_by_category_def(project_id, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+
+    # Aggregate category counts across all project_ids
+    merged: dict = {}
+    for pid in project_ids:
+        rows = await repo.get_breakdown_by_category_def(pid, feedback_type=feedback_type, date_from=d_from, date_to=d_to)
+        for r in rows:
+            key = str(r.get("category_def_id") or "uncategorised")
+            if key not in merged:
+                merged[key] = dict(r)
+            else:
+                for field in ("total", "grievances", "suggestions", "applause", "resolved"):
+                    merged[key][field] = int(merged[key].get(field, 0)) + int(r.get(field, 0))
+
     items = [
         FeedbackBreakdownItem(
-            category_def_id      = r.get("category_def_id"),
-            category_name        = r.get("category_name") or "uncategorised",
-            category_slug        = r.get("category_slug"),
-            total                = int(r.get("total", 0)),
-            grievances           = int(r.get("grievances", 0)),
-            suggestions          = int(r.get("suggestions", 0)),
-            applause             = int(r.get("applause", 0)),
-            resolved             = int(r.get("resolved", 0)),
-            avg_resolution_hours = float(r["avg_resolution_hours"]) if r.get("avg_resolution_hours") is not None else None,
+            category_def_id      = v.get("category_def_id"),
+            category_name        = v.get("category_name") or "uncategorised",
+            category_slug        = v.get("category_slug"),
+            total                = int(v.get("total", 0)),
+            grievances           = int(v.get("grievances", 0)),
+            suggestions          = int(v.get("suggestions", 0)),
+            applause             = int(v.get("applause", 0)),
+            resolved             = int(v.get("resolved", 0)),
+            avg_resolution_hours = float(v["avg_resolution_hours"]) if v.get("avg_resolution_hours") is not None else None,
         )
-        for r in rows
+        for v in merged.values()
     ]
     return FeedbackBreakdownResponse(total_items=len(items), items=items)
 

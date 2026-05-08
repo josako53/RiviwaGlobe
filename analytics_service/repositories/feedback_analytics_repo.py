@@ -36,6 +36,14 @@ class FeedbackAnalyticsRepository:
             return uuid.UUID(str(rows["organisation_id"]))
         return None
 
+    async def get_project_ids_for_org(self, org_id: uuid.UUID) -> List[uuid.UUID]:
+        """Return all project IDs that belong to an organisation."""
+        rows = await self._fetchall(
+            "SELECT id FROM fb_projects WHERE organisation_id = :oid",
+            {"oid": str(org_id)},
+        )
+        return [uuid.UUID(str(r["id"])) for r in rows]
+
     async def _fetchone(self, sql: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         result = await self.db.execute(text(sql), params or {})
         row = result.mappings().first()

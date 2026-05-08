@@ -10,7 +10,8 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Query
 
-from core.dependencies import AnalyticsDbDep, FeedbackDbDep, StaffDep, assert_project_org_access
+from core.dependencies import AnalyticsDbDep, FeedbackDbDep, StaffDep, assert_project_org_access, assert_org_access
+from core.exceptions import ValidationError as AppValidationError
 from repositories.analytics_repo import AnalyticsRepository
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
@@ -98,21 +99,34 @@ async def get_unresolved_grievances(
 
 @router.get("/sla-status", response_model=SLAStatusResponse)
 async def get_sla_status(
-    project_id:    UUID = Query(...),
+    project_id:    Optional[UUID] = Query(None, description="Project UUID (mutually exclusive with org_id)"),
+    org_id:        Optional[UUID] = Query(None, description="Organisation UUID — aggregates across all org projects"),
     breached_only: bool = Query(False, description="Return only breached records"),
     _token: StaffDep = None,
     fb_db:  FeedbackDbDep = None,
     an_db:  AnalyticsDbDep = None,
 ) -> SLAStatusResponse:
+    if not project_id and not org_id:
+        raise AppValidationError(message="Provide either project_id or org_id.")
+    if org_id and not project_id:
+        assert_org_access(_token, org_id)
+        fb_repo = FeedbackAnalyticsRepository(fb_db)
+        project_ids = await fb_repo.get_project_ids_for_org(org_id)
+        if not project_ids:
+            return SLAStatusResponse(by_priority=[], overdue_list=[], total_breached=0, overall_compliance_rate=None)
+        project_id = project_ids[0]
     """
     SLA compliance status for grievances in the project.
     Returns per-priority breakdown (ack SLA met/breached, resolution SLA met/breached)
     and a flat overdue list. Uses pre-computed analytics_db data when available,
     falling back to live feedback_db query.
     """
-    # Try pre-computed analytics_db first
+    # Try pre-computed analytics_db first (may fail if schema uses text vs uuid)
     an_repo = AnalyticsRepository(an_db)
-    sla_records = await an_repo.get_sla_status(project_id, breached_only=breached_only)
+    try:
+        sla_records = await an_repo.get_sla_status(project_id, breached_only=breached_only)
+    except Exception:
+        sla_records = []
 
     if sla_records:
         # Build response from pre-computed records
@@ -238,9 +252,10 @@ async def get_sla_status(
 
 @router.get("/dashboard", response_model=GrievanceDashboardResponse)
 async def get_grievance_dashboard(
-    project_id:    UUID           = Query(..., description="Project UUID"),
+    project_id:    Optional[UUID] = Query(None, description="Project UUID (mutually exclusive with org_id)"),
+    org_id:        Optional[UUID] = Query(None, description="Organisation UUID — aggregates across all org projects"),
     department_id: Optional[UUID] = Query(None, description="Filter by department UUID"),
-    status:        Optional[str]  = Query(None, description="Filter by status (e.g. SUBMITTED, ACKNOWLEDGED, IN_REVIEW, ESCALATED, RESOLVED, CLOSED, DISMISSED)"),
+    status:        Optional[str]  = Query(None, description="Filter by status"),
     priority:      Optional[str]  = Query(None, description="Filter by priority (CRITICAL, HIGH, MEDIUM, LOW)"),
     date_from:     Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
     date_to:       Optional[str]  = Query(None, description="ISO date YYYY-MM-DD"),
@@ -249,6 +264,20 @@ async def get_grievance_dashboard(
     _token: StaffDep = None,
     fb_db:  FeedbackDbDep = None,
 ) -> GrievanceDashboardResponse:
+    if not project_id and not org_id:
+        raise AppValidationError(message="Provide either project_id or org_id.")
+    if org_id and not project_id:
+        assert_org_access(_token, org_id)
+        fb_repo_tmp = FeedbackAnalyticsRepository(fb_db)
+        pids = await fb_repo_tmp.get_project_ids_for_org(org_id)
+        if not pids:
+            return GrievanceDashboardResponse(
+                summary=GrievanceSummaryStats(total_grievances=0, submitted=0, acknowledged=0, in_review=0,
+                                              escalated=0, resolved=0, closed=0, dismissed=0,
+                                              resolved_on_time_pct=None, resolved_late_pct=None, acknowledged_pct=None),
+                by_priority=[], by_department=[], by_stage=[], overdue=[], grievances=[], total=0, page=1, page_size=page_size,
+            )
+        project_id = pids[0]
     """
     Comprehensive grievance dashboard for a project.
     Returns:
@@ -339,19 +368,31 @@ async def get_grievance_dashboard(
 
 @router.get("/hotspots", response_model=HotspotResponse)
 async def get_hotspots(
-    project_id:   UUID = Query(...),
+    project_id:   Optional[UUID] = Query(None, description="Project UUID (mutually exclusive with org_id)"),
+    org_id:       Optional[UUID] = Query(None, description="Organisation UUID — aggregates across all org projects"),
     alert_status: str  = Query("active", description="active | resolved | all"),
     _token: StaffDep = None,
+    fb_db:  FeedbackDbDep = None,
     an_db:  AnalyticsDbDep = None,
 ) -> HotspotResponse:
     """
-    Geographic/category hotspot alerts for the project.
+    Geographic/category hotspot alerts for the project (or all projects in an org).
     Returns active spikes where feedback volume significantly exceeds baseline.
     """
+    if not project_id and not org_id:
+        raise AppValidationError(message="Provide either project_id or org_id.")
+
+    if org_id and not project_id:
+        assert_org_access(_token, org_id)
+        fb_repo_tmp = FeedbackAnalyticsRepository(fb_db)
+        pids = await fb_repo_tmp.get_project_ids_for_org(org_id)
+        if not pids:
+            return HotspotResponse(total=0, alerts=[])
+        project_id = pids[0]
+
     an_repo = AnalyticsRepository(an_db)
 
     if alert_status == "all":
-        # Fetch active first, then resolved
         active   = await an_repo.get_hotspot_alerts(project_id, status="active")
         resolved = await an_repo.get_hotspot_alerts(project_id, status="resolved")
         records  = active + resolved

@@ -11,7 +11,8 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Query
 
-from core.dependencies import FeedbackDbDep, StaffDep
+from core.dependencies import FeedbackDbDep, StaffDep, assert_org_access
+from core.exceptions import ValidationError as AppValidationError
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
     ImplementationTimeResponse,
@@ -72,32 +73,54 @@ async def get_implementation_time(
 
 @router.get("/frequency", response_model=SuggestionFrequencyResponse)
 async def get_suggestion_frequency(
-    project_id: UUID = Query(...),
+    project_id: Optional[UUID] = Query(None, description="Project UUID (mutually exclusive with org_id)"),
+    org_id:     Optional[UUID] = Query(None, description="Organisation UUID — aggregates across all org projects"),
     period:     str  = Query("week", description="week | month | year"),
     _token: StaffDep = None,
     fb_db:  FeedbackDbDep = None,
 ) -> SuggestionFrequencyResponse:
     """
     Suggestion frequency broken down by category and priority for the current period.
+    Provide either project_id (single project) or org_id (all org projects aggregated).
     """
+    if not project_id and not org_id:
+        raise AppValidationError(message="Provide either project_id or org_id.")
+
     if period not in ("week", "month", "year"):
         period = "week"
-
     period_days_map = {"week": 7, "month": 30, "year": 365}
     period_days = period_days_map[period]
 
     repo = FeedbackAnalyticsRepository(fb_db)
-    rows = await repo.get_suggestion_frequency(project_id, period=period)
 
-    total = sum(int(r.get("count", 0)) for r in rows)
+    if project_id:
+        project_ids = [project_id]
+    else:
+        assert_org_access(_token, org_id)
+        project_ids = await repo.get_project_ids_for_org(org_id)
+        if not project_ids:
+            return SuggestionFrequencyResponse(period=period, period_days=period_days, total=0, items=[])
+
+    # Aggregate across all project_ids
+    merged: dict = {}
+    for pid in project_ids:
+        rows = await repo.get_suggestion_frequency(pid, period=period)
+        for r in rows:
+            key = (r.get("category") or "unknown", r.get("priority") or "unknown")
+            if key not in merged:
+                merged[key] = dict(r)
+            else:
+                merged[key]["count"] = int(merged[key].get("count", 0)) + int(r.get("count", 0))
+
+    total = sum(int(v.get("count", 0)) for v in merged.values())
     items = [
         SuggestionFrequencyItem(
-            category    = r.get("category"),
-            priority    = r.get("priority"),
-            count       = int(r.get("count", 0)),
-            rate_per_day= float(r["rate_per_day"]) if r.get("rate_per_day") is not None else None,
+            category    = v.get("category"),
+            priority    = v.get("priority"),
+            count       = int(v.get("count", 0)),
+            rate_per_day= float(v["rate_per_day"]) if v.get("rate_per_day") is not None else None,
         )
-        for r in rows
+        for v in merged.values()
     ]
     return SuggestionFrequencyResponse(
         period      = period,
