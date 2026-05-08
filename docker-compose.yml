@@ -1301,6 +1301,61 @@ services:
     volumes:
       - spark_checkpoints:/tmp/spark_checkpoints
 
+  # ── STAFF SERVICE ────────────────────────────────────────────────────────────
+  staff_service:
+    build:
+      context: ./staff_service
+      dockerfile: Dockerfile
+    container_name: staff_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8135:8135"]
+    environment:
+      STAFF_DB_HOST:        staff_db
+      DB_PORT:              5432
+      STAFF_DB_USER:        ${STAFF_DB_USER:-staff_admin}
+      STAFF_DB_PASSWORD:    ${STAFF_DB_PASSWORD:-staff_pass_135}
+      STAFF_DB_NAME:        ${STAFF_DB_NAME:-staff_db}
+      AUTH_SECRET_KEY:      ${SECRET_KEY}
+      AUTH_ALGORITHM:       ${ALGORITHM:-HS256}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      REDIS_URL:            redis://redis:6379/10
+      MINIO_ENDPOINT:       minio:9000
+      MINIO_ACCESS_KEY:     ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY:     ${MINIO_SECRET_KEY:-minioadmin}
+      STAFF_BUCKET:         riviwa-staff
+      ENVIRONMENT:          ${ENVIRONMENT}
+      DEBUG:                ${DEBUG:-false}
+    depends_on:
+      staff_db:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  staff_db:
+    image: postgres:15-alpine
+    container_name: staff_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${STAFF_DB_USER:-staff_admin}
+      POSTGRES_PASSWORD: ${STAFF_DB_PASSWORD:-staff_pass_135}
+      POSTGRES_DB:       ${STAFF_DB_NAME:-staff_db}
+    ports: ["5447:5432"]
+    volumes: [staff_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STAFF_DB_USER:-staff_admin} -d ${STAFF_DB_NAME:-staff_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 networks:
   riviwa-net:
     driver: bridge
@@ -1332,4 +1387,5 @@ volumes:
   product_db_data:
   qr_db_data:
   verification_db_data:
+  staff_db_data:
   certbot_certs:
