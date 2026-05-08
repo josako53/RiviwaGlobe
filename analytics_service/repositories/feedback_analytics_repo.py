@@ -3403,6 +3403,245 @@ class FeedbackAnalyticsRepository:
         """
         return await self._fetchall(sql, params)
 
+    # ── Branch analytics: Summary ─────────────────────────────────────────────
+
+    async def get_branches_summary(
+        self,
+        org_id: uuid.UUID,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        feedback_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Per-branch comprehensive summary: counts, resolution rate, escalation rate, overdue."""
+        params: Dict[str, Any] = {"org_id": str(org_id)}
+        extra = self._org_date_clauses(params, date_from, date_to)
+        if feedback_type:
+            extra += " AND f.feedback_type::text = :feedback_type"
+            params["feedback_type"] = feedback_type.upper()
+        sql = f"""
+            SELECT
+                f.branch_id,
+                COUNT(*)                                                                        AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                    AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')                   AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')                     AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')                      AS inquiries,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))                AS resolved,
+                COUNT(*) FILTER (WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')) AS open_count,
+                COUNT(*) FILTER (WHERE f.status::text = 'ESCALATED')                           AS escalated,
+                COUNT(*) FILTER (WHERE f.status::text = 'DISMISSED')                           AS dismissed,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                      AND f.target_resolution_date IS NOT NULL
+                      AND f.target_resolution_date < NOW()
+                )                                                                               AS overdue,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                               AS avg_resolution_hours,
+                ROUND(CAST(
+                    COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))::NUMERIC /
+                    NULLIF(COUNT(*), 0) * 100.0
+                AS NUMERIC), 2)                                                                 AS resolution_rate,
+                ROUND(CAST(
+                    COUNT(*) FILTER (WHERE f.status::text = 'ESCALATED')::NUMERIC /
+                    NULLIF(COUNT(*), 0) * 100.0
+                AS NUMERIC), 2)                                                                 AS escalation_rate
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.branch_id IS NOT NULL
+              {extra}
+            GROUP BY f.branch_id
+            ORDER BY total DESC
+        """
+        return await self._fetchall(sql, params)
+
+    # ── Branch analytics: Trend ───────────────────────────────────────────────
+
+    async def get_branches_trend(
+        self,
+        org_id: uuid.UUID,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        granularity: str = "day",
+        feedback_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Multi-branch feedback counts bucketed by period — for trend/comparison charts."""
+        trunc = granularity if granularity in ("hour", "day", "week", "month") else "day"
+        params: Dict[str, Any] = {"org_id": str(org_id)}
+        extra = self._org_date_clauses(params, date_from, date_to)
+        if feedback_type:
+            extra += " AND f.feedback_type::text = :feedback_type"
+            params["feedback_type"] = feedback_type.upper()
+        sql = f"""
+            SELECT
+                f.branch_id,
+                date_trunc('{trunc}', f.submitted_at)                        AS period,
+                COUNT(*)                                                      AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')  AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION') AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')   AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')    AS inquiries,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED')) AS resolved
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.branch_id IS NOT NULL
+              {extra}
+            GROUP BY f.branch_id, period
+            ORDER BY f.branch_id, period
+        """
+        return await self._fetchall(sql, params)
+
+    # ── Branch analytics: Single-branch detail ────────────────────────────────
+
+    async def get_branch_detail(
+        self,
+        org_id: uuid.UUID,
+        branch_id: uuid.UUID,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """
+        Deep-dive into a single branch: summary + by-department + by-category
+        + by-service + daily trend.
+        """
+        params: Dict[str, Any] = {"org_id": str(org_id), "branch_id": str(branch_id)}
+        extra = self._org_date_clauses(params, date_from, date_to)
+
+        summary_sql = f"""
+            SELECT
+                COUNT(*)                                                                        AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                    AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION')                   AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')                     AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')                      AS inquiries,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))                AS resolved,
+                COUNT(*) FILTER (WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')) AS open_count,
+                COUNT(*) FILTER (WHERE f.status::text = 'ESCALATED')                           AS escalated,
+                COUNT(*) FILTER (WHERE f.status::text = 'DISMISSED')                           AS dismissed,
+                COUNT(*) FILTER (
+                    WHERE f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                      AND f.target_resolution_date IS NOT NULL
+                      AND f.target_resolution_date < NOW()
+                )                                                                               AS overdue,
+                COUNT(*) FILTER (
+                    WHERE f.priority::text = 'CRITICAL'
+                      AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                               AS critical_open,
+                COUNT(*) FILTER (
+                    WHERE f.priority::text = 'HIGH'
+                      AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
+                )                                                                               AS high_open,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                               AS avg_resolution_hours,
+                ROUND(CAST(
+                    COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))::NUMERIC /
+                    NULLIF(COUNT(*), 0) * 100.0
+                AS NUMERIC), 2)                                                                 AS resolution_rate,
+                ROUND(CAST(
+                    COUNT(*) FILTER (WHERE f.status::text = 'ESCALATED')::NUMERIC /
+                    NULLIF(COUNT(*), 0) * 100.0
+                AS NUMERIC), 2)                                                                 AS escalation_rate
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.branch_id = :branch_id
+              {extra}
+        """
+
+        dept_sql = f"""
+            SELECT
+                f.department_id,
+                COUNT(*)                                                                     AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                 AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')                  AS applause,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))             AS resolved,
+                ROUND(CAST(AVG(
+                    CASE WHEN f.resolved_at IS NOT NULL
+                    THEN EXTRACT(EPOCH FROM (f.resolved_at - f.submitted_at)) / 3600.0
+                    ELSE NULL END
+                ) AS NUMERIC), 2)                                                            AS avg_resolution_hours
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.branch_id = :branch_id
+              AND f.department_id IS NOT NULL
+              {extra}
+            GROUP BY f.department_id
+            ORDER BY total DESC
+        """
+
+        cat_sql = f"""
+            SELECT
+                f.category_def_id,
+                f.category::text                                                             AS category,
+                COUNT(*)                                                                     AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                 AS grievances,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))             AS resolved
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.branch_id = :branch_id
+              {extra}
+            GROUP BY f.category_def_id, f.category
+            ORDER BY total DESC
+            LIMIT 15
+        """
+
+        svc_sql = f"""
+            SELECT
+                f.service_id,
+                COUNT(*)                                                                     AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                 AS grievances,
+                COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))             AS resolved
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.branch_id = :branch_id
+              AND f.service_id IS NOT NULL
+              {extra}
+            GROUP BY f.service_id
+            ORDER BY total DESC
+            LIMIT 10
+        """
+
+        trend_sql = f"""
+            SELECT
+                date_trunc('day', f.submitted_at)                            AS period,
+                COUNT(*)                                                     AS total,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')  AS grievances,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'SUGGESTION') AS suggestions,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')   AS applause,
+                COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')    AS inquiries
+            FROM feedbacks f
+            JOIN fb_projects p ON p.id = f.project_id
+            WHERE p.organisation_id = :org_id
+              AND f.branch_id = :branch_id
+              {extra}
+            GROUP BY period
+            ORDER BY period
+        """
+
+        summary    = await self._fetchone(summary_sql, params) or {}
+        by_dept    = await self._fetchall(dept_sql, params)
+        by_cat     = await self._fetchall(cat_sql, params)
+        by_service = await self._fetchall(svc_sql, params)
+        trend      = await self._fetchall(trend_sql, params)
+
+        return {
+            **summary,
+            "by_department": by_dept,
+            "by_category":   by_cat,
+            "by_service":    by_service,
+            "trend":         trend,
+        }
+
     # ── Summary counts for AI context ────────────────────────────────────────
 
     async def get_summary_counts(self, project_id: uuid.UUID) -> Dict[str, Any]:
