@@ -63,9 +63,9 @@ class StaffProfileRepository:
         result = await self.db.execute(
             select(StaffProfile).where(
                 func.lower(StaffProfile.staff_code) == code.strip().lower(),
-            )
+            ).order_by(StaffProfile.created_at.desc()).limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_by_badge_number(self, org_id: UUID, badge_number: str) -> Optional[StaffProfile]:
         result = await self.db.execute(
