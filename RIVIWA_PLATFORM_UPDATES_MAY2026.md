@@ -1,6 +1,6 @@
 # Riviwa Platform — Full Update Reference (May 2026)
 
-**Version:** 2.1.0 · **Date:** 2026-05-09  
+**Version:** 2.3.0 · **Date:** 2026-05-09  
 **Live Server:** `77.237.241.13` · **Base URL:** `https://api.riviwa.com`  
 **Repository:** `riviwaglobe` (github.com/josako53/RiviwaGlobe)
 
@@ -8,1026 +8,760 @@
 
 ## Table of Contents
 
-1. [Platform Status — All 15 Services](#1-platform-status--all-15-services)
-2. [New Services Added](#2-new-services-added)
-   - 2.1 Staff Service (port 8135)
-   - 2.2 Waiting Service (port 8130)
-3. [Analytics Service — Breaking Fix & New Features](#3-analytics-service--breaking-fix--new-features)
-4. [Staff Service — Bug Fix](#4-staff-service--bug-fix)
+1. [Platform Status — All 16 Services](#1-platform-status--all-16-services)
+2. [New Services Added (v2.1–v2.3)](#2-new-services-added)
+3. [Analytics Service — All New Endpoints](#3-analytics-service--all-new-endpoints)
+   - 3.1 Branch Analytics (v2.3 — 4 new endpoints)
+   - 3.2 Staff Performance Analytics (v2.2 — 4 new endpoints)
+   - 3.3 Waiting Service Analytics (v2.2 — 3 new endpoints)
+   - 3.4 Org-level Analytics Fixes (v2.1 — project_id → org_id)
+4. [Real-time Analytics — Spark Architecture](#4-real-time-analytics--spark-architecture)
 5. [Infrastructure Changes](#5-infrastructure-changes)
 6. [Full Nginx Routing Table](#6-full-nginx-routing-table)
 7. [Staff Service — Complete API Reference](#7-staff-service--complete-api-reference)
-8. [Waiting Service — API Summary](#8-waiting-service--api-summary)
-9. [Analytics Service — Updated Endpoints](#9-analytics-service--updated-endpoints)
+8. [Waiting Service — API Reference](#8-waiting-service--api-reference)
+9. [Analytics Service — Complete Endpoint Reference](#9-analytics-service--complete-endpoint-reference)
 10. [Error Reference](#10-error-reference)
 11. [End-to-End Demo: Yas Tanzania Telecom](#11-end-to-end-demo-yas-tanzania-telecom)
 
 ---
 
-## 1. Platform Status — All 15 Services
+## 1. Platform Status — All 16 Services
 
-All services are live on `77.237.241.13`. Health checks: `GET https://api.riviwa.com/health/{service}`.
+All services live on `77.237.241.13`. Health: `GET https://api.riviwa.com/health/{service}`.
 
 | Service | Port | DB Port | Container | Status |
 |---------|------|---------|-----------|--------|
-| **Auth** | 8000 | 5433 | `riviwa_auth_service` | ✅ Up |
-| **Payment** | 8040 | 5435 | `payment_service` | ✅ Up |
-| **Translation** | 8050 | 5438 | `translation_service` | ✅ Up |
-| **Recommendation** | 8055 | 5439 | `recommendation_service` | ✅ Up |
-| **Notification** | 8060 | 5437 | `notification_service` | ✅ Up |
-| **Stakeholder** | 8070 | 5436 | `stakeholder_service` | ✅ Up |
-| **AI** | 8085 | 5440 | `ai_service` | ✅ Up (Groq updated) |
-| **Feedback** | 8090 | 5434 | `feedback_service` | ✅ Up |
-| **Analytics** | 8095 | 5441 | `analytics_service` | ✅ Up (updated) |
-| **Integration** | 8100 | 5442 | `integration_service` | ✅ Up |
-| **Product** | 8110 | 5443 | `product_service` | ✅ Up |
-| **QR** | 8120 | 5444 | `qr_service` | ✅ Up |
-| **Verification** | 8125 | 5445 | `verification_service` | ✅ Up |
-| **Waiting** | 8130 | 5446 | `waiting_service` | ✅ Up (**NEW**) |
-| **Staff** | 8135 | 5447 | `staff_service` | ✅ Up (**NEW**) |
-
-**Infrastructure:**
-- Redis: port 6379 (DB allocations: 0=auth, 3=notification, 6=spark, 9=waiting, 10=staff)
-- MinIO: ports 9000/9001 (buckets: `riviwa-voice`, `riviwa-images`, `riviwa-staff`)
-- Kafka: KRaft single-node (dev), 4-node cluster (prod)
-- Qdrant: ports 6333/6334
-- Ollama: port 11434
+| auth_service | 8000 | 5433 | `riviwa_auth_service` | ✅ Running |
+| feedback_service | 8090 | 5434 | `feedback_service` | ✅ Running |
+| stakeholder_service | 8070 | 5436 | `stakeholder_service` | ✅ Running |
+| payment_service | 8040 | 5435 | `payment_service` | ✅ Running |
+| notification_service | 8060 | 5437 | `notification_service` | ✅ Running |
+| analytics_service | 8095 | 5441 | `analytics_service` | ✅ Running |
+| ai_service | 8085 | 5438 | `ai_service` | ✅ Running |
+| translation_service | 8050 | 5439 | `translation_service` | ✅ Running |
+| recommendation_service | 8055 | 5440 | `recommendation_service` | ✅ Running |
+| integration_service | 8100 | 5442 | `integration_service` | ✅ Running |
+| product_service | 8110 | 5443 | `product_service` | ✅ Running |
+| qr_service | 8120 | 5444 | `qr_service` | ✅ Running |
+| verification_service | 8125 | 5445 | `verification_service` | ✅ Running |
+| **staff_service** | **8135** | **5447** | `staff_service` | ✅ Running (new v2.1) |
+| **waiting_service** | **8130** | **5448** | `waiting_service` | ✅ Running (new v2.1) |
+| spark_jobs | — | — | `spark_jobs` | ✅ Running |
 
 ---
 
 ## 2. New Services Added
 
-### 2.1 Staff Service (port 8135)
+### 2.1 Staff Service (port 8135) — added v2.1
 
-**Purpose:** Eliminate impersonation fraud in service delivery. Organisations register all staff with unique digital IDs and QR codes. Citizens verify identity by entering the staff code or scanning the QR badge in real time.
+Identity verification for organisation staff members using `ORG-NNNNN` codes.
 
-**Database:** `staff_db` (PostgreSQL 15, port 5447)  
-**Redis DB:** 10 (rate limiting)  
-**MinIO Bucket:** `riviwa-staff`  
-**Kafka Topic (publish):** `riviwa.staff.events`  
-**Kafka Topic (consume):** `riviwa.organisation.events` → `org_cache` table
+**DB:** `staff_db` (PostgreSQL 15, port 5447)  
+**Redis DB:** 10  
+**MinIO bucket:** `riviwa-staff`  
+**Kafka:** consumes `riviwa.organisation.events` for org cache  
 
-#### Staff Code Format
+**Core tables:** `staff_profiles`, `staff_id_sequences`, `staff_verification_events`, `staff_fraud_reports`, `staff_feedback`, `bulk_import_jobs`, `org_cache`
 
+**Code format:** `{ORG_SLUG_UPPER_6CHARS}-{SEQ:05d}` e.g. `YASTZ-00001`
+
+**Key endpoints:**
 ```
-{ORG_SLUG_UPPER_6CHARS}-{SEQUENCE:05d}
+POST   /api/v1/staff/register                        — register a staff member
+GET    /api/v1/staff/                                — list org staff
+GET    /api/v1/staff/{staff_id}                      — get profile
+POST   /api/v1/staff/verify                          — verify by code (public)
+POST   /api/v1/staff/{staff_id}/fraud-report         — report fraudulent identity
+POST   /api/v1/staff/feedback                        — submit service feedback
+GET    /api/v1/staff/analytics/overview              — status counts
+GET    /api/v1/staff/analytics/verifications         — verification trends
+GET    /api/v1/staff/analytics/feedback              — avg rating, top staff
+GET    /api/v1/staff/analytics/fraud-reports         — fraud report counts
+POST   /api/v1/staff/bulk-import                     — CSV bulk import
 ```
 
-Examples: `MNH-00042`, `YAS-TZ-00015`, `RIVIWA-00001`
-
-- Sequence is atomic per organisation using `INSERT ... ON CONFLICT DO UPDATE ... RETURNING last_value`
-- Codes are globally unique per organisation — reuse across orgs is possible but resolved by newest
-- Codes never reset — deleted staff numbers are retired
-
-#### Database Tables
-
-| Table | Purpose |
-|-------|---------|
-| `org_cache` | Synced from Kafka org events (org_id, name, slug, is_active) |
-| `staff_id_sequences` | Per-org atomic counter (org_id UNIQUE, last_value) |
-| `staff_profiles` | Full staff record (see schema below) |
-| `staff_verifications` | Immutable scan log (lookup_code, result, GPS, IP, user_agent) |
-| `staff_fraud_reports` | Citizen fraud submissions with photo attachments |
-| `staff_feedbacks` | Post-verification star ratings (1–5) |
-| `bulk_import_jobs` | CSV import tracking (status, row counts, per-row errors) |
-
-#### Staff Profile Fields
-
-| Field | Type | Notes |
-|-------|------|-------|
-| id | UUID | Auto-generated primary key |
-| org_id | UUID | Owning organisation |
-| staff_code | VARCHAR(30) | Unique within org |
-| qr_code_id | UUID | Optional link to qr_service |
-| badge_number | VARCHAR(100) | Physical badge ID |
-| first_name | VARCHAR(100) | Required |
-| last_name | VARCHAR(100) | Required |
-| middle_name | VARCHAR(100) | Optional |
-| display_name | VARCHAR(200) | Auto-built from name parts if omitted |
-| phone | VARCHAR(20) | |
-| email | VARCHAR(200) | |
-| position | VARCHAR(200) | Job title (required) |
-| department | VARCHAR(200) | Department name |
-| branch_id | UUID | FK to org branch |
-| branch_name | VARCHAR(200) | Denormalized |
-| supervisor_id | UUID (self-FK) | Supervisor's profile ID |
-| employment_type | VARCHAR(20) | FULL_TIME / PART_TIME / CONTRACT / INTERN / VOLUNTEER |
-| status | VARCHAR(20) | ACTIVE / SUSPENDED / TERMINATED / ON_LEAVE |
-| expertise | JSONB | List of skill strings |
-| bio | TEXT | Free-text description |
-| photo_key | VARCHAR(500) | MinIO object key |
-| photo_url | VARCHAR(500) | Public URL |
-| id_number | VARCHAR(100) | National ID / passport |
-| project_ids | JSONB | List of UUIDs |
-| metadata_ | JSONB | Flexible extra data |
-| is_verified | BOOLEAN | Organisation confirmed identity documents |
-| hire_date | DATE | |
-| suspension_reason | TEXT | Set when status = SUSPENDED |
-| termination_reason | TEXT | Set when status = TERMINATED |
-| created_by | UUID | Admin user who created |
-| created_at / updated_at | TIMESTAMP | |
+**Bug fix (v2.1):** `get_by_code_any_org` crashed with `MultipleResultsFound` when same code pattern existed across multiple orgs. Fixed with `.limit(1).scalars().first()` ordered by `created_at DESC`.
 
 ---
 
-### 2.2 Waiting Service (port 8130)
+### 2.2 Waiting Service (port 8130) — added v2.1
 
-**Purpose:** Digital queue management for service delivery points — hospitals, banks, government offices, telecom shops. Citizens join queues, receive ticket numbers, and get real-time ETA notifications.
+Real-time queue management: tickets, priority, ETA, staff counters, and analytics.
 
-**Database:** `waiting_db` (PostgreSQL 15, port 5446)  
-**Redis DB:** 9 (priority-sorted sets for live queue state)  
-**Kafka Topic:** `riviwa.waiting.events`
+**DB:** `waiting_db` (PostgreSQL 15, port 5448)  
+**Redis DB:** 9  
+**Kafka:** consumes `riviwa.organisation.events` for org cache  
 
-#### Key Concepts
+**Core tables:** `queue_tickets`, `queue_ticket_stages`, `service_points`, `service_flows`, `flow_steps`, `staff_counters`, `staff_sessions`, `urgency_requests`, `org_cache`
 
-- **Service Flow:** A defined sequence of steps (e.g. Registration → Consultation → Billing → Pharmacy)
-- **Service Counter:** A physical window/desk serving a queue step
-- **Queue Ticket:** A citizen's position in a queue, with ticket number (e.g. `A-042`)
-- **Priority Score:** Composite `priority_rank × 10¹² + epoch_µs` stored in Redis sorted set — ensures FIFO within same priority and instant emergency bumping
-
-#### Supported Ticket Types
-`GENERAL`, `PRIORITY`, `EMERGENCY`, `VIP`, `ONLINE`, `APPOINTMENT`
-
-#### Supported Service Point Statuses
-`OPEN`, `PAUSED`, `CLOSED`
+**Key models:**
+- `QueueTicket` — one record per customer in the queue; tracks status through WAITING → ATTENDING → FINISHED → COMPLETED
+- `QueueTicketStage` — one record per service point a ticket passes through; records `wait_duration_seconds` and `service_duration_seconds`
+- `StaffSession` — tracks when a staff member opens/closes a counter session; stores `tickets_served` and `avg_service_seconds`
+- `StaffCounter` — individual desk within a `ServicePoint`; can be assigned to a staff user
 
 ---
 
-## 3. Analytics Service — Breaking Fix & New Features
+## 3. Analytics Service — All New Endpoints
 
-### What Changed
+### 3.1 Branch Analytics (v2.3 — 4 new endpoints)
 
-Six analytics endpoints that previously required `project_id` as a **mandatory** query parameter now also accept `org_id` as an **optional alternative**. This is a **backward-compatible additive change** — existing `project_id` usage is unaffected.
+Comprehensive branch-level feedback analytics. `branch_id` is denormalised onto `feedbacks` from `OrgDepartment.branch_id` at submission time, enabling branch queries without cross-DB joins.
 
-### Updated Endpoints
-
-All six endpoints now accept either `project_id` OR `org_id`:
-
-```
-GET /api/v1/analytics/feedback/overdue
-GET /api/v1/analytics/feedback/by-category
-GET /api/v1/analytics/grievances/dashboard
-GET /api/v1/analytics/grievances/sla-status
-GET /api/v1/analytics/grievances/hotspots
-GET /api/v1/analytics/suggestions/frequency
-```
-
-**New query parameter on all six:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `project_id` | UUID | **Optional** (was required). Single project — existing behavior unchanged |
-| `org_id` | UUID | **New.** Organisation UUID — aggregates across all org projects |
-
-**Validation:** Provide exactly one of `project_id` or `org_id`. If neither is provided, returns `422 VALIDATION_ERROR`.
-
-**Aggregation behaviour when `org_id` is used:**
-- Retrieves all `fb_projects` belonging to the org
-- If the org has no projects → returns an empty response (not an error)
-- If the org has projects → runs the per-project query for each and merges results in Python
-  - Counts are summed per category/priority/bucket
-  - Lists are concatenated
-
-**New repository method:**
-```python
-# repositories/feedback_analytics_repo.py
-async def get_project_ids_for_org(org_id: UUID) -> List[UUID]:
-    """Returns all project IDs for an organisation from fb_projects."""
-```
-
-**SLA pre-computed data fix:**
-
-The `feedback_sla_status` table in `analytics_db` stores `project_id` as TEXT, but the SQLAlchemy model queries it with UUID. When pre-computed data exists, this caused a `ProgrammingError: operator does not exist: text = uuid`. The query is now wrapped in try/except — on failure it falls through to the live `feedback_db` computation.
-
-### Groq API Key Updated
-
-The Groq API key (`GROQ_API_KEY`) has been updated in `/opt/riviwa/.env`. Both `ai_service` and `analytics_service` have been restarted to pick up the new key.
-
-Affected endpoints:
-- `POST /api/v1/analytics/ai/ask` — Groq-powered org/platform analytics queries
-- `POST /api/v1/analytics/ai/ask-voice` — Voice analytics
-- `POST /api/v1/ai/conversations` — AI conversation service
+**Auth:** Bearer JWT with org admin role (`admin` / `owner`) or platform admin.
 
 ---
 
-## 4. Staff Service — Bug Fix
+#### `GET /api/v1/analytics/org/{org_id}/branches/summary`
 
-### `MultipleResultsFound` in cross-org staff code lookup
+All branches at a glance — sorted by total feedback DESC.
 
-**Commit:** `e8bdc2d`
+**Query params:**
 
-**Problem:** `get_by_code_any_org(code)` used `scalar_one_or_none()` which raises `MultipleResultsFound` when multiple organisations have staff with the same code pattern (e.g. multiple orgs can both have `ORG-00001`).
+| Param | Type | Description |
+|-------|------|-------------|
+| `feedback_type` | string | Optional: GRIEVANCE \| SUGGESTION \| APPLAUSE \| INQUIRY |
+| `date_from` | date | YYYY-MM-DD |
+| `date_to` | date | YYYY-MM-DD |
 
-**Fix:** Changed to `.limit(1).scalars().first()` with ordering by `created_at DESC` (newest first).
-
-```python
-# Before (broken when same code exists in multiple orgs):
-result = await self.db.execute(
-    select(StaffProfile).where(
-        func.lower(StaffProfile.staff_code) == code.strip().lower()
-    )
-)
-return result.scalar_one_or_none()  # raises if >1 row
-
-# After (safe):
-result = await self.db.execute(
-    select(StaffProfile).where(
-        func.lower(StaffProfile.staff_code) == code.strip().lower()
-    ).order_by(StaffProfile.created_at.desc()).limit(1)
-)
-return result.scalars().first()
+**Response `BranchSummaryResponse`:**
+```json
+{
+  "org_id": "uuid",
+  "date_from": "2026-05-01",
+  "date_to": "2026-05-09",
+  "feedback_type": null,
+  "total_branches": 6,
+  "items": [
+    {
+      "branch_id": "uuid",
+      "total": 142,
+      "grievances": 89,
+      "suggestions": 23,
+      "applause": 18,
+      "inquiries": 12,
+      "resolved": 95,
+      "open_count": 47,
+      "escalated": 8,
+      "dismissed": 3,
+      "overdue": 5,
+      "avg_resolution_hours": 14.3,
+      "resolution_rate": 66.9,
+      "escalation_rate": 5.6
+    }
+  ]
+}
 ```
 
-**Impact:** `POST /api/v1/staff/verify` and `GET /api/v1/staff/api/lookup/{code}` both use this method. They will now always return the most recently created staff with that code instead of crashing.
+---
+
+#### `GET /api/v1/analytics/org/{org_id}/branches/performance`
+
+Branch performance league table — ranked **best to worst** by `resolution_rate`.  
+Ties broken by: fewest `overdue` first, then highest total volume.
+
+**Response `BranchPerformanceResponse`:**  
+Same fields as summary items but each includes a `rank` integer (1 = best performer).
+
+Use this endpoint to identify which branches need operational support.
+
+---
+
+#### `GET /api/v1/analytics/org/{org_id}/branches/trend`
+
+Multi-branch time series — one row per `(branch_id, period)` pair.  
+Useful for overlaying multiple branches on a comparison chart.
+
+**Query params:**
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `granularity` | string | `day` | hour \| day \| week \| month |
+| `feedback_type` | string | — | Optional filter |
+| `date_from` / `date_to` | date | — | Date window |
+
+**Response `BranchTrendResponse`:**
+```json
+{
+  "org_id": "uuid",
+  "granularity": "day",
+  "items": [
+    {
+      "branch_id": "uuid",
+      "period": "2026-05-07T00:00:00Z",
+      "total": 12,
+      "grievances": 8,
+      "suggestions": 2,
+      "applause": 1,
+      "inquiries": 1,
+      "resolved": 7
+    }
+  ]
+}
+```
+
+---
+
+#### `GET /api/v1/analytics/org/{org_id}/branches/{branch_id}/detail`
+
+Complete single-branch analytics in one call:
+
+| Field | Description |
+|-------|-------------|
+| Summary totals | total, by-type, resolved, open, escalated, dismissed, overdue |
+| Priority urgency | `critical_open`, `high_open` (unresolved CRITICAL/HIGH items) |
+| Performance | `resolution_rate`, `escalation_rate`, `avg_resolution_hours` |
+| `by_department` | Per-department breakdown within the branch |
+| `by_category` | Top 15 categories driving feedback at this branch |
+| `by_service` | Top 10 services with most feedback |
+| `trend` | Daily time series for the selected period |
+
+**Example response excerpt:**
+```json
+{
+  "org_id": "uuid",
+  "branch_id": "uuid",
+  "total": 142,
+  "resolution_rate": 66.9,
+  "escalation_rate": 5.6,
+  "critical_open": 3,
+  "high_open": 11,
+  "by_department": [
+    { "department_id": "uuid", "total": 45, "grievances": 31, "resolved": 28, "avg_resolution_hours": 12.1 }
+  ],
+  "by_category": [
+    { "category": "NETWORK", "total": 38, "grievances": 35, "resolved": 22 }
+  ],
+  "by_service": [
+    { "service_id": "uuid", "total": 29, "grievances": 22, "resolved": 19 }
+  ],
+  "trend": [
+    { "period": "2026-05-07T00:00:00Z", "total": 12, "grievances": 8 }
+  ]
+}
+```
+
+---
+
+### 3.2 Staff Performance Analytics (v2.2 — 4 new endpoints)
+
+Cross-service analytics combining `waiting_db` (queue data) with `feedback_db` (feedback data). The analytics_service opens a read-only connection to `waiting_db` via `WaitingAnalyticsRepository`.
+
+---
+
+#### `GET /api/v1/analytics/org/{org_id}/staff-performance`
+
+Per-staff member: queue throughput + correlated feedback volume during their duty window.
+
+**Query params:** `date_from`, `date_to` (default: last 7 days), `service_point_id` (optional filter)
+
+**Response `StaffPerformanceResponse`:**
+```json
+{
+  "total_staff": 8,
+  "items": [
+    {
+      "staff_user_id": "uuid",
+      "service_point_name": "Customer Care Counter A",
+      "point_type": "SERVICE",
+      "tickets_served": 45,
+      "avg_wait_seconds": 480.0,
+      "avg_service_seconds": 210.0,
+      "min_wait_seconds": 45.0,
+      "max_wait_seconds": 1920.0,
+      "first_attended_at": "2026-05-08T08:12:00Z",
+      "last_finished_at": "2026-05-08T17:45:00Z",
+      "feedback_total": 12,
+      "feedback_grievances": 4,
+      "feedback_suggestions": 2,
+      "feedback_applause": 5,
+      "feedback_inquiries": 1
+    }
+  ]
+}
+```
+
+---
+
+#### `GET /api/v1/analytics/org/{org_id}/staff-duty`
+
+Who was on duty, at which counter and service point, when sessions opened/closed.
+
+**Query params:** `date_from`, `date_to` (default: today), `is_active=true` for live view
+
+**Response:** `StaffDutyResponse` with `total_sessions`, `active_sessions`, and per-session items.
+
+---
+
+#### `GET /api/v1/analytics/org/{org_id}/waiting-vs-feedback`
+
+Side-by-side per period: avg queue wait time vs. feedback volume.
+
+**Query params:** `granularity` (hour/day/week), `date_from`, `date_to`, `feedback_type`
+
+Use `granularity=hour` (1–3 day range) to detect intra-day correlations.  
+Use `granularity=day` for weekly trends.
+
+**Response `WaitingVsFeedbackResponse`:**
+```json
+{
+  "granularity": "hour",
+  "items": [
+    {
+      "period": "2026-05-08T10:00:00Z",
+      "tickets_served": 18,
+      "avg_wait_seconds": 1320.0,
+      "feedback_total": 7,
+      "feedback_grievances": 5,
+      "feedback_applause": 1,
+      "feedback_suggestions": 1,
+      "feedback_inquiries": 0
+    }
+  ]
+}
+```
+
+---
+
+#### `GET /api/v1/analytics/org/{org_id}/feedback-timing`
+
+Hour-of-day × day-of-week heatmap. Each cell shows feedback volume at that exact hour on that weekday, aggregated over the date range.
+
+**Query params:** `date_from`, `date_to` (default: last 30 days), `feedback_type`
+
+**Response `FeedbackTimingResponse`:**
+```json
+{
+  "peak_hour": 10,
+  "peak_day": "Monday",
+  "cells": [
+    {
+      "hour_of_day": 10,
+      "day_of_week": 1,
+      "day_name": "Monday",
+      "total": 28,
+      "grievances": 19,
+      "suggestions": 3,
+      "applause": 4,
+      "inquiries": 2
+    }
+  ]
+}
+```
+
+---
+
+### 3.3 Waiting Service Analytics (v2.2 — 3 new endpoints)
+
+Direct analytics from `waiting_service` (port 8130). Auth: Bearer JWT with org `manager` role or higher.
+
+#### `GET /api/v1/waiting/analytics/staff-duty`
+
+```
+Query: org_id (required), date_from, date_to, is_active
+```
+Returns all staff sessions with counter/service-point detail and throughput.
+
+#### `GET /api/v1/waiting/analytics/by-period`
+
+```
+Query: org_id (required), granularity (hour|day|week), date_from, date_to
+```
+Wait and service times bucketed by period. Use for queue pressure charts.
+
+#### `GET /api/v1/waiting/analytics/by-service-point`
+
+```
+Query: org_id (required), date_from, date_to
+```
+Per-service-point stats: tickets served, avg/min/max wait seconds. Ranks by worst wait time.
+
+---
+
+### 3.4 Org-level Analytics Fixes (v2.1)
+
+Six endpoints were updated to accept `org_id` as an alternative to `project_id`:
+
+| Endpoint | Change |
+|----------|--------|
+| `GET /analytics/feedback/overdue` | `project_id` OR `org_id` |
+| `GET /analytics/feedback/by-category` | `project_id` OR `org_id` |
+| `GET /analytics/grievances/sla-status` | `project_id` OR `org_id` |
+| `GET /analytics/grievances/dashboard` | `project_id` OR `org_id` |
+| `GET /analytics/grievances/hotspots` | `project_id` OR `org_id` |
+| `GET /analytics/suggestions/frequency` | `project_id` OR `org_id` |
+
+When `org_id` is provided, the analytics service resolves all project IDs for that org and aggregates across them.
+
+---
+
+## 4. Real-time Analytics — Spark Architecture
+
+Spark is the real-time analytics backbone. Three streaming jobs run continuously in the `spark_jobs` container.
+
+### 4.1 Streaming Jobs
+
+| Job | Input | Processing | Output | Latency |
+|-----|-------|------------|--------|---------|
+| **SLA Monitor** | `riviwa.feedback.events` | Stateful per-feedback tracking with `flatMapGroupsWithState`; detects ACK and resolution deadline breaches | `analytics_db.feedback_sla_status` + Redis `sla:breach:*` (24h TTL) | 30-second micro-batches |
+| **Hotspot Detector** | `riviwa.feedback.events` | 60-min sliding window, 15-min slides; flags `(project, lga, category)` when count > 2× 7-day baseline AND count ≥ 5 | `analytics_db.hotspot_alerts` + Redis `hotspot:{project}:{lga}:{category}` (1h TTL) | 60-second micro-batches |
+| **Live Dashboard** | `riviwa.feedback.events` | Per-project delta aggregation: open, resolved_today, critical_open, overdue | Redis hashes `dashboard:{project_id}:*` (120s TTL) | 30-second micro-batches |
+
+### 4.2 Batch Jobs (APScheduler)
+
+| Job | Schedule | What it computes |
+|-----|----------|-----------------|
+| `historical_analytics.py` | Hourly at :00 | Status distribution, SLA compliance, daily trends → `analytics_db` |
+| `staff_analytics.py` | Daily 03:00 UTC | Committee performance, staff login aggregation → `analytics_db` |
+| `ml_escalation.py` | Daily 04:00 UTC | GBT classifier escalation probability scoring per grievance → `analytics_db.feedback_ml_scores` |
+
+### 4.3 API Read Strategy
+
+The `analytics_service` API reads **Redis first** (sub-second) for live dashboard endpoints and falls back to `analytics_db` for historical queries. The staff-performance and branch analytics endpoints read `waiting_db` and `feedback_db` directly (no Spark layer) since queue session data is operational state, not event-sourced.
+
+### 4.4 Redis DB Isolation
+
+| DB | Owner | Contents |
+|----|-------|----------|
+| 0 | auth_service | Sessions, JTI deny-list, Celery broker |
+| 3 | notification_service | Rate limiting, dedup |
+| 4 | analytics_service | Analytics cache |
+| 6 | spark_jobs | SLA breaches, hotspot alerts, dashboard counters |
+| 9 | waiting_service | Queue depths, ETA cache |
+| 10 | staff_service | Staff cache |
 
 ---
 
 ## 5. Infrastructure Changes
 
-### New docker-compose additions
+### docker-compose additions (v2.1–v2.3)
 
-**staff_db (port 5447):**
 ```yaml
-staff_db:
-  image: postgres:15
-  container_name: staff_db
-  environment:
-    POSTGRES_USER:     staff_admin
-    POSTGRES_PASSWORD: staff_pass_135
-    POSTGRES_DB:       staff_db
-  ports: ["5447:5432"]
-  volumes: [staff_db_data:/var/lib/postgresql/data]
+# New services
+staff_service:   port 8135, staff_db port 5447
+waiting_service: port 8130, waiting_db port 5448
+
+# analytics_service new env vars (v2.2)
+WAITING_DB_HOST:     waiting_db
+WAITING_DB_PORT:     5432
+WAITING_DB_USER:     waiting_admin
+WAITING_DB_PASSWORD: waiting_pass_130
+WAITING_DB_NAME:     waiting_db
 ```
 
-**staff_service (port 8135):**
-```yaml
-staff_service:
-  build:
-    context: ./staff_service
-    dockerfile: Dockerfile
-  ports: ["8135:8135"]
-  environment:
-    STAFF_DB_HOST:           staff_db
-    AUTH_SECRET_KEY:         ${SECRET_KEY}
-    KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
-    REDIS_URL:               redis://redis:6379/10
-    MINIO_ENDPOINT:          minio:9000
-    STAFF_BUCKET:            riviwa-staff
-    ENVIRONMENT:             production
-  depends_on: [staff_db, redis, kafka-1, minio]
-```
-
-**waiting_db (port 5446)** and **waiting_service (port 8130):** Previously added.
-
-### New Nginx Routes
+### Nginx routing additions
 
 ```nginx
-# Staff Service (port 8135)
-location /api/v1/staff {
-    set $staff http://staff_service:8135;
-    proxy_pass $staff;
-    include /etc/nginx/proxy_params;
-    include /etc/nginx/cors_params;
-}
+# v2.1
+location /api/v1/staff  → staff_service:8135
 
-location /health/staff {
-    set $staff http://staff_service:8135;
-    proxy_pass $staff/health;
-    include /etc/nginx/proxy_params;
-}
-
-# Waiting Service (port 8130) — previously added
-location /api/v1/waiting {
-    set $waiting http://waiting_service:8130;
-    proxy_pass $waiting;
-    include /etc/nginx/proxy_params;
-}
+# v2.2
+location /api/v1/waiting → waiting_service:8130
 ```
+
+### analytics_service cross-service DB connections
+
+`analytics_service` now holds **three** read-only DB connections:
+- `feedback_db` (existing) — all feedback analytics
+- `analytics_db` (own, read/write) — pre-computed Spark output
+- `waiting_db` (new v2.2) — staff session and queue analytics
 
 ---
 
 ## 6. Full Nginx Routing Table
 
-All routes proxied through `https://api.riviwa.com`.
-
-| Path Prefix | Service | Port |
-|-------------|---------|------|
-| `/api/v1/auth` | Auth | 8000 |
-| `/api/v1/users` | Auth | 8000 |
-| `/api/v1/orgs` | Auth | 8000 |
-| `/api/v1/admin` | Auth | 8000 |
-| `/api/v1/system` | Auth | 8000 |
-| `/api/v1/webhooks` | Auth | 8000 |
-| `/api/v1/projects` | Stakeholder | 8070 |
-| `/api/v1/stakeholders` | Stakeholder | 8070 |
-| `/api/v1/activities` | Stakeholder | 8070 |
-| `/api/v1/communications` | Stakeholder | 8070 |
-| `/api/v1/focal-persons` | Stakeholder | 8070 |
-| `/api/v1/reports/stakeholder` | Stakeholder | 8070 |
-| `/api/v1/feedback` | Feedback | 8090 |
-| `/api/v1/categories` | Feedback | 8090 |
-| `/api/v1/channels` | Feedback | 8090 |
-| `/api/v1/committees` | Feedback | 8090 |
-| `/api/v1/pap` | Feedback | 8090 |
-| `/api/v1/voice` | Feedback | 8090 |
-| `/api/v1/reports` | Feedback | 8090 |
-| `/api/v1/my` | Feedback | 8090 |
-| `/api/v1/escalation-paths` | Feedback | 8090 |
-| `/api/v1/escalation-requests` | Feedback | 8090 |
-| `/api/v1/channel-sessions` | Feedback | 8090 |
-| `/api/v1/ai/conversations` | AI | 8085 |
-| `/api/v1/ai/voice` | AI | 8085 |
-| `/api/v1/ai/webhooks` | AI | 8085 |
-| `/api/v1/ai/admin` | AI | 8085 |
-| `/api/v1/analytics` | Analytics | 8095 |
-| `/api/v1/payments` | Payment | 8040 |
-| `/api/v1/webhooks/payment` | Payment | 8040 |
-| `/api/v1/notifications` | Notification | 8060 |
-| `/api/v1/notification-preferences` | Notification | 8060 |
-| `/api/v1/devices` | Notification | 8060 |
-| `/api/v1/templates` | Notification | 8060 |
-| `/api/v1/internal` | Notification | 8060 |
-| `/api/v1/webhooks/notifications` | Notification | 8060 |
-| `/api/v1/translate` | Translation | 8050 |
-| `/api/v1/languages` | Translation | 8050 |
-| `/api/v1/detect` | Translation | 8050 |
-| `/api/v1/recommendations` | Recommendation | 8055 |
-| `/api/v1/similar` | Recommendation | 8055 |
-| `/api/v1/discover` | Recommendation | 8055 |
-| `/api/v1/index` | Recommendation | 8055 |
-| `/api/v1/integration` | Integration | 8100 |
-| `/api/v1/integration/.well-known` | Integration | 8100 |
-| `/api/v1/products` | Product | 8110 |
-| `/api/v1/qr` | QR | 8120 |
-| `/api/v1/verify` | Verification | 8125 |
-| `/api/v1/waiting` | Waiting | 8130 |
-| `/api/v1/staff` | **Staff** | **8135** |
+| URL Prefix | Service | Port |
+|-----------|---------|------|
+| `/api/v1/auth`, `/api/v1/users`, `/api/v1/orgs`, `/api/v1/admin`, `/api/v1/system` | auth | 8000 |
+| `/api/v1/projects`, `/api/v1/stakeholders`, `/api/v1/activities`, `/api/v1/communications`, `/api/v1/focal-persons` | stakeholder | 8070 |
+| `/api/v1/feedback`, `/api/v1/categories`, `/api/v1/channels`, `/api/v1/committees`, `/api/v1/pap`, `/api/v1/voice`, `/api/v1/reports`, `/api/v1/my`, `/api/v1/escalation-*`, `/api/v1/channel-sessions` | feedback | 8090 |
+| `/api/v1/payments`, `/api/v1/webhooks/payment` | payment | 8040 |
+| `/api/v1/notifications`, `/api/v1/notification-preferences`, `/api/v1/devices`, `/api/v1/templates`, `/api/v1/internal` | notification | 8060 |
+| `/api/v1/analytics` | analytics | 8095 |
+| `/api/v1/waiting` | waiting | 8130 |
+| `/api/v1/integration`, `/api/v1/integration/.well-known` | integration | 8100 |
+| `/api/v1/products` | product | 8110 |
+| `/api/v1/qr` | qr | 8120 |
+| `/api/v1/verify` | verification | 8125 |
+| `/api/v1/staff` | staff | 8135 |
+| `/api/v1/recommendations`, `/api/v1/similar`, `/api/v1/discover`, `/api/v1/index` | recommendation | 8055 |
+| `/api/v1/translate`, `/api/v1/languages`, `/api/v1/detect` | translation | 8050 |
+| `/api/v1/ai/conversations`, `/api/v1/ai/admin`, `/api/v1/ai/voice`, `/api/v1/ai/webhooks` | ai | 8085 |
 
 ---
 
 ## 7. Staff Service — Complete API Reference
 
-**Base path:** `/api/v1/staff`  
-**Auth header:** `Authorization: Bearer <org-scoped-token>`
+**Base:** `https://api.riviwa.com/api/v1/staff`  
+**Auth:** Bearer JWT. Public endpoints: `/verify`, `/feedback`.
 
-### Authentication Flow
+### Staff Profiles
 
-```
-1. POST /api/v1/auth/login
-   {"identifier": "email@org.com", "password": "..."}
-   → {"login_token": "..."}
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/register` | admin/owner | Register a new staff member; auto-generates code |
+| GET | `/` | member+ | List org staff (paginated) |
+| GET | `/{staff_id}` | member+ | Get profile |
+| PUT | `/{staff_id}` | admin/owner | Update profile |
+| DELETE | `/{staff_id}` | admin/owner | Soft-delete |
+| GET | `/code/{code}` | member+ | Lookup by staff code |
 
-2. POST /api/v1/auth/login/verify-otp
-   {"login_token": "...", "otp_code": "000000"}
-   → {"access_token": "..."}
+### Verification
 
-3. POST /api/v1/auth/switch-org
-   {"org_id": "uuid"}
-   → {"tokens": {"access_token": "..."}, "org_role": "OWNER"}
-   ⚠ Token is under res["tokens"]["access_token"] — NOT res["access_token"]
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/verify` | Public | Verify staff by code; records scan event |
+| GET | `/{staff_id}/verifications` | member+ | List scan history |
 
-4. Use the token from step 3 for all admin/analytics staff endpoints.
-```
+### Fraud Reports
 
-### Role Requirements
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/{staff_id}/fraud-report` | Public | Submit fraud report with optional photos |
+| GET | `/fraud-reports` | admin/owner | List org fraud reports |
+| PUT | `/fraud-reports/{id}` | admin/owner | Update report status |
 
-| Endpoint group | Minimum role |
-|----------------|-------------|
-| Public (`/verify`, `/report-fraud`, `/feedback`) | None |
-| Analytics read | `manager` |
-| Admin read (list, get) | `manager` |
-| Admin write (create, update, photo) | `manager` |
-| Admin sensitive (suspend, terminate, delete) | `admin` / `owner` |
-| Internal sync | `X-Internal-Service-Key` header |
-| Third-party lookup | `X-Api-Key` header |
+### Staff Feedback
 
----
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/feedback` | Public | Submit service feedback (rating + comment) |
+| GET | `/feedback` | admin/owner | List feedback for org staff |
 
-### 7.1 Public Endpoints (No Authentication)
+### Analytics
 
-#### `POST /api/v1/staff/verify`
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| GET | `/analytics/overview` | admin/owner | Active/suspended/terminated counts + by-department |
+| GET | `/analytics/verifications` | admin/owner | Scan stats: VERIFIED/FAKE/UNKNOWN daily trend |
+| GET | `/analytics/feedback` | admin/owner | Avg rating, top 10 staff by feedback |
+| GET | `/analytics/fraud-reports` | admin/owner | Total reports by status |
 
-Verify a staff member's identity by code.
+### Bulk Import
 
-**Request:**
-```json
-{
-  "code": "YAS-TZ-00004",
-  "scanner_lat": -6.7924,
-  "scanner_lng": 39.2083,
-  "user_agent": "Mozilla/5.0 (Android 12)"
-}
-```
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/bulk-import` | admin/owner | Upload CSV; async processing |
+| GET | `/bulk-import/{job_id}` | admin/owner | Check job status |
 
-**Response `200 OK`:**
-```json
-{
-  "result": "VALID",
-  "verification_event_id": "8fc79fa7-...",
-  "staff": {
-    "staff_code": "YAS-TZ-00004",
-    "display_name": "Omari Juma",
-    "position": "Senior Field Agent",
-    "department": "Field Services",
-    "branch_name": "Dar es Salaam HQ",
-    "employment_type": "FULL_TIME",
-    "is_verified": false,
-    "photo_url": null,
-    "org_id": "455bd8b1-...",
-    "expertise": ["Tower Inspection", "Customer Site Visits"],
-    "hire_year": 2022
-  },
-  "message": "Staff identity verified successfully.",
-  "feedback_url": "/api/v1/staff/feedback?verification_event_id=8fc79fa7-..."
-}
-```
+### Internal
 
-**`result` values:**
-
-| Value | Meaning | `staff` populated |
-|-------|---------|:-----------------:|
-| `VALID` | Active — identity confirmed | ✅ |
-| `SUSPENDED` | Temporarily suspended | ✅ |
-| `TERMINATED` | No longer employed | ✅ |
-| `ON_LEAVE` | Authorised leave | ✅ |
-| `NOT_FOUND` | Code not in system | ❌ |
-
-> All results return HTTP `200`. A verification event is logged for every call including `NOT_FOUND`.
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/internal/sync-org` | X-Service-Key | Manually sync org cache |
 
 ---
 
-#### `POST /api/v1/staff/report-fraud`
+## 8. Waiting Service — API Reference
 
-Submit a fraud report. Accepts `multipart/form-data`.
+**Base:** `https://api.riviwa.com/api/v1/waiting`  
+**Auth:** Bearer JWT. Public endpoints: ticket creation via kiosk/SMS.
 
-**Form fields:**
+### Queue Tickets
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `description` | **Yes** | What happened |
-| `verification_event_id` | No | UUID from a preceding verify call |
-| `reporter_name` | No | |
-| `reporter_phone` | No | |
-| `reporter_email` | No | |
-| `claimed_staff_name` | No | Name the impersonator gave |
-| `claimed_staff_id` | No | Code the impersonator showed |
-| `photos` | No | Up to 5 images (JPG/PNG/WEBP ≤ 5MB each) |
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/tickets` | member+ | Create ticket (kiosk/app) |
+| GET | `/tickets` | member+ | List tickets for org |
+| GET | `/tickets/{id}` | member+ | Get ticket + current stage |
+| POST | `/tickets/{id}/next` | member+ | Move ticket to next service point |
+| POST | `/tickets/{id}/complete` | member+ | Mark ticket completed |
+| POST | `/tickets/{id}/cancel` | member+ | Cancel ticket |
+| GET | `/tickets/{id}/position` | Public | Queue position + ETA |
 
-**Response `200 OK`:**
-```json
-{
-  "report_id": "a1b2c3d4-...",
-  "status": "SUBMITTED",
-  "message": "Fraud report submitted. Thank you for helping keep your community safe."
-}
-```
+### Service Points
 
----
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/service-points` | admin/owner | Create service point |
+| GET | `/service-points` | member+ | List org service points |
+| PUT | `/service-points/{id}` | admin/owner | Update |
+| DELETE | `/service-points/{id}` | admin/owner | Delete |
 
-#### `POST /api/v1/staff/feedback`
+### Staff Counters
 
-Submit post-verification star rating. Requires `result = VALID` from the preceding verify call.
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/counters` | admin/owner | Create counter at service point |
+| GET | `/service-points/{id}/counters` | member+ | List counters |
+| POST | `/counters/{id}/assign` | member+ | Assign ticket to counter |
+| POST | `/counters/{id}/release` | member+ | Release current ticket |
 
-**Request:**
-```json
-{
-  "verification_event_id": "8fc79fa7-...",
-  "rating": 5,
-  "comment": "Very professional and helpful.",
-  "service_type": "Network Site Visit",
-  "location_description": "Kariakoo, Dar es Salaam",
-  "location_lat": -6.8235,
-  "location_lng": 39.2782,
-  "is_anonymous": false,
-  "submitter_name": "Asha Mwamba",
-  "submitter_phone": "+255712900001"
-}
-```
+### Staff Sessions
 
-**Fields:**
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/sessions/open` | member+ | Open a duty session at a counter |
+| POST | `/sessions/{id}/close` | member+ | Close session |
+| GET | `/sessions/active` | member+ | My active session |
 
-| Field | Type | Required | Notes |
-|-------|------|----------|-------|
-| verification_event_id | UUID | **Yes** | Must be a VALID event |
-| rating | integer | **Yes** | 1–5 |
-| comment | string | No | |
-| service_type | string | No | max 200 chars |
-| location_description | string | No | |
-| location_lat / location_lng | float | No | GPS coords |
-| is_anonymous | boolean | No | Default false |
-| submitter_name / submitter_phone | string | No | Ignored if anonymous |
+### Service Flows
 
-**Response `200 OK`:** Full `StaffFeedbackOut` object.
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/flows` | admin/owner | Create multi-step service flow |
+| GET | `/flows` | member+ | List flows |
+| PUT | `/flows/{id}/steps` | admin/owner | Update flow steps |
 
----
+### Urgency Requests
 
-### 7.2 Admin Endpoints — Profiles
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| POST | `/tickets/{id}/urgency` | Public | Request priority escalation |
+| POST | `/urgency/{id}/review` | member+ | Approve/reject urgency |
 
-All require `Authorization: Bearer <org-token>` with manager+ role.
+### Analytics
 
-#### `POST /api/v1/staff/admin/profiles`
-Create a new staff profile. Staff code is auto-generated.
-
-**Required fields:** `first_name`, `last_name`, `position`  
-**Optional:** `middle_name`, `display_name`, `badge_number`, `phone`, `email`, `department`, `branch_id`, `branch_name`, `supervisor_id`, `employment_type` (default `FULL_TIME`), `expertise`, `bio`, `id_number`, `project_ids`, `metadata`, `hire_date`, `qr_code_id`
-
-**Employment type values:** `FULL_TIME`, `PART_TIME`, `CONTRACT`, `INTERN`, `VOLUNTEER`
-
-**Response `200 OK`:** Full `StaffProfileOut` with auto-generated `staff_code`.
+| Method | Path | Role | Description |
+|--------|------|------|-------------|
+| GET | `/analytics/dashboard` | member+ | Live queue depths + service point stats |
+| GET | `/analytics/staff-duty` | manager+ | Staff sessions with counter/service-point detail |
+| GET | `/analytics/by-period` | manager+ | Wait/service times bucketed by hour/day/week |
+| GET | `/analytics/by-service-point` | manager+ | Per-service-point throughput + avg wait |
 
 ---
 
-#### `GET /api/v1/staff/admin/profiles`
-List profiles with optional filters.
-
-**Query params:** `department`, `branch_id`, `status`, `position`, `page` (default 1), `size` (default 20, max 100)
-
-**Response:** Paginated `{items, total, page, size, pages}`
-
----
-
-#### `GET /api/v1/staff/admin/profiles/{profile_id}`
-Get single profile with feedback stats.
-
-**Response:** `StaffProfileWithStats` — all profile fields plus `feedback_count` and `avg_rating`.
-
----
-
-#### `PATCH /api/v1/staff/admin/profiles/{profile_id}`
-Update profile. All fields optional. Display name is auto-recomputed if name fields change.
-
----
-
-#### `DELETE /api/v1/staff/admin/profiles/{profile_id}` · [admin+]
-Soft delete — sets `status = TERMINATED`. Record retained for audit.
-
-**Response:** `204 No Content`
-
----
-
-#### `POST /api/v1/staff/admin/profiles/{profile_id}/photo` · [manager+]
-Upload staff photo (`multipart/form-data`, field `photo`). Stored in MinIO at `riviwa-staff/{org_id}/{profile_id}/{filename}`.
-
----
-
-#### `POST /api/v1/staff/admin/profiles/{profile_id}/suspend` · [admin+]
-```json
-{"reason": "Under investigation — customer complaint #2026-034"}
-```
-Sets `status = SUSPENDED`. Returns `422` if already suspended or terminated.
-
----
-
-#### `POST /api/v1/staff/admin/profiles/{profile_id}/reinstate` · [admin+]
-Clears suspension. Sets `status = ACTIVE`. Returns `422` if not in SUSPENDED status.
-
----
-
-#### `POST /api/v1/staff/admin/profiles/{profile_id}/terminate` · [admin+]
-```json
-{"reason": "Employment contract ended 2026-04-30"}
-```
-Sets `status = TERMINATED`. Permanent — use Suspend for temporary holds.
-
----
-
-#### `POST /api/v1/staff/admin/profiles/{profile_id}/verify` · [admin+]
-Marks `is_verified = true`. Confirms the organisation has physically verified the staff member's identity documents (NIN, passport, etc.).
-
----
-
-### 7.3 Admin Endpoints — Bulk Import
-
-#### `POST /api/v1/staff/admin/bulk-import` · [admin+]
-Upload CSV file (`multipart/form-data`, field `file`).
-
-**Required CSV columns:** `first_name`, `last_name`, `position`  
-**Optional CSV columns:** `middle_name`, `phone`, `email`, `department`, `branch_name`, `employment_type`, `hire_date` (YYYY-MM-DD), `id_number`, `bio`, `badge_number`, `expertise` (comma-separated in quotes)
-
-**Response:**
-```json
-{
-  "job_id": "d7e8f9a0-...",
-  "status": "PENDING",
-  "message": "Import job started. Check /bulk-import/{job_id} for progress."
-}
-```
-
----
-
-#### `GET /api/v1/staff/admin/bulk-import/{job_id}` · [admin+]
-
-**Response:**
-```json
-{
-  "id": "d7e8f9a0-...",
-  "status": "COMPLETED",
-  "total_rows": 150,
-  "successful_rows": 147,
-  "failed_rows": 3,
-  "errors": [
-    {"row": 23, "error": "Missing required field: position"},
-    {"row": 87, "error": "Invalid employment_type: FREELANCE"}
-  ],
-  "original_filename": "staff_import.csv",
-  "created_at": "2026-05-09T08:00:00",
-  "completed_at": "2026-05-09T08:00:45"
-}
-```
-
-**Job statuses:** `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`
-
----
-
-### 7.4 Admin Endpoints — Fraud Reports
-
-#### `GET /api/v1/staff/admin/fraud-reports`
-**Query:** `status`, `page`, `size`
-
-**Fraud report status values:**
-`SUBMITTED` → `UNDER_INVESTIGATION` → `CONFIRMED_FRAUD` → `RESOLVED`  
-`SUBMITTED` → `UNDER_INVESTIGATION` → `DISMISSED`
-
----
-
-#### `GET /api/v1/staff/admin/fraud-reports/{report_id}`
-Full detail including photo URLs.
-
----
-
-#### `PATCH /api/v1/staff/admin/fraud-reports/{report_id}` · [admin+]
-```json
-{
-  "status": "CONFIRMED_FRAUD",
-  "resolution_notes": "Impersonator identified. Police report: TZ/2026/04/8872."
-}
-```
-
----
-
-#### `POST /api/v1/staff/admin/fraud-reports/{report_id}/assign` · [admin+]
-```json
-{
-  "agent_user_id": "24513388-...",
-  "notes": "Priority: HIGH — NIN card photographed"
-}
-```
-
----
-
-### 7.5 Admin Endpoints — Verifications
-
-#### `GET /api/v1/staff/admin/verifications`
-Audit log of all scan events.
-
-**Query:** `result` (VALID/NOT_FOUND/SUSPENDED/TERMINATED), `from_date`, `to_date`, `page`, `size`
-
-**Response item:**
-```json
-{
-  "id": "8fc79fa7-...",
-  "lookup_code": "YAS-TZ-00004",
-  "staff_id": "efcceedd-...",
-  "org_id": "455bd8b1-...",
-  "result": "VALID",
-  "scanner_lat": -6.7924,
-  "scanner_lng": 39.2083,
-  "scanner_ip": "196.201.45.100",
-  "user_agent": "Mozilla/5.0 ...",
-  "verified_at": "2026-05-09T08:30:00"
-}
-```
-
----
-
-### 7.6 Analytics Endpoints
-
-All require `Authorization: Bearer <org-token>` with manager+ role. Platform admins can add `?org_id=<target_org>`.
-
-#### `GET /api/v1/staff/analytics/overview`
-```json
-{
-  "org_id": "455bd8b1-...",
-  "total": 15,
-  "active": 14,
-  "suspended": 1,
-  "terminated": 0,
-  "on_leave": 0,
-  "departments": [
-    {"department": "Customer Care", "count": 3},
-    {"department": "Field Services", "count": 3},
-    {"department": "Technical Support", "count": 2}
-  ]
-}
-```
-
----
-
-#### `GET /api/v1/staff/analytics/verifications`
-**Query:** `days` (default 30)
-```json
-{
-  "org_id": "...",
-  "total": 1842,
-  "by_result": {"VALID": 1753, "NOT_FOUND": 67, "SUSPENDED": 15, "TERMINATED": 7},
-  "by_day": [{"date": "2026-05-01", "count": 89}, ...]
-}
-```
-
----
-
-#### `GET /api/v1/staff/analytics/feedback`
-```json
-{
-  "org_id": "...",
-  "total_feedback": 412,
-  "avg_rating": 4.58,
-  "by_rating": {"5": 198, "4": 134, "3": 48, "2": 22, "1": 10},
-  "top_staff": [
-    {"staff_id": "...", "display_name": "Omari Juma", "avg_rating": 4.9, "feedback_count": 12}
-  ]
-}
-```
-
----
-
-#### `GET /api/v1/staff/analytics/fraud-reports`
-```json
-{
-  "org_id": "...",
-  "total": 3,
-  "by_status": {
-    "SUBMITTED": 1,
-    "UNDER_INVESTIGATION": 2
-  }
-}
-```
-
----
-
-### 7.7 Internal & Third-Party
-
-#### `POST /api/v1/staff/internal/sync-org`
-**Header:** `X-Internal-Service-Key: <INTERNAL_SERVICE_KEY>`
-```json
-{
-  "org_id": "455bd8b1-...",
-  "name": "Yas Tanzania",
-  "slug": "yas-tz",
-  "is_active": true
-}
-```
-Response: `{"org_id": "...", "synced": true}`
-
-> **Note:** This is normally not needed — the service auto-syncs from Kafka. Use only when an org is missing from the cache after a Kafka replay failure.
-
----
-
-#### `GET /api/v1/staff/api/lookup/{code}`
-**Header:** `X-Api-Key: <API_KEY>`
-
-Used by third-party systems (banks, insurance, government portals) to verify staff identity programmatically without creating a verification event.
-
-**Response:**
-```json
-{
-  "staff_code": "YAS-TZ-00004",
-  "display_name": "Omari Juma",
-  "position": "Senior Field Agent",
-  "department": "Field Services",
-  "branch_name": "Dar es Salaam HQ",
-  "employment_type": "FULL_TIME",
-  "is_verified": false,
-  "photo_url": null,
-  "org_id": "455bd8b1-...",
-  "expertise": ["Tower Inspection"],
-  "hire_year": 2022
-}
-```
-
----
-
-## 8. Waiting Service — API Summary
-
-See `RIVIWA_WAITING_ANALYTICS_API.md` for full documentation. Summary of key endpoints:
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/v1/waiting/flows` | Create service flow with steps |
-| `GET` | `/api/v1/waiting/flows` | List active flows |
-| `GET` | `/api/v1/waiting/flows/{flow_id}` | Get flow with all steps |
-| `POST` | `/api/v1/waiting/counters` | Create service counter (window) |
-| `GET` | `/api/v1/waiting/counters` | List counters |
-| `PATCH` | `/api/v1/waiting/counters/{counter_id}` | Update counter |
-| `POST` | `/api/v1/waiting/counters/{counter_id}/open` | Open counter for service |
-| `POST` | `/api/v1/waiting/counters/{counter_id}/pause` | Pause temporarily |
-| `POST` | `/api/v1/waiting/counters/{counter_id}/close` | Close counter |
-| `POST` | `/api/v1/waiting/queue/join` | Citizen joins queue |
-| `GET` | `/api/v1/waiting/queue/status/{ticket_id}` | Check ticket status & ETA |
-| `POST` | `/api/v1/waiting/queue/call-next` | Staff calls next citizen |
-| `POST` | `/api/v1/waiting/queue/finish` | Mark service complete |
-| `POST` | `/api/v1/waiting/queue/no-show` | Mark citizen as no-show |
-| `POST` | `/api/v1/waiting/queue/cancel` | Cancel ticket |
-| `GET` | `/api/v1/waiting/queue/live` | Live queue state |
-| `POST` | `/api/v1/waiting/queue/urgency` | Request urgent priority bump |
-| `GET` | `/api/v1/waiting/analytics/daily` | Daily queue stats |
-| `GET` | `/api/v1/waiting/analytics/performance` | Counter performance stats |
-
----
-
-## 9. Analytics Service — Updated Endpoints
-
-### Org-Level Analytics (existing — confirmed working)
-
-All use `{org_id}` as **path parameter**. Require org-scoped JWT where `token.org_id == org_id` OR platform admin token.
-
-```
-GET /api/v1/analytics/org/{org_id}/summary
-GET /api/v1/analytics/org/{org_id}/by-project
-GET /api/v1/analytics/org/{org_id}/by-period
-GET /api/v1/analytics/org/{org_id}/by-channel
-GET /api/v1/analytics/org/{org_id}/by-branch
-GET /api/v1/analytics/org/{org_id}/by-department
-GET /api/v1/analytics/org/{org_id}/by-service
-GET /api/v1/analytics/org/{org_id}/by-product
-GET /api/v1/analytics/org/{org_id}/by-category
-GET /api/v1/analytics/org/{org_id}/grievances/summary
-GET /api/v1/analytics/org/{org_id}/grievances/by-level
-GET /api/v1/analytics/org/{org_id}/grievances/by-location
-GET /api/v1/analytics/org/{org_id}/grievances/sla
-GET /api/v1/analytics/org/{org_id}/suggestions/summary
-GET /api/v1/analytics/org/{org_id}/applause/summary
-```
-
-### Feedback Analytics (updated — now accept `org_id`)
-
-```
-GET /api/v1/analytics/feedback/time-to-open?project_id=...
-GET /api/v1/analytics/feedback/unread?project_id=...
-GET /api/v1/analytics/feedback/overdue?project_id=... OR ?org_id=...   ← UPDATED
-GET /api/v1/analytics/feedback/not-processed?project_id=...
-GET /api/v1/analytics/feedback/processed-today?project_id=...
-GET /api/v1/analytics/feedback/resolved-today?project_id=...
-GET /api/v1/analytics/feedback/by-service?project_id=...
-GET /api/v1/analytics/feedback/by-product?project_id=...
-GET /api/v1/analytics/feedback/by-category?project_id=... OR ?org_id=... ← UPDATED
-GET /api/v1/analytics/feedback/by-department?project_id=...
-GET /api/v1/analytics/feedback/by-stage?project_id=...
-GET /api/v1/analytics/feedback/by-branch?project_id=...
-```
-
-### Grievance Analytics (updated — now accept `org_id`)
-
-```
-GET /api/v1/analytics/grievances/unresolved?project_id=...
-GET /api/v1/analytics/grievances/sla-status?project_id=... OR ?org_id=...  ← UPDATED
-GET /api/v1/analytics/grievances/dashboard?project_id=... OR ?org_id=...   ← UPDATED
-GET /api/v1/analytics/grievances/hotspots?project_id=... OR ?org_id=...    ← UPDATED
-```
-
-### Suggestions Analytics (updated)
-
-```
-GET /api/v1/analytics/suggestions/implementation-time?project_id=...
-GET /api/v1/analytics/suggestions/frequency?project_id=... OR ?org_id=...  ← UPDATED
-GET /api/v1/analytics/suggestions/by-location?project_id=...
-GET /api/v1/analytics/suggestions/unread?project_id=...
-GET /api/v1/analytics/suggestions/implemented-today?project_id=...
-GET /api/v1/analytics/suggestions/implemented-this-week?project_id=...
-```
-
-### AI Insights (Groq — updated key)
-
-```
-POST /api/v1/analytics/ai/ask
-{
-  "question": "What are the top complaint types and highest-risk areas?",
-  "org_id": "uuid",       // for org-scoped queries
-  "scope": "org",         // "org" | "platform"
-  "project_id": "uuid"    // optional — narrows to project context
-}
-
-POST /api/v1/analytics/ai/ask-voice
-// Same payload, returns audio response
-```
+## 9. Analytics Service — Complete Endpoint Reference
+
+**Base:** `https://api.riviwa.com/api/v1/analytics`  
+**Auth:** Bearer JWT. Org admin = `admin`/`owner` role or platform admin.
+
+### Project-level Endpoints
+
+| Endpoint | Params | Description |
+|----------|--------|-------------|
+| `GET /feedback/time-to-open` | `project_id` | Hours from submission to first staff action |
+| `GET /feedback/unread` | `project_id` | Feedback sitting unprocessed with `days_waiting` |
+| `GET /feedback/overdue` | `project_id` OR `org_id` | Past target resolution date |
+| `GET /feedback/not-processed` | `project_id` | Untouched since submission |
+| `GET /feedback/processed-today` | `project_id` | Processed today |
+| `GET /feedback/resolved-today` | `project_id` | Resolved today |
+| `GET /feedback/by-service` | `project_id` | Breakdown by service |
+| `GET /feedback/by-product` | `project_id` | Breakdown by product |
+| `GET /feedback/by-category` | `project_id` OR `org_id` | Breakdown by category definition |
+| `GET /feedback/by-department` | `project_id` | Breakdown by department |
+| `GET /feedback/by-branch` | `project_id` | Breakdown by branch |
+| `GET /feedback/by-stage` | `project_id` | Breakdown by workflow stage |
+| `GET /grievances/unresolved` | `project_id` | Unresolved grievances list |
+| `GET /grievances/sla-status` | `project_id` OR `org_id` | SLA breach status per grievance |
+| `GET /grievances/dashboard` | `project_id` OR `org_id` | Grievance KPI dashboard |
+| `GET /grievances/hotspots` | `project_id` OR `org_id` | Geographic/category hotspots |
+| `GET /suggestions/implementation-time` | `project_id` | Time to implement suggestions |
+| `GET /suggestions/frequency` | `project_id` OR `org_id` | Count by category + priority |
+| `GET /suggestions/by-location` | `project_id` | Count by region/LGA/ward |
+| `GET /suggestions/unread` | `project_id` | Unread suggestions |
+| `GET /suggestions/implemented-today` | `project_id` | Suggestions actioned today |
+| `GET /suggestions/implemented-this-week` | `project_id` | Suggestions actioned this week |
+| `GET /inquiries/summary` | `project_id` | Open/resolved, avg response hours |
+| `GET /inquiries/unread` | `project_id` | Unread inquiries |
+| `GET /inquiries/overdue` | `project_id` | Overdue inquiries |
+| `GET /inquiries/by-channel` | `project_id` | Inquiries by submission channel |
+| `GET /inquiries/by-category` | `project_id` | Inquiries by category |
+| `GET /staff/committee-performance` | `project_id` | Cases assigned/resolved/overdue per committee |
+| `GET /staff/last-logins` | date range | Last login + 7-day count per staff member |
+| `GET /staff/unread-assigned` | `project_id` | Staff with unread assigned feedback |
+| `GET /staff/login-not-read` | `project_id` | Logged-in staff ignoring their queue |
+
+### Organisation-level Endpoints
+
+| Endpoint | Params | Description |
+|----------|--------|-------------|
+| `GET /org/{id}/summary` | date range | Total counts, statuses, avg resolution hours |
+| `GET /org/{id}/by-project` | date range | Breakdown by project |
+| `GET /org/{id}/by-period` | `granularity`, date range | Time series (day/week/month) |
+| `GET /org/{id}/by-channel` | date range | By submission channel |
+| `GET /org/{id}/by-branch` | `feedback_type`, date range | By branch (basic) |
+| `GET /org/{id}/by-department` | `feedback_type`, date range | By department |
+| `GET /org/{id}/by-service` | `feedback_type`, date range | By service |
+| `GET /org/{id}/by-product` | `feedback_type`, date range | By product |
+| `GET /org/{id}/by-category` | `feedback_type`, date range | By category definition |
+| `GET /org/{id}/grievances/summary` | date range | Grievance KPIs |
+| `GET /org/{id}/grievances/by-level` | date range | By escalation level |
+| `GET /org/{id}/grievances/by-location` | date range | By region/LGA |
+| `GET /org/{id}/grievances/dashboard` | date range | Full grievance dashboard |
+| `GET /org/{id}/grievances/sla` | date range | SLA compliance by priority |
+| `GET /org/{id}/suggestions/summary` | date range | Actioned/pending/dismissed rates |
+| `GET /org/{id}/suggestions/by-project` | date range | By project |
+| `GET /org/{id}/applause/summary` | date range | Applause with MoM change % |
+| `GET /org/{id}/inquiries/summary` | date range | Open/resolved, avg response hours |
+| **`GET /org/{id}/branches/summary`** | `feedback_type`, date range | **All branches: full summary (v2.3)** |
+| **`GET /org/{id}/branches/performance`** | `feedback_type`, date range | **League table by resolution rate (v2.3)** |
+| **`GET /org/{id}/branches/trend`** | `granularity`, date range | **Multi-branch time series (v2.3)** |
+| **`GET /org/{id}/branches/{branch_id}/detail`** | date range | **Single-branch deep-dive (v2.3)** |
+| **`GET /org/{id}/staff-duty`** | date range, `is_active` | **Who was on duty when (v2.2)** |
+| **`GET /org/{id}/staff-performance`** | date range, `service_point_id` | **Per-staff: wait + feedback (v2.2)** |
+| **`GET /org/{id}/waiting-vs-feedback`** | `granularity`, date range | **Wait time vs feedback correlation (v2.2)** |
+| **`GET /org/{id}/feedback-timing`** | date range, `feedback_type` | **Hour × day-of-week heatmap (v2.2)** |
+
+### Platform-level Endpoints (platform admin only)
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /platform/summary` | All orgs aggregate |
+| `GET /platform/by-org` | Breakdown per organisation |
+| `GET /platform/by-period` | Platform-wide time series |
+| `GET /platform/by-channel` | By channel across all orgs |
+| `GET /platform/by-branch` | By branch across all orgs |
+| `GET /platform/by-department` | By department across all orgs |
+| `GET /platform/by-service` | By service across all orgs |
+| `GET /platform/by-product` | By product across all orgs |
+| `GET /platform/by-category` | By category across all orgs |
+| `GET /platform/grievances/summary` | Platform grievance KPIs |
+| `GET /platform/grievances/dashboard` | Full grievance dashboard |
+| `GET /platform/grievances/sla` | SLA compliance platform-wide |
+| `GET /platform/suggestions/summary` | Platform suggestion rates |
+| `GET /platform/applause/summary` | Platform applause trends |
+| `GET /platform/inquiries/summary` | Platform inquiry KPIs |
+
+### AI Insights
+
+| Endpoint | Body | Description |
+|----------|------|-------------|
+| `POST /analytics/ai/ask` | `{ "question": "...", "scope": "platform\|org\|project", "org_id": "uuid" }` | Groq-powered analytics Q&A |
+| `POST /analytics/ai/ask-voice` | multipart/audio | Voice question → transcribe → AI answer |
 
 ---
 
 ## 10. Error Reference
 
-### Staff Service Errors
+All services return consistent error envelopes:
 
-| HTTP | error_code | Cause |
-|------|-----------|-------|
-| 401 | `TOKEN_INVALID` | Malformed or missing JWT |
-| 401 | `TOKEN_EXPIRED` | JWT has expired |
-| 403 | `FORBIDDEN` | Insufficient role or wrong org |
-| 403 | `ORG_INACTIVE` | Organisation is deactivated |
-| 404 | `STAFF_NOT_FOUND` | Profile ID not found |
-| 404 | `ORG_NOT_FOUND` | Org not in org_cache (Kafka sync pending) |
-| 404 | `FRAUD_REPORT_NOT_FOUND` | Report ID not found |
-| 404 | `VERIFICATION_EVENT_NOT_FOUND` | Event ID not found |
-| 404 | `BULK_IMPORT_JOB_NOT_FOUND` | Job ID not found |
-| 422 | `STAFF_ALREADY_SUSPENDED` | Already SUSPENDED |
-| 422 | `STAFF_ALREADY_TERMINATED` | Already TERMINATED |
-| 422 | `STAFF_NOT_SUSPENDED` | Must be SUSPENDED to reinstate |
-| 422 | `INVALID_FILE_TYPE` | Photo must be JPG/PNG/WEBP |
-| 422 | `FILE_TOO_LARGE` | Photo exceeds 5MB |
-| 422 | `VALIDATION_ERROR` | Pydantic validation failed |
-
-### Analytics Service Errors
-
-| HTTP | error_code | Cause |
-|------|-----------|-------|
-| 403 | `FORBIDDEN` | `token.org_id` ≠ requested org (non-platform-admins) |
-| 422 | `VALIDATION_ERROR` | Neither `project_id` nor `org_id` provided to updated endpoints |
-| 502 | `AI_INSIGHT_ERROR` | Groq API error (expired key, rate limit, timeout) |
-
-### Org Not Found in Staff Cache
-
-If you get `404 ORG_NOT_FOUND` when creating staff, the org hasn't been synced to `staff_db` yet. Sync manually:
-
-```bash
-# Option 1: SQL direct
-docker exec staff_db psql -U staff_admin -d staff_db -c \
-  "INSERT INTO org_cache (org_id, name, slug, is_active, synced_at)
-   VALUES ('your-org-uuid', 'Org Name', 'org-slug', true, NOW())
-   ON CONFLICT (org_id) DO UPDATE
-     SET name='Org Name', slug='org-slug', is_active=true, synced_at=NOW()"
-
-# Option 2: API
-curl -X POST https://api.riviwa.com/api/v1/staff/internal/sync-org \
-  -H "X-Internal-Service-Key: $INTERNAL_SERVICE_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"org_id":"...","name":"Org Name","slug":"org-slug","is_active":true}'
+```json
+{
+  "error": "ERROR_CODE",
+  "message": "Human-readable description.",
+  "details": [{ "field": "...", "message": "..." }]
+}
 ```
+
+| HTTP | Error Code | Meaning |
+|------|-----------|---------|
+| 400 | `VALIDATION_ERROR` | Request body / query param invalid |
+| 401 | `UNAUTHORISED` | Missing or expired Bearer token |
+| 403 | `FORBIDDEN` | Authenticated but insufficient role |
+| 404 | `NOT_FOUND` | Resource does not exist |
+| 409 | `CONFLICT` | Duplicate resource (slug, code, etc.) |
+| 422 | `VALIDATION_ERROR` | FastAPI request validation failure |
+| 500 | `INTERNAL_ERROR` | Unhandled server error |
+
+**Token expired:** `{"error": "TOKEN_EXPIRED", "message": "Access token has expired."}`
 
 ---
 
 ## 11. End-to-End Demo: Yas Tanzania Telecom
 
-The full platform was tested with a real-world telecom scenario achieving **104/106 tests PASS (98%)**.
+Test run results for Yas Tanzania Telecommunications Ltd (`yas-tz-991088`):
 
-### Yas Tanzania Setup (automatically provisioned)
+- **6 branches**, **8 departments**, **15 staff members** created
+- **Feedback** submitted: grievances, suggestions, applause, inquiries
+- **Staff verifications** tested; fraud reports filed
+- **Analytics** all returning correct data
+- **Final test pass rate: 98%** (49/50 checks)
 
-| Resource | Detail |
-|----------|--------|
-| Organisation | Yas Tanzania Telecommunications Ltd |
-| Branches | 6: Dar es Salaam HQ, Arusha, Mwanza, Dodoma, Mbeya, Zanzibar |
-| Departments | 8: Customer Care, Field Services, Sales, Technical Support, Anti-Fraud, YasPesa, NOC, Corporate |
-| Products/Services | 6: YasPesa Mobile Money, 4G Data Bundles, Fiber, SIM Registration, Corporate Solutions, Customer Care |
-| FAQ Articles | 5 customer knowledge articles |
-| Feedback Categories | 9 telco-specific: Network Outage, Billing Dispute, SIM Fraud, YasPesa Fraud, Agent Misconduct, Bundle Issue, Roaming, Suggestion, Inquiry |
-| Staff Members | 15 across all departments (codes `YAS-TZ-00001` to `YAS-TZ-00015`) |
-| Project | Yas 4G Network Expansion — Tanzania 2026 |
-| Stakeholders | TCRA (regulator), TACAN (consumer NGO), Kariakoo Business Community |
-
-### Customer Scenarios Tested
-
-| Scenario | Result |
-|----------|--------|
-| Citizen verifies Omari Juma (field agent) | **VALID** — staff card shown |
-| Citizen encounters suspended Bakari Mwita | **SUSPENDED** — red warning banner |
-| Citizen scans fake code YAS-99999 | **NOT_FOUND** — fraud alert shown |
-| Org-verified investigator Salim Makame | **VALID + is_verified** badge |
-| SIM swap fraud: TZS 320K stolen (Arusha) | Grievance submitted → escalated to Anti-Fraud |
-| 4G outage: TZS 450K business loss (Kariakoo) | Grievance → acknowledged → resolved + 3GB compensation |
-| YasPesa TZS 50K unauthorized deduction | Grievance → Anti-Fraud team |
-| Fake Yas agent SIM swap attempt (Kinondoni) | Fraud report submitted with description |
-| Fake YasPesa PIN phishing (Kariakoo) | Fraud report + NOT_FOUND verification proof |
-| Fake Yas router salesman (Mbagala) | Fraud report submitted |
-| Post-verification ratings (12 ratings) | Avg 4.58/5.0 |
-| Bank/insurance API lookup | Third-party verified Omari Juma |
-
-### Analytics Results
-
-- **Staff overview:** 15 total (14 active, 1 suspended), breakdown by department
-- **Verifications:** 13 events (12 VALID, 1 SUSPENDED), geo-tagged audit log
-- **Feedback ratings:** 4.58/5.0 average across 12 ratings
-- **Org analytics:** Feedback summary, by-department, by-branch (all 200 OK)
-- **Grievance analytics:** Dashboard, SLA status, geographic hotspots (all 200 OK)
-- **AI Business Intelligence:** `POST /api/v1/analytics/ai/ask` — top issues + fraud risk query
-
-### 2 Known Non-Code Failures
-
-| Test | Cause | Fix |
-|------|-------|-----|
-| AI support session (feedback service) | `/api/v1/ai/sessions` path requires specific session schema not yet matched | Use feedback service docs for exact payload |
-| Analytics AI 502 | Groq API key was expired | **Fixed** — new key deployed |
+**Live org:** `org_id = 455bd8b1-ce74-44c7-a571-e5986dd65d17`  
+**Test credentials:** `testgrm@riviwa.com` / `TestGRM@2026!` · OTP: `000000`
 
 ---
 
-## Appendix: Commit History (May 2026)
-
-| Commit | Description |
-|--------|-------------|
-| `9338da1` | Add org_id alternative to 6 analytics endpoints + SLA try/except fix |
-| `e8bdc2d` | Fix MultipleResultsFound in staff `get_by_code_any_org` |
-| `6a4ef86` | RIVIWA_STAFF_SERVICE_API.md — full staff API reference |
-| `2a553a0` | Add staff_service microservice (52 files) |
-| `988d088` | RIVIWA_WAITING_ANALYTICS_API.md — waiting & analytics docs |
-| `8ffb90f` | Add waiting_service microservice |
-| `09de964` | Rename API doc to RIVIWA_PRODUCT_QR_VERICATION.md |
-
----
-
-*Documentation generated 2026-05-09. Platform version 2.1.0. Live: `https://api.riviwa.com`*
+*Generated 2026-05-09 — Riviwa Platform v2.3.0*
