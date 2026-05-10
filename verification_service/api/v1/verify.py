@@ -6,49 +6,52 @@ from typing import Optional
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from db.session import get_async_session
+from events.producer import get_producer
 from models.verification import (
     FakeSuspectReport, ReportStatus, UnrecognizedScanHeatmap,
     VerificationEvent, VerificationResult,
 )
 from services.image_intelligence_client import analyze_fake_image
-from services.verify_service import compute_geohash, fetch_product_details, resolve_code
+from services.verify_service import (
+    compute_geohash, fetch_product_details, increment_scan_count, resolve_code,
+)
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1/verify", tags=["Verification"])
 
 
 @router.post("", status_code=200)
-async def verify_code(body: dict, db: AsyncSession = Depends(get_async_session)) -> dict:
+async def verify_code(
+    body: dict,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+) -> dict:
     """
     Verify a QR code or SMS short code.
 
-    A QR / unique code is PERMANENT evidence that a person used a service.
-    It is only marked as ALREADY_USED when feedback has actually been submitted through it.
-
     Results:
-      AUTHENTIC     — Code is genuine and feedback has NOT yet been submitted.
-                      Consumer can now leave feedback.
-      ALREADY_USED  — Feedback was submitted through this code.
-                      Shows the service/transaction details as proof of service.
-      UNRECOGNIZED  — Code not found. Prompt user to report as suspected fake.
+      AUTHENTIC     — Code is genuine; feedback not yet submitted.
+      ALREADY_USED  — Feedback was already submitted through this code.
+      UNRECOGNIZED  — Code not found in the Riviwa system.
     """
     raw_code = body.get("code", "").strip()
     if not raw_code:
         raise HTTPException(status_code=422, detail={"error": "CODE_REQUIRED"})
 
-    # Extract short_code from full QR URL if needed
     if "/qr/" in raw_code:
         raw_code = raw_code.split("/qr/")[-1].split("?")[0]
 
-    lat = body.get("lat")
-    lng = body.get("lng")
-    user_agent = body.get("user_agent", "")
+    lat        = body.get("lat")
+    lng        = body.get("lng")
+    user_agent = body.get("user_agent", "") or request.headers.get("user-agent", "")
+    scanner_ip = request.client.host if request.client else None
 
+    producer = await get_producer()
     qr_data, clean_code = await resolve_code(raw_code)
 
     if not qr_data:
@@ -66,6 +69,13 @@ async def verify_code(body: dict, db: AsyncSession = Depends(get_async_session))
                 cluster_cell=compute_geohash(float(lat), float(lng)),
             ))
         await db.commit()
+        producer.scanned(
+            verification_event_id=event.id, short_code=clean_code,
+            result=VerificationResult.UNRECOGNIZED.value,
+            organisation_id=None, product_id=None, qr_type=None,
+            scanner_lat=float(lat) if lat else None,
+            scanner_lng=float(lng) if lng else None,
+        )
         return {
             "result": "UNRECOGNIZED",
             "verification_event_id": str(event.id),
@@ -80,7 +90,6 @@ async def verify_code(body: dict, db: AsyncSession = Depends(get_async_session))
     qr_type = qr_data.get("qr_type", "")
 
     if qr_data.get("feedback_already_submitted"):
-        # Code was used — feedback was submitted. Show service details as proof.
         result = VerificationResult.ALREADY_USED
         if qr_type == "PRODUCT":
             message = "This product has already been verified and feedback submitted. This is a genuine product — see details below."
@@ -99,12 +108,16 @@ async def verify_code(body: dict, db: AsyncSession = Depends(get_async_session))
         else:
             message = "Verified. This is a genuine Riviwa-registered entity. You can now leave feedback."
 
+    org_id     = uuid.UUID(qr_data["organisation_id"]) if qr_data.get("organisation_id") else None
+    product_id = uuid.UUID(qr_data["product_id"])      if qr_data.get("product_id")      else None
+    qr_code_id = uuid.UUID(qr_data["qr_code_id"])      if qr_data.get("qr_code_id")      else None
+
     event = VerificationEvent(
         short_code=clean_code[:130],
         result=result.value,
-        product_id=uuid.UUID(qr_data["product_id"]) if qr_data.get("product_id") else None,
-        organisation_id=uuid.UUID(qr_data["organisation_id"]) if qr_data.get("organisation_id") else None,
-        qr_code_id=uuid.UUID(qr_data["qr_code_id"]) if qr_data.get("qr_code_id") else None,
+        product_id=product_id,
+        organisation_id=org_id,
+        qr_code_id=qr_code_id,
         qr_type=qr_type,
         scanner_lat=float(lat) if lat else None,
         scanner_lng=float(lng) if lng else None,
@@ -115,38 +128,56 @@ async def verify_code(body: dict, db: AsyncSession = Depends(get_async_session))
     db.add(event)
     await db.commit()
 
-    response = {
-        "result": result.value,
-        "verification_event_id": str(event.id),
-        "message": message,
-        "short_code": qr_data.get("short_code"),
-        "sms_code": qr_data.get("sms_code"),
-        "qr_type": qr_type,
-        "organisation_id": qr_data.get("organisation_id"),
-        "scan_count": qr_data.get("scan_count", 0),
-    }
+    # Fix: increment scan_count in qr_service (fire-and-forget, never blocks response)
+    if qr_code_id:
+        await increment_scan_count(
+            qr_code_id=str(qr_code_id),
+            short_code=clean_code,
+            scanner_ip=scanner_ip,
+            user_agent=user_agent[:512] if user_agent else None,
+        )
 
+    # Publish Kafka event
+    producer.scanned(
+        verification_event_id=event.id,
+        short_code=clean_code,
+        result=result.value,
+        organisation_id=org_id,
+        product_id=product_id,
+        qr_type=qr_type,
+        scanner_lat=float(lat) if lat else None,
+        scanner_lng=float(lng) if lng else None,
+    )
+
+    response = {
+        "result":                result.value,
+        "verification_event_id": str(event.id),
+        "message":               message,
+        "short_code":            qr_data.get("short_code"),
+        "sms_code":              qr_data.get("sms_code"),
+        "qr_type":               qr_type,
+        "organisation_id":       qr_data.get("organisation_id"),
+        "scan_count":            qr_data.get("scan_count", 0) + 1,
+    }
     if product_details:
         response["product"] = product_details
-
     if result == VerificationResult.AUTHENTIC:
         response["redirect_url"] = qr_data.get("redirect_url")
         response["actions"] = ["submit_feedback"]
     elif result == VerificationResult.ALREADY_USED:
         response["feedback_id"] = str(event.feedback_id) if event.feedback_id else None
         response["actions"] = ["track_feedback", "view_service_details"]
-        # Fetch service context so consumer can see which service they used
         if qr_data.get("receipt_session_id"):
             service_ctx = await _fetch_receipt_context(qr_data["receipt_session_id"])
             if service_ctx:
                 response["service_context"] = service_ctx
                 response["note"] = "This QR code is permanent evidence that you used this service."
-
     return response
 
 
 @router.post("/report-fake", status_code=status.HTTP_201_CREATED)
 async def report_fake_product(
+    request: Request,
     verification_event_id: str = Form(...),
     reporter_phone: Optional[str] = Form(default=None),
     reporter_name: Optional[str] = Form(default=None),
@@ -159,12 +190,7 @@ async def report_fake_product(
 ) -> dict:
     """
     Report a suspected fake/counterfeit product or service.
-
-    If a photo is provided:
-      1. Upload to MinIO (permanent storage for field agents).
-      2. Send to ai_service: CLIP ViT-B/32 similarity search (org-scoped → platform-wide)
-         then Llama 4 Scout visual reasoning about counterfeit indicators.
-      3. Store the AI verdict in ai_analysis — returned immediately to the consumer.
+    Requires a verification_event_id from a prior POST /verify call.
     """
     event_id = uuid.UUID(verification_event_id)
     event = await db.get(VerificationEvent, event_id)
@@ -173,7 +199,6 @@ async def report_fake_product(
 
     photo_key = photo_url = None
     photo_bytes: Optional[bytes] = None
-
     if photo and photo.size:
         photo_bytes = await photo.read()
         photo_key, photo_url = await _upload_fake_photo_bytes(
@@ -181,7 +206,6 @@ async def report_fake_product(
             photo.content_type or "image/jpeg", str(event_id),
         )
 
-    # Run AI image analysis if a photo was submitted
     ai_analysis: Optional[dict] = None
     if photo_bytes:
         org_id = str(event.organisation_id) if event.organisation_id else None
@@ -189,17 +213,8 @@ async def report_fake_product(
             f"{gps_lat},{gps_lng}" if gps_lat and gps_lng else None
         )
         ai_analysis = await analyze_fake_image(
-            photo_bytes,
-            org_id=org_id,
-            short_code=event.short_code,
-            location=location_ctx,
+            photo_bytes, org_id=org_id, short_code=event.short_code, location=location_ctx,
         )
-        if ai_analysis:
-            log.info("fake_report.ai_analysis_done",
-                     verdict=ai_analysis.get("ai_verdict", {}).get("verdict"),
-                     similarity=ai_analysis.get("clip_similarity", 0))
-        else:
-            log.warning("fake_report.ai_analysis_unavailable")
 
     report = FakeSuspectReport(
         verification_event_id=event_id,
@@ -219,42 +234,41 @@ async def report_fake_product(
     db.add(report)
     await db.commit()
     await db.refresh(report)
+    log.info("fake_report.submitted", report_id=str(report.id), has_photo=bool(photo_key))
 
-    log.info("fake_report.submitted", report_id=str(report.id),
-             lat=gps_lat, lng=gps_lng, has_photo=bool(photo_key),
-             ai_verdict=ai_analysis.get("ai_verdict", {}).get("verdict") if ai_analysis else None)
+    # Publish Kafka event
+    producer = await get_producer()
+    producer.fake_reported(
+        report_id=report.id,
+        verification_event_id=event_id,
+        short_code=event.short_code,
+        organisation_id=event.organisation_id,
+        has_photo=bool(photo_key),
+        gps_lat=gps_lat,
+        gps_lng=gps_lng,
+    )
 
     response = {
         "report_id": str(report.id),
-        "status": "SUBMITTED",
-        "message": "Thank you for reporting. Our field team will investigate this location.",
+        "status":    "SUBMITTED",
+        "message":   "Thank you for reporting. Our field team will investigate this location.",
         "has_photo": bool(photo_key),
-        "location": {"lat": gps_lat, "lng": gps_lng, "description": location_description},
+        "location":  {"lat": gps_lat, "lng": gps_lng, "description": location_description},
     }
-
     if ai_analysis:
         verdict = ai_analysis.get("ai_verdict", {})
         response["ai_analysis"] = {
-            "verdict":            verdict.get("verdict"),
-            "confidence":         verdict.get("confidence"),
-            "suspected_brand":    verdict.get("suspected_brand"),
-            "suspected_product":  verdict.get("suspected_product"),
-            "clip_similarity":    ai_analysis.get("clip_similarity"),
-            "top_matches":        ai_analysis.get("top_matches", [])[:3],
+            "verdict":               verdict.get("verdict"),
+            "confidence":            verdict.get("confidence"),
+            "clip_similarity":       ai_analysis.get("clip_similarity"),
             "counterfeit_indicators": verdict.get("counterfeit_indicators", []),
-            "reasoning":          verdict.get("reasoning"),
-            "recommended_action": verdict.get("recommended_action"),
+            "reasoning":             verdict.get("reasoning"),
+            "recommended_action":    verdict.get("recommended_action"),
         }
-
     return response
 
 
 async def _fetch_receipt_context(receipt_session_id: str) -> Optional[dict]:
-    """
-    Fetch receipt/service context from qr_service when a code is ALREADY_USED.
-    Returns the service details (attendant, location, date, amount etc.) so the
-    consumer can see which service they used — permanent evidence of service.
-    """
     try:
         async with httpx.AsyncClient(timeout=4.0) as client:
             resp = await client.get(
@@ -273,12 +287,10 @@ async def _fetch_receipt_context(receipt_session_id: str) -> Optional[dict]:
     return None
 
 
-async def _upload_fake_photo_bytes(
-    data: bytes, filename: str, content_type: str, event_id: str
-) -> tuple:
+async def _upload_fake_photo_bytes(data: bytes, filename: str, content_type: str, event_id: str) -> tuple:
     import aiobotocore.session as aio_session
     bucket = settings.VERIFICATION_BUCKET
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    ts  = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     ext = filename.rsplit(".", 1)[-1][:10]
     key = f"fake-reports/{event_id}/{ts}.{ext}"
     sess = aio_session.get_session()

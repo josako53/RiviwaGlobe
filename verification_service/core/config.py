@@ -21,14 +21,18 @@ class Settings(BaseSettings):
 
     # Service URLs
     QR_SERVICE_URL:      str = "http://qr_service:8120"
-    PRODUCT_SERVICE_URL: str = "http://product_service:8100"
+    PRODUCT_SERVICE_URL: str = "http://product_service:8110"
     AI_SERVICE_URL:      str = "http://ai_service:8085"
 
     # MinIO / S3
-    MINIO_ENDPOINT:   str = "http://minio:9000"
-    MINIO_ACCESS_KEY: str = "minioadmin"
-    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_ENDPOINT:      str = "http://minio:9000"
+    MINIO_ACCESS_KEY:    str = "minioadmin"
+    MINIO_SECRET_KEY:    str = "minioadmin"
     VERIFICATION_BUCKET: str = "riviwa-verification"
+
+    # Kafka
+    KAFKA_BOOTSTRAP_SERVERS:     str = "kafka-1:9092"
+    KAFKA_VERIFICATION_TOPIC:    str = "riviwa.verification.events"
 
     @property
     def async_db_url(self) -> str:

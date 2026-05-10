@@ -53,6 +53,8 @@ class QRScan(SQLModel, table=True):
     id:                 uuid.UUID        = Field(default_factory=uuid.uuid4, primary_key=True)
     qr_code_id:         uuid.UUID        = Field(index=True)
     short_code:         str              = Field(max_length=64, index=True)
+    organisation_id:    uuid.UUID        = Field(index=True)
+    qr_type:            str              = Field(max_length=20)
     scanner_ip:         Optional[str]    = Field(default=None, max_length=64)
     scanner_ua:         Optional[str]    = Field(default=None, max_length=512)
     fingerprint:        Optional[str]    = Field(default=None, max_length=32)

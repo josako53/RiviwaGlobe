@@ -9,16 +9,25 @@ from sqlmodel import SQLModel
 
 from core.config import settings
 from db.session import engine
+from events.producer import get_producer
 
 log = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # DB tables
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
     log.info("verification_service.db_ready")
+
+    # Kafka producer
+    producer = await get_producer()
+    await producer.start()
+
     yield
+
+    await producer.stop()
     await engine.dispose()
 
 
@@ -29,7 +38,7 @@ app = FastAPI(
         "Handles genuine/used/unrecognized results, fake product reporting with GPS and photo, "
         "field agent management, and counterfeit heatmap analytics."
     ),
-    version="1.0.0",
+    version="1.1.0",
     docs_url=None if settings.ENVIRONMENT == "production" else "/docs",
     redoc_url=None if settings.ENVIRONMENT == "production" else "/redoc",
     openapi_url=None if settings.ENVIRONMENT == "production" else "/openapi.json",

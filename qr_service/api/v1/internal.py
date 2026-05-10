@@ -13,7 +13,7 @@ from core.auth import InternalDep
 from core.config import settings
 from core.security import generate_short_code
 from db.session import get_async_session
-from models.qr import QRCode, ReceiptSession
+from models.qr import QRCode, QRScan, ReceiptSession
 from repositories.qr_repo import QRRepository
 from services.qr_service import get_org_sms_code, make_qr_png, upload_qr_png
 
@@ -200,3 +200,42 @@ async def get_receipt_session(
         "custom_attributes":    session.custom_attributes,
         "is_consumed":          session.is_consumed,
     }
+
+
+@router.post("/increment-scan", status_code=200)
+async def increment_scan(
+    body: dict,
+    db: AsyncSession = Depends(get_async_session),
+    _=InternalDep,
+) -> dict:
+    """
+    Record a scan event and increment scan_count on the QR code.
+    Called by verification_service immediately after a successful code lookup.
+
+    Body: {qr_code_id, short_code, scanner_ip?, user_agent?}
+    """
+    from sqlalchemy import select as sa_select
+    qr_id = uuid.UUID(body["qr_code_id"])
+    short_code = body.get("short_code", "")
+    repo = QRRepository(db)
+
+    # Fetch QR to get organisation_id and qr_type (required by qr_scans table)
+    qr_row = (await db.execute(
+        sa_select(QRCode).where(QRCode.id == qr_id)
+    )).scalar_one_or_none()
+    if not qr_row:
+        raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
+
+    await repo.increment_scan(qr_id)
+
+    await repo.record_scan(
+        qr_id=qr_id,
+        short_code=short_code,
+        organisation_id=qr_row.organisation_id,
+        qr_type=qr_row.qr_type,
+        ip=body.get("scanner_ip"),
+        ua=body.get("user_agent"),
+    )
+    await db.commit()
+    log.info("internal.qr.scan_recorded", qr_id=str(qr_id), short_code=short_code)
+    return {"recorded": True, "qr_code_id": str(qr_id)}

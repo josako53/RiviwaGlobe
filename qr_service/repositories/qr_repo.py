@@ -162,6 +162,8 @@ class QRRepository:
         self,
         qr_id: uuid.UUID,
         short_code: str,
+        organisation_id: Optional[uuid.UUID] = None,
+        qr_type: str = "",
         ip: Optional[str] = None,
         ua: Optional[str] = None,
         fingerprint: Optional[str] = None,
@@ -169,6 +171,8 @@ class QRRepository:
         scan = QRScan(
             qr_code_id=qr_id,
             short_code=short_code,
+            organisation_id=organisation_id,
+            qr_type=qr_type,
             scanner_ip=ip,
             scanner_ua=(ua or "")[:512],
             fingerprint=fingerprint,
