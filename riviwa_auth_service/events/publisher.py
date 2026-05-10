@@ -830,8 +830,8 @@ class EventPublisher:
             # ── Media — received by consumers to sync ProjectCache ──────────
             "cover_image_url":     getattr(project, "cover_image_url", None),
             "org_logo_url":        None,  # populated by org.events logo upload
-            # ── Org identity — consumers can cache org name without extra calls
-            "org_display_name":    getattr(project, "organisation", None) and getattr(project.organisation, "display_name", None),
+            # ── Org identity — populated by org.events; lazy-loading not safe post-commit
+            "org_display_name":    None,
             "background":           getattr(project, "background", None),
             "objectives":           getattr(project, "objectives", None),
             "expected_outcomes":    getattr(project, "expected_outcomes", None),
