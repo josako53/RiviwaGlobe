@@ -123,7 +123,7 @@ async def submit_feedback(
         verification_event_id=body.verification_event_id,
         staff_id=event.staff_id,
         org_id=event.org_id,
-        rating=body.rating,
+        feedback_type=body.feedback_type,
         comment=body.comment,
         service_type=body.service_type,
         location_description=body.location_description,

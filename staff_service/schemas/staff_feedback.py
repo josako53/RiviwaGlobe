@@ -2,15 +2,20 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+FeedbackType = Literal["grievance", "suggestion", "applause", "inquiry"]
 
 
 class StaffFeedbackCreate(BaseModel):
     verification_event_id: UUID
-    rating: int = Field(..., ge=1, le=5)
+    feedback_type: FeedbackType = Field(
+        ...,
+        description="grievance | suggestion | applause | inquiry — mirrors Riviwa core feedback vocabulary",
+    )
     comment: Optional[str] = None
     service_type: Optional[str] = Field(None, max_length=200)
     location_description: Optional[str] = Field(None, max_length=500)
@@ -26,7 +31,7 @@ class StaffFeedbackOut(BaseModel):
     verification_event_id: UUID
     staff_id: UUID
     org_id: UUID
-    rating: int
+    feedback_type: str
     comment: Optional[str] = None
     service_type: Optional[str] = None
     location_description: Optional[str] = None
