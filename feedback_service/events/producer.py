@@ -51,7 +51,7 @@ class FeedbackProducer:
 
     # ── Typed helpers ──────────────────────────────────────────────────────────
 
-    async def feedback_submitted(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
+    async def feedback_submitted(self, feedback_id: uuid.UUID, project_id: Optional[uuid.UUID],
                                   feedback_type: str, category: str,
                                   org_id: Optional[uuid.UUID] = None,
                                   branch_id: Optional[uuid.UUID] = None,
@@ -60,10 +60,11 @@ class FeedbackProducer:
                                   product_id: Optional[uuid.UUID] = None,
                                   category_def_id: Optional[uuid.UUID] = None,
                                   stakeholder_engagement_id: Optional[uuid.UUID] = None,
-                                  distribution_id: Optional[uuid.UUID] = None) -> None:
+                                  distribution_id: Optional[uuid.UUID] = None,
+                                  qr_short_code: Optional[str] = None) -> None:
         await self.publish(FeedbackEvents.SUBMITTED, {
             "feedback_id":     str(feedback_id),
-            "project_id":      str(project_id),
+            "project_id":      str(project_id) if project_id else None,
             "feedback_type":   feedback_type,
             "category":        category,
             "org_id":          str(org_id)          if org_id          else None,
@@ -74,7 +75,8 @@ class FeedbackProducer:
             "category_def_id": str(category_def_id) if category_def_id else None,
             "stakeholder_engagement_id": str(stakeholder_engagement_id) if stakeholder_engagement_id else None,
             "distribution_id":           str(distribution_id)           if distribution_id           else None,
-        }, key=str(project_id))
+            "short_code":      qr_short_code,
+        }, key=str(project_id) if project_id else str(org_id) if org_id else "unknown")
 
     async def feedback_acknowledged(self, feedback_id: uuid.UUID, project_id: uuid.UUID,
                                      priority: str,

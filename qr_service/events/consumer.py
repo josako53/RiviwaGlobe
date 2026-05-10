@@ -55,8 +55,10 @@ async def _consume_loop() -> None:
             # feedback.submitted events carry short_code and feedback_id
             if event.get("event_type") not in ("feedback.submitted", "FEEDBACK_SUBMITTED"):
                 continue
-            short_code  = event.get("short_code") or event.get("qr_code")
-            feedback_id_str = event.get("feedback_id")
+            # Payload is nested under 'payload' key in the Riviwa event envelope
+            payload = event.get("payload", event)
+            short_code  = payload.get("short_code") or payload.get("qr_code")
+            feedback_id_str = payload.get("feedback_id")
             if not short_code:
                 continue
             feedback_id = uuid.UUID(feedback_id_str) if feedback_id_str else None

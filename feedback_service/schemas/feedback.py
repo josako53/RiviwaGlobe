@@ -91,7 +91,12 @@ class ConsumerSubmitFeedback(BaseModel):
     issue_gps_lat: Optional[float] = Field(default=None, ge=-90, le=90)
     issue_gps_lng: Optional[float] = Field(default=None, ge=-180, le=180)
 
-    # ── Sub-project link ──────────────────────────────────────────────────────
+    qr_short_code: Optional[str] = Field(
+        default=None, max_length=20,
+        description="QR/SMS short code scanned before submitting. Triggers ALREADY_USED on next scan.",
+    )
+
+        # ── Sub-project link ──────────────────────────────────────────────────────
     subproject_id: Optional[uuid.UUID] = Field(default=None, description="Sub-project (work package) UUID")
 
     # ── Department link ───────────────────────────────────────────────────────
@@ -183,6 +188,10 @@ class StaffSubmitFeedback(BaseModel):
             "sms, whatsapp, phone_call, mobile_app, web_portal, in_person, "
             "paper_form, email, public_meeting, notice_box, other"
         ),
+    )
+    qr_short_code: Optional[str] = Field(
+        default=None, max_length=20,
+        description="QR/SMS short code scanned before submitting. Triggers ALREADY_USED on next scan.",
     )
     subject: str = Field(..., min_length=5, max_length=500, description="Short summary (Annex 5: Complaint header)")
     description: str = Field(..., min_length=10, description="Full description (Annex 5: Complaint Description)")

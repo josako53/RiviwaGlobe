@@ -309,6 +309,7 @@ class FeedbackService:
             category_def_id=f.category_def_id,
             stakeholder_engagement_id=f.stakeholder_engagement_id,
             distribution_id=f.distribution_id,
+            qr_short_code=data.get("qr_short_code"),
         )
 
         # Notify Consumer that submission was received
@@ -496,6 +497,7 @@ class FeedbackService:
             service_id=f.service_id,
             product_id=f.product_id,
             category_def_id=f.category_def_id,
+            qr_short_code=data.get("qr_short_code"),
         )
 
         # Notify Consumer (self-service portal submission)
