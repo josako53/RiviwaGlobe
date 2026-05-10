@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from api.v1 import (
     ai_insights,
     branch_analytics,
+    employee_feedback_analytics,
     feedback,
     grievances,
     inquiries,
@@ -30,3 +31,4 @@ api_v1_router.include_router(platform_analytics.router)
 api_v1_router.include_router(inquiries.router)
 api_v1_router.include_router(staff_performance.router)
 api_v1_router.include_router(branch_analytics.router)
+api_v1_router.include_router(employee_feedback_analytics.router)
