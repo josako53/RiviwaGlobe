@@ -131,6 +131,13 @@ AVAILABLE_TEMPLATES: Dict[str, Dict] = {
         "org_types_hint": ["government", "roads_agency", "world_bank_project"],
         "level_count": 6,
     },
+
+    "MICROFINANCE_5_LEVEL": {
+        "display_name": "Microfinance / Fintech 5-Level",
+        "description": "Branch helpdesk → Complaints unit → Compliance & risk → Executive management → Regulatory authority. For MFIs, SACCOs, mobile money operators, and fintech companies.",
+        "org_types_hint": ["microfinance", "sacco", "fintech", "mobile_money", "bank", "insurance"],
+        "level_count": 5,
+    },
 }
 
 
@@ -379,6 +386,89 @@ SYSTEM_TEMPLATE_SEEDS: List[Dict] = [
             },
         ],
     },
+    # ── MICROFINANCE_5_LEVEL ──────────────────────────────────────────────────
+    {
+        "template_key": "MICROFINANCE_5_LEVEL",
+        "name": "Microfinance / Fintech 5-Level Escalation",
+        "description": (
+            "Five-level escalation for microfinance institutions, SACCOs, "
+            "mobile money operators, and fintech companies. Fast SLAs at "
+            "branch level, mandatory compliance escalation, and a final "
+            "regulatory authority level aligned with Bank of Tanzania / TCRA timelines."
+        ),
+        "levels": [
+            {
+                "level_order": 1,
+                "name": "Branch / Agent Helpdesk",
+                "code": "branch_helpdesk",
+                "description": "Branch officer or field agent. First contact for transaction failures, account issues, loan queries, and agent misconduct.",
+                "consumer_visible_name": "Customer Helpdesk",
+                "is_final": False,
+                "ack_sla_hours": 2,
+                "resolution_sla_hours": 24,
+                "sla_overrides": _sla(2, 24),
+                "auto_escalate_on_breach": True,
+                "auto_escalate_after_hours": 24,
+            },
+            {
+                "level_order": 2,
+                "name": "Customer Complaints Unit",
+                "code": "complaints_unit",
+                "description": "Centralised complaints team. Handles unresolved branch escalations, loan disputes, and agent misconduct.",
+                "consumer_visible_name": "Customer Complaints Team",
+                "is_final": False,
+                "ack_sla_hours": 4,
+                "resolution_sla_hours": 72,
+                "sla_overrides": _sla(4, 72),
+                "auto_escalate_on_breach": True,
+                "auto_escalate_after_hours": 72,
+            },
+            {
+                "level_order": 3,
+                "name": "Compliance & Risk Officer",
+                "code": "compliance_officer",
+                "description": "Handles regulatory concerns, suspected fraud, high-value disputes, and complaints requiring external regulatory reporting.",
+                "consumer_visible_name": "Compliance Review",
+                "is_final": False,
+                "ack_sla_hours": 24,
+                "resolution_sla_hours": 168,
+                "sla_overrides": _sla(24, 168),
+                "auto_escalate_on_breach": True,
+                "auto_escalate_after_hours": 168,
+            },
+            {
+                "level_order": 4,
+                "name": "Executive Management",
+                "code": "executive_management",
+                "description": "CEO / MD / Board committee. Final internal authority for high-value, systemic, or reputationally sensitive complaints.",
+                "consumer_visible_name": "Executive Management",
+                "is_final": False,
+                "ack_sla_hours": 48,
+                "resolution_sla_hours": 336,
+                "sla_overrides": _sla(48, 336),
+                "auto_escalate_on_breach": True,
+                "auto_escalate_after_hours": 336,
+            },
+            {
+                "level_order": 5,
+                "name": "Regulatory Authority",
+                "code": "regulatory_authority",
+                "description": "External regulator — Bank of Tanzania (BoT), TCRA, or CMSA depending on licence type. Final level. 30-day regulatory resolution timeline.",
+                "consumer_visible_name": "Regulatory Authority",
+                "is_final": True,
+                "ack_sla_hours": 72,
+                "resolution_sla_hours": 720,
+                "sla_overrides": {
+                    "critical": {"ack_hours": 24,  "resolution_hours": 168},
+                    "high":     {"ack_hours": 48,  "resolution_hours": 360},
+                    "medium":   {"ack_hours": 72,  "resolution_hours": 720},
+                    "low":      {"ack_hours": 120, "resolution_hours": None},
+                },
+                "auto_escalate_on_breach": False,
+            },
+        ],
+    },
+
 ]
 
 # Keep backward-compat alias for any code that still references the old name
