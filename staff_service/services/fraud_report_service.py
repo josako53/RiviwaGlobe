@@ -58,7 +58,9 @@ class FraudReportService:
         report = await self.repo.get_by_id(report_id)
         if not report:
             raise FraudReportNotFoundError()
-        if not is_platform_admin and org_id and report.org_id != org_id:
+        # Allow access when: platform admin, OR report belongs to caller's org,
+        # OR report has no org (public submission — any org admin may investigate)
+        if not is_platform_admin and report.org_id is not None and report.org_id != org_id:
             raise ForbiddenError()
         return report
 
@@ -81,8 +83,12 @@ class FraudReportService:
         report = await self.repo.get_by_id(report_id)
         if not report:
             raise FraudReportNotFoundError()
-        if not is_platform_admin and report.org_id != org_id:
+        # Allow when: platform admin, OR report belongs to org, OR org_id is None (public submission)
+        if not is_platform_admin and report.org_id is not None and report.org_id != org_id:
             raise ForbiddenError()
+        # Stamp org_id if the report was submitted without one (first org to investigate claims it)
+        if report.org_id is None and org_id:
+            updates["org_id"] = org_id
         if "status" in updates and updates["status"]:
             updates["status"] = updates["status"].upper()
         return await self.repo.update(report, updates)
@@ -98,12 +104,14 @@ class FraudReportService:
         report = await self.repo.get_by_id(report_id)
         if not report:
             raise FraudReportNotFoundError()
-        if not is_platform_admin and report.org_id != org_id:
+        if not is_platform_admin and report.org_id is not None and report.org_id != org_id:
             raise ForbiddenError()
         updates: Dict[str, Any] = {
             "assigned_agent_id": agent_user_id,
             "status": "UNDER_INVESTIGATION",
         }
+        if report.org_id is None and org_id:
+            updates["org_id"] = org_id
         if notes:
             updates["resolution_notes"] = notes
         return await self.repo.update(report, updates)
