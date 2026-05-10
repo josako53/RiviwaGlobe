@@ -1,7 +1,7 @@
-# Riviwa Platform — May 2026 Update (v2.2 → v2.3)
+# Riviwa Platform — May 2026 Update (v2.2 → v2.4)
 
 **Date:** 2026-05-09/10  
-**Version:** 2.3.0  
+**Version:** 2.4.0  
 **Base URL:** `https://api.riviwa.com`
 
 This document covers **only what is new or changed** since the last documented state.
@@ -10,7 +10,7 @@ For full API references see the existing docs:
 | Document | Covers |
 |----------|--------|
 | `RIVIWA_FULL_API_REFERENCE.md` | All core services (auth, feedback, stakeholder, payment, notification) |
-| `RIVIWA_STAFF_SERVICE_API.md` | Staff service — complete endpoint reference |
+| `RIVIWA_STAFF_SERVICE_API.md` | Staff service — complete endpoint reference (updated for v2.4) |
 | `RIVIWA_WAITING_ANALYTICS_API.md` | Waiting service basic API + analytics dashboard |
 | `RIVIWA_NEW_ENDPOINTS_REFERENCE.md` | Analytics org/platform endpoints up to 2026-04-22 |
 | `RIVIWA_PRODUCT_QR_VERICATION.md` | Product, QR, verification service endpoints |
@@ -21,6 +21,10 @@ For full API references see the existing docs:
 
 | Version | Change |
 |---------|--------|
+| v2.4 | **Staff feedback redesigned** — 5-star rating replaced with Riviwa feedback vocabulary |
+| v2.4 | **Bug fix**: `auth_service` project activation silently dropped Kafka events (lazy-load crash) |
+| v2.4 | **Bug fix**: `feedback_service` Kafka consumer stopped on exception, never restarted |
+| v2.4 | **Bug fix**: Fraud reports with `org_id=null` now accessible to org admins |
 | v2.3 | **4 new branch analytics endpoints** on `analytics_service` |
 | v2.2 | **4 new staff-performance endpoints** on `analytics_service` (cross-service: waiting_db + feedback_db) |
 | v2.2 | **3 new waiting analytics endpoints** on `waiting_service` |
@@ -395,10 +399,101 @@ location /health/waiting {
 
 **`staff_service` — `get_by_code_any_org` MultipleResultsFound**
 
-When the same staff code pattern existed across multiple orgs (e.g. multiple Yas Tanzania test orgs each having `YASTZ-00001`), `scalar_one_or_none()` raised `MultipleResultsFound`.
-
-**Fix:** Changed to `.limit(1).scalars().first()` ordered by `created_at DESC`, so the most recently created record wins. Committed `e8bdc2d`.
+When the same staff code pattern existed across multiple orgs, `scalar_one_or_none()` raised `MultipleResultsFound`. Fixed to `.limit(1).scalars().first()` ordered by `created_at DESC`. Committed `e8bdc2d`.
 
 ---
 
-*Riviwa Platform v2.3.0 — changes since `RIVIWA_WAITING_ANALYTICS_API.md` (2026-05-08)*
+## 7. Staff Feedback Redesign (v2.4)
+
+### What changed
+
+The staff feedback endpoint previously accepted a numeric `rating` (integer 1–5). This is replaced with `feedback_type`, using the same four-value vocabulary as all other Riviwa feedback surfaces.
+
+**Migration:** `c3d4e5f6a7b8` drops the `rating` column and adds `feedback_type VARCHAR(20)` with an index. Non-destructive — the column is new, no existing data is migrated.
+
+### `POST /api/v1/staff/feedback` — field change
+
+**Before:**
+```json
+{ "verification_event_id": "...", "rating": 5, "comment": "..." }
+```
+
+**After:**
+```json
+{ "verification_event_id": "...", "feedback_type": "applause", "comment": "..." }
+```
+
+`feedback_type` accepts: `grievance` | `suggestion` | `applause` | `inquiry`
+
+### `GET /api/v1/staff/analytics/feedback` — response change
+
+**Before:**
+```json
+{
+  "avg_rating": 4.3,
+  "by_rating": { "5": 198, "4": 134, "3": 48, "2": 22, "1": 10 }
+}
+```
+
+**After:**
+```json
+{
+  "total": 412,
+  "applause_rate": 74.3,
+  "by_type": { "grievance": 62, "suggestion": 44, "applause": 306, "inquiry": 0 },
+  "by_staff": [
+    {
+      "staff_id": "uuid",
+      "total": 67,
+      "grievances": 2,
+      "suggestions": 5,
+      "applause": 58,
+      "inquiries": 2,
+      "applause_rate": 86.6
+    }
+  ]
+}
+```
+
+**`applause_rate`** is the primary performance metric: `applause / total × 100`. It produces the same quality signal as the org-level feedback analytics and removes the ambiguity of numeric averages (is 4.2 good? compared to what?).
+
+### Database schema diff (`staff_feedbacks` table)
+
+| Column | v2.3 | v2.4 |
+|--------|------|------|
+| `rating` | INTEGER (1–5) | **Removed** |
+| `feedback_type` | — | VARCHAR(20), indexed |
+
+---
+
+## 8. Bug Fixes (v2.4)
+
+### `auth_service` — Project Kafka events silently dropped
+
+**Symptom:** Activating an org project via `POST /api/v1/orgs/{org_id}/projects/{id}/activate` returned 200, but the `org_project.published` event was never delivered to Kafka consumers (`feedback_service`, `stakeholder_service`). Projects did not appear in `fb_projects` and feedback submissions returned `PROJECT_NOT_FOUND`.
+
+**Root cause:** `_project_payload()` in `events/publisher.py` accessed `project.organisation.display_name` — a SQLAlchemy lazy relationship — after the DB session had been committed. In an async context this raises `greenlet_spawn has not been called`, which was caught and logged as `project_service.publish_failed` but silently dropped.
+
+**Fix:** Set `org_display_name: None` in the payload. The field is already populated by the separate `org.updated` event path. Committed `f01a787`.
+
+**Effect:** All project activations now publish correctly. Projects sync to `feedback_db` within ~15 seconds of activation.
+
+---
+
+### `feedback_service` — Kafka consumer stopped permanently on exception
+
+**Symptom:** After a transient error (network hiccup, malformed message), the consumer task stopped and was never restarted. Subsequent Kafka events were committed by the broker but not processed.
+
+**Fix:** Split `_consume_loop` into `_consume_once` (single run) + `_consume_loop` (retry wrapper with exponential backoff 5 s → 60 s). Committed `e7e8526`.
+
+---
+
+### `staff_service` — Fraud reports with `org_id=null` returned 403 to org admins
+
+**Symptom:** Public fraud reports submitted without a `verification_event_id` have `org_id=null`. When an org admin tried to view or update these reports, the service compared `null != org_id` and raised 403.
+
+**Fix:** Service now treats `org_id=null` as "unaffiliated — any org admin may investigate." The first org admin to update a null-org report stamps their `org_id` on it for future scoping. Committed `8891d83`.
+
+---
+
+*Riviwa Platform v2.4.0 — 2026-05-10*

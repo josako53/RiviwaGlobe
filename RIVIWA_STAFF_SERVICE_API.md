@@ -231,15 +231,15 @@ Citizen-submitted reports of impersonation.
 | updated_at | TIMESTAMP | |
 
 ### `staff_feedbacks`
-Post-verification service ratings.
+Post-verification feedback using Riviwa's core vocabulary. Performance is measured as `applause_rate` (applause ÷ total × 100), not a numeric average. This keeps feedback data consistent with all other Riviwa feedback surfaces and makes the signal objective and scannable.
 
 | Column | Type | Notes |
 |--------|------|-------|
 | id | UUID (PK) | |
 | verification_event_id | UUID (FK) | Must be VALID verification |
-| staff_id | UUID (FK) | Staff being rated |
+| staff_id | UUID (FK) | Staff being evaluated |
 | org_id | UUID | |
-| rating | INTEGER | 1–5 stars |
+| feedback_type | VARCHAR(20) | `grievance` \| `suggestion` \| `applause` \| `inquiry` |
 | comment | TEXT | Optional text |
 | service_type | VARCHAR(200) | Type of service provided |
 | location_description | VARCHAR(500) | Text description of location |
@@ -449,15 +449,24 @@ POST /api/v1/staff/feedback
 Content-Type: application/json
 ```
 
-**Purpose:** After a successful verification (result = VALID), the citizen can submit a star rating and optional comment about the service received.
+**Purpose:** After a successful verification (result = VALID), the citizen submits feedback about the service received. Riviwa uses its standard feedback vocabulary — the same four types used across all feedback surfaces — rather than a numeric star rating. Staff performance is then derived as `applause_rate` (the percentage of APPLAUSE feedback out of total), which is objective and consistent with all other Riviwa dashboards.
+
+**`feedback_type` values:**
+
+| Value | When to use |
+|-------|-------------|
+| `applause` | Positive — staff was helpful, professional, or went above expectations |
+| `grievance` | Complaint — poor service, misconduct, or unresolved problem |
+| `suggestion` | Improvement idea — process or behaviour that could be better |
+| `inquiry` | Question — citizen needs follow-up information |
 
 **Request Body:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | verification_event_id | UUID | **Yes** | From the verify response |
-| rating | integer | **Yes** | 1–5 stars |
-| comment | string | No | Free-text feedback |
+| feedback_type | string | **Yes** | `grievance` \| `suggestion` \| `applause` \| `inquiry` |
+| comment | string | No | Free-text — required context for grievances/suggestions |
 | service_type | string | No | Type of service e.g. "Health Consultation" |
 | location_description | string | No | Text description of where service happened |
 | location_lat | float | No | GPS latitude |
@@ -469,7 +478,7 @@ Content-Type: application/json
 ```json
 {
   "verification_event_id": "8fc79fa7-af36-4df5-815a-4c23ce971204",
-  "rating": 5,
+  "feedback_type": "applause",
   "comment": "Dr. Hassan was professional and thorough. Highly recommended.",
   "service_type": "Emergency Consultation",
   "is_anonymous": false,
@@ -486,7 +495,7 @@ Content-Type: application/json
   "verification_event_id": "8fc79fa7-af36-4df5-815a-4c23ce971204",
   "staff_id": "efcceedd-f456-4f3f-86fa-29026965505e",
   "org_id": "bd877fc4-0439-4e7a-871b-3701b95b3a02",
-  "rating": 5,
+  "feedback_type": "applause",
   "comment": "Dr. Hassan was professional and thorough. Highly recommended.",
   "service_type": "Emergency Consultation",
   "location_description": null,
@@ -502,6 +511,7 @@ Content-Type: application/json
 **Errors:**
 - `404 VERIFICATION_EVENT_NOT_FOUND` — event ID doesn't exist
 - `404 STAFF_NOT_FOUND` — the event has no associated staff (NOT_FOUND scan)
+- `422 VALIDATION_ERROR` — invalid `feedback_type` value
 
 ---
 
@@ -660,7 +670,7 @@ GET /api/v1/staff/admin/profiles/{profile_id}
 Authorization: Bearer <token>  [manager+]
 ```
 
-Returns the full `StaffProfileWithStats` object, which includes feedback count and average rating in addition to all profile fields.
+Returns the full `StaffProfileWithStats` object, which includes feedback count and applause rate in addition to all profile fields.
 
 **Success Response `200 OK`:**
 
@@ -671,7 +681,6 @@ Returns the full `StaffProfileWithStats` object, which includes feedback count a
   "display_name": "Amina Hassan",
   "status": "ACTIVE",
   "feedback_count": 23,
-  "avg_rating": 4.7,
   ...
 }
 ```
@@ -1170,30 +1179,45 @@ GET /api/v1/staff/analytics/feedback
 Authorization: Bearer <token>  [manager+]
 ```
 
+Returns feedback broken down by Riviwa's four feedback types. The key performance indicator is `applause_rate` — the percentage of all feedback for a staff member (or the org as a whole) that is APPLAUSE. This is a clean, objective signal: it doesn't conflate "4 stars" with "5 stars" and produces the same quality data format used in all other Riviwa feedback dashboards.
+
 **Success Response `200 OK`:**
 
 ```json
 {
   "org_id": "bd877fc4-...",
-  "total_feedback": 412,
-  "avg_rating": 4.3,
-  "by_rating": {
-    "5": 198,
-    "4": 134,
-    "3": 48,
-    "2": 22,
-    "1": 10
+  "total": 412,
+  "applause_rate": 74.3,
+  "by_type": {
+    "grievance": 62,
+    "suggestion": 44,
+    "applause": 306,
+    "inquiry": 0
   },
-  "top_staff": [
+  "by_staff": [
     {
       "staff_id": "efcceedd-...",
-      "display_name": "Dr. Amina Hassan",
-      "avg_rating": 4.9,
-      "feedback_count": 67
+      "total": 67,
+      "grievances": 2,
+      "suggestions": 5,
+      "applause": 58,
+      "inquiries": 2,
+      "applause_rate": 86.6
     }
   ]
 }
 ```
+
+**Reading `applause_rate`:**
+
+| Range | Interpretation |
+|-------|---------------|
+| ≥ 80% | Excellent — staff is performing well |
+| 60–79% | Good — minor issues to address |
+| 40–59% | Needs attention — investigate grievances |
+| < 40% | Poor — immediate management action required |
+
+This interpretation is consistent regardless of feedback volume, making it fair to compare staff members with 5 submissions versus 500.
 
 ---
 
@@ -1328,11 +1352,22 @@ X-Api-Key: <API_KEY>
 | `ON_LEAVE` | Staff exists but on leave |
 | `NOT_FOUND` | Code not found in system |
 
+### Staff Feedback Type (`feedback_type`)
+
+| Value | Description | Follow-up action |
+|-------|-------------|-----------------|
+| `applause` | Positive recognition | Share with staff, record as performance signal |
+| `grievance` | Complaint or misconduct | Investigate, contact reporter if not anonymous |
+| `suggestion` | Process improvement idea | Forward to department manager |
+| `inquiry` | Request for information | Contact reporter with answer |
+
+Performance metric: `applause_rate = applause / total × 100`. See section 11.3.
+
 ### Fraud Report Status (`status`)
 
 | Value | Description |
 |-------|-------------|
-| `SUBMITTED` | Newly received |
+| `SUBMITTED` | Newly received — visible to org admins |
 | `UNDER_INVESTIGATION` | Assigned to investigator |
 | `CONFIRMED_FRAUD` | Impersonation confirmed |
 | `DISMISSED` | Report found unfounded |
@@ -1607,16 +1642,29 @@ Parse `result`:
 
 ### Step 10 — Citizen Submits Feedback
 
-Using the `verification_event_id` from Step 9:
+Using the `verification_event_id` from Step 9. Choose `feedback_type` based on what the citizen experienced — not a number, but a category that drives the right follow-up action:
 
 ```bash
+# Applause — staff went above expectations
 curl -s -X POST https://api.riviwa.com/api/v1/staff/feedback \
   -H "Content-Type: application/json" \
   -d '{
     "verification_event_id": "8fc79fa7-...",
-    "rating": 5,
-    "comment": "Very helpful agent.",
+    "feedback_type": "applause",
+    "comment": "Very helpful agent, explained everything clearly.",
     "is_anonymous": true
+  }'
+
+# Grievance — staff was unhelpful or conducted misconduct
+curl -s -X POST https://api.riviwa.com/api/v1/staff/feedback \
+  -H "Content-Type: application/json" \
+  -d '{
+    "verification_event_id": "8fc79fa7-...",
+    "feedback_type": "grievance",
+    "comment": "Agent refused to give a receipt after collecting my payment.",
+    "is_anonymous": false,
+    "submitter_name": "Rose Mtui",
+    "submitter_phone": "+255712100010"
   }'
 ```
 
