@@ -500,7 +500,20 @@ class Feedback(SQLModel, table=True):
         description="Human-readable reference: GRV-2025-0001 / SGG-2025-0001 / APP-2025-0001",
     )
 
-    # ── Project context ────────────────────────────────────────────────────────
+    # ── Organisation context (denormalised at submission time) ────────────────
+    # Set from project.organisation_id when project_id is provided, or from
+    # the submitter's JWT org_id when submitting without a project.
+    # Enables org-level analytics without requiring a project to exist.
+    org_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description=(
+            "auth_service Organisation.id — denormalised at submission time. "
+            "Set from project.organisation_id or from the token's org_id for "
+            "project-less submissions. Enables org-scoped analytics on all feedback."
+        ),
+    )
+
+    # ── Project context (optional — not every org runs GRM projects) ──────────
     project_id: Optional[uuid.UUID] = Field(
         default=None,
         sa_column=Column(ForeignKey("fb_projects.id", ondelete="SET NULL"), nullable=True, index=True)

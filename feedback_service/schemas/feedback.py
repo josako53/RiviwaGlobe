@@ -16,7 +16,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -149,13 +149,33 @@ class StaffSubmitFeedback(BaseModel):
     })
 
     # ── SECTION A — Required ──────────────────────────────────────────────────
-    project_id: uuid.UUID = Field(..., description="Project UUID (Annex 5: Type of activity under MVDP)")
+    # project_id and org_id are mutually exclusive alternatives.
+    # Provide project_id for GRM project-scoped feedback, or org_id alone
+    # for org-level feedback (branch/department/service/product) without a project.
+    project_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Project UUID. Omit when submitting org-level feedback without a project.",
+    )
+    org_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description=(
+            "Organisation UUID. Required when project_id is omitted. "
+            "Allows feedback scoped to a branch, department, service, or product "
+            "without requiring a GRM project to exist."
+        ),
+    )
     feedback_type: str = Field(
         ...,
-        description="grievance | suggestion | applause",
-        json_schema_extra={"enum": ["grievance", "suggestion", "applause"]},
+        description="grievance | suggestion | applause | inquiry",
+        json_schema_extra={"enum": ["grievance", "suggestion", "applause", "inquiry"]},
     )
     category: str = Field(..., description="Feedback category (Annex 5: Type of Complaint)")
+
+    @model_validator(mode="after")
+    def require_project_or_org(self) -> "StaffSubmitFeedback":
+        if not self.project_id and not self.org_id:
+            raise ValueError("Provide either project_id (for project-scoped feedback) or org_id (for org-level feedback without a project).")
+        return self
     channel: str = Field(
         ...,
         description=(

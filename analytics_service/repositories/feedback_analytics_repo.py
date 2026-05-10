@@ -1,4 +1,4 @@
-"""
+﻿"""
 repositories/feedback_analytics_repo.py
 ────────────────────────────────────────────────────────────────────────────
 Read-only analytics repository that queries feedback_db directly using
@@ -981,8 +981,7 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.branch_id IS NOT NULL {extra}
             GROUP BY f.branch_id
             ORDER BY total DESC
@@ -1165,8 +1164,7 @@ class FeedbackAnalyticsRepository:
                 ) AS NUMERIC), 2)                                                           AS avg_days_unresolved,
                 COUNT(DISTINCT f.project_id)                                                AS total_projects
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id {extra}
+            WHERE f.org_id = :org_id {extra}
         """
         rows = await self._fetchall(sql, params)
         row = rows[0] if rows else {}
@@ -1269,8 +1267,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')                 AS applause,
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')                  AS inquiries
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id {extra}
+            WHERE f.org_id = :org_id {extra}
             GROUP BY DATE_TRUNC('{trunc}', f.submitted_at)
             ORDER BY DATE_TRUNC('{trunc}', f.submitted_at) ASC
         """
@@ -1299,8 +1296,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')                 AS applause,
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')                  AS inquiries
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id {extra}
+            WHERE f.org_id = :org_id {extra}
             GROUP BY f.channel
             ORDER BY total DESC
         """
@@ -1339,8 +1335,7 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.{dimension} IS NOT NULL {extra}
             GROUP BY f.{dimension}
             ORDER BY total DESC
@@ -1378,9 +1373,8 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
             LEFT JOIN feedback_category_defs cd ON cd.id = f.category_def_id
-            WHERE p.organisation_id = :org_id {extra}
+            WHERE f.org_id = :org_id {extra}
             GROUP BY f.category_def_id, cd.name, cd.slug
             ORDER BY total DESC
         """
@@ -1410,8 +1404,7 @@ class FeedbackAnalyticsRepository:
                 )                                                                           AS unresolved,
                 COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id {extra}
+            WHERE f.org_id = :org_id {extra}
             GROUP BY f.issue_lga, f.issue_ward
             ORDER BY total DESC
         """
@@ -1464,8 +1457,7 @@ class FeedbackAnalyticsRepository:
                       AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
                 )                                                                           AS low_unresolved
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE' {extra}
         """
         rows = await self._fetchall(sql, params)
@@ -1490,8 +1482,7 @@ class FeedbackAnalyticsRepository:
                 )                                                                           AS unresolved,
                 COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE' {extra}
             GROUP BY f.current_level
             ORDER BY total DESC
@@ -1517,8 +1508,7 @@ class FeedbackAnalyticsRepository:
                 f.resolved_at,
                 f.submitted_at
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE' {extra}
         """
         rows = await self._fetchall(sql, params)
@@ -1581,8 +1571,7 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                           AS avg_hours_to_implement
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'SUGGESTION' {extra}
         """
         rows = await self._fetchall(sql, params)
@@ -1650,8 +1639,7 @@ class FeedbackAnalyticsRepository:
                           DATE_TRUNC('month', NOW() - INTERVAL '1 month')
                 )                                                                           AS last_month
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'APPLAUSE' {extra}
         """
         count_rows = await self._fetchall(sql_counts, params)
@@ -1665,9 +1653,8 @@ class FeedbackAnalyticsRepository:
                 f.category::text                                                            AS category,
                 COUNT(*)                                                                    AS count
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
             LEFT JOIN feedback_category_defs cd ON cd.id = f.category_def_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'APPLAUSE' {extra}
             GROUP BY f.category_def_id, cd.name, f.category
             ORDER BY count DESC
@@ -2363,8 +2350,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.priority::text = 'LOW'
                     AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED'))           AS low_open
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'INQUIRY' {extra}
         """
         rows = await self._fetchall(sql, params)
@@ -2758,8 +2744,7 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                           AS avg_days_unresolved
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
         """
@@ -2786,8 +2771,7 @@ class FeedbackAnalyticsRepository:
                 )                                                                           AS unresolved,
                 COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
             GROUP BY f.priority
@@ -2820,8 +2804,7 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
             GROUP BY f.department_id
@@ -2893,8 +2876,7 @@ class FeedbackAnalyticsRepository:
                 f.assigned_committee_id                             AS committee_id,
                 f.issue_lga
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE'
               AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
               AND f.target_resolution_date IS NOT NULL
@@ -2922,8 +2904,7 @@ class FeedbackAnalyticsRepository:
         count_sql = f"""
             SELECT COUNT(*) AS total
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
         """
@@ -2957,8 +2938,7 @@ class FeedbackAnalyticsRepository:
                 f.stage_id,
                 f.project_id
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
             ORDER BY f.submitted_at DESC
@@ -3307,8 +3287,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')          AS applause,
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')           AS inquiries
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.submitted_at >= :dt_from
               AND f.submitted_at <= :dt_to
         """
@@ -3352,8 +3331,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')          AS applause,
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')           AS inquiries
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.submitted_at >= :dt_from
               AND f.submitted_at <= :dt_to
               {type_clause}
@@ -3393,8 +3371,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')   AS applause,
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')    AS inquiries
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.submitted_at >= :dt_from
               AND f.submitted_at <= :dt_to
               {type_clause}
@@ -3449,8 +3426,7 @@ class FeedbackAnalyticsRepository:
                     NULLIF(COUNT(*), 0) * 100.0
                 AS NUMERIC), 2)                                                                 AS escalation_rate
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.branch_id IS NOT NULL
               {extra}
             GROUP BY f.branch_id
@@ -3486,8 +3462,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')    AS inquiries,
                 COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED')) AS resolved
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.branch_id IS NOT NULL
               {extra}
             GROUP BY f.branch_id, period
@@ -3549,8 +3524,7 @@ class FeedbackAnalyticsRepository:
                     NULLIF(COUNT(*), 0) * 100.0
                 AS NUMERIC), 2)                                                                 AS escalation_rate
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.branch_id = :branch_id
               {extra}
         """
@@ -3568,8 +3542,7 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                            AS avg_resolution_hours
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.branch_id = :branch_id
               AND f.department_id IS NOT NULL
               {extra}
@@ -3585,8 +3558,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                 AS grievances,
                 COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))             AS resolved
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.branch_id = :branch_id
               {extra}
             GROUP BY f.category_def_id, f.category
@@ -3601,8 +3573,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'GRIEVANCE')                 AS grievances,
                 COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))             AS resolved
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.branch_id = :branch_id
               AND f.service_id IS NOT NULL
               {extra}
@@ -3620,8 +3591,7 @@ class FeedbackAnalyticsRepository:
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'APPLAUSE')   AS applause,
                 COUNT(*) FILTER (WHERE f.feedback_type::text = 'INQUIRY')    AS inquiries
             FROM feedbacks f
-            JOIN fb_projects p ON p.id = f.project_id
-            WHERE p.organisation_id = :org_id
+            WHERE f.org_id = :org_id
               AND f.branch_id = :branch_id
               {extra}
             GROUP BY period

@@ -24,7 +24,11 @@ async def submit_feedback(body: StaffSubmitFeedback, db: DbDep, kafka: KafkaDep,
     for historical records (paper forms, past complaints).
     Requires org role manager/admin/owner or platform admin.
     """
-    return feedback_out(await _svc(db, kafka).submit(body.model_dump(exclude_none=True), token_sub=token.sub))
+    return feedback_out(await _svc(db, kafka).submit(
+        body.model_dump(exclude_none=True),
+        token_sub=token.sub,
+        token_org_id=token.org_id,
+    ))
 
 
 @router.post(

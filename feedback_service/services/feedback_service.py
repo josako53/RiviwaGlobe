@@ -203,8 +203,9 @@ class FeedbackService:
             return val
         return uuid.UUID(str(val))
 
-    async def submit(self, data: dict, token_sub: Optional[uuid.UUID] = None) -> Feedback:
+    async def submit(self, data: dict, token_sub: Optional[uuid.UUID] = None, token_org_id: Optional[uuid.UUID] = None) -> Feedback:
         project_id = self._to_uuid(data.get("project_id"))
+        explicit_org_id = self._to_uuid(data.get("org_id"))
         project = None
         active_stage = None
 
@@ -221,6 +222,12 @@ class FeedbackService:
         else:
             feedback_type = FeedbackType(data["feedback_type"])
 
+        # org_id: project wins, then explicit field, then token org
+        effective_org_id = (
+            project.organisation_id if project
+            else explicit_org_id or token_org_id
+        )
+
         # Use MAX of existing sequence numbers so gaps/deletions never cause duplicates
         _year = datetime.now().year
         _seq  = await self.repo.next_ref_sequence(_PREFIX[feedback_type], _year)
@@ -229,6 +236,7 @@ class FeedbackService:
 
         f = Feedback(
             unique_ref                   = unique_ref,
+            org_id                       = effective_org_id,
             project_id                   = project_id,
             stage_id                     = active_stage.id if active_stage else None,
             subproject_id                = self._to_uuid(data.get("subproject_id")),
@@ -293,7 +301,7 @@ class FeedbackService:
 
         await self.producer.feedback_submitted(
             f.id, f.project_id, f.feedback_type.value, f.category.value,
-            org_id=project.organisation_id if project else None,
+            org_id=f.org_id,
             branch_id=f.branch_id,
             department_id=f.department_id,
             service_id=f.service_id,
