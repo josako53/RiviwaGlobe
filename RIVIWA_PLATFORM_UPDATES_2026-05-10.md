@@ -21,6 +21,7 @@ For full API references see the existing docs:
 
 | Version | Change |
 |---------|--------|
+| v2.5 | **Employee internal feedback** — staff can rate their own org (anonymous or named); combined performance analytics |
 | v2.4 | **Org-level feedback** — feedback no longer requires a project; `org_id` stored directly on every feedback record |
 | v2.4 | **Staff feedback redesigned** — 5-star rating replaced with Riviwa feedback vocabulary |
 | v2.4 | **Bug fix**: `auth_service` project activation silently dropped Kafka events (lazy-load crash) |
@@ -584,4 +585,175 @@ The five project-centric queries (e.g. `FROM fb_projects LEFT JOIN feedbacks`) a
 
 ---
 
-*Riviwa Platform v2.4.0 — 2026-05-10*
+## 10. Employee Internal Feedback — Staff Rating Their Own Organisation (v2.5)
+
+### What it is
+
+Any authenticated org member can submit structured feedback **about their own organisation** — separate from consumer GRM feedback (which is external citizens about projects/services). This is the internal voice channel: how staff feel about management, compensation, culture, working conditions, etc.
+
+Submissions can be **anonymous** or identified. When anonymous, the `employee_user_id` is not stored. Org admins see the full list but cannot de-anonymise.
+
+### Categories
+
+| Slug | Description |
+|------|-------------|
+| `working_conditions` | Physical workspace, equipment, health |
+| `management` | Day-to-day management practices |
+| `culture` | Org values, inclusivity, team spirit |
+| `compensation` | Salary, bonuses, benefits |
+| `tools_resources` | Software, hardware, systems |
+| `communication` | Internal comms, transparency |
+| `career_growth` | L&D, promotion, mentorship |
+| `safety` | Physical or psychological safety |
+| `team_dynamics` | Collaboration, team conflicts |
+| `leadership` | Senior leadership direction |
+| `benefits` | Leave, insurance, perks |
+| `other` | Anything else |
+
+### Tracking Numbers
+
+Employee feedback uses the `EF-YYYY-NNNN` format (e.g. `EF-2026-0001`), distinct from GRM tracking numbers.
+
+### Endpoints — `feedback_service` (port 8090)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/my/employee-feedback` | Any org member | Submit feedback about your org |
+| `GET`  | `/api/v1/my/employee-feedback` | Any org member | Your own submissions (anonymous ones not shown — no link) |
+| `GET`  | `/api/v1/employee-feedback` | Manager+ | List all submissions for the org |
+| `GET`  | `/api/v1/employee-feedback/{id}` | Manager+ | Detail view |
+| `PATCH`| `/api/v1/employee-feedback/{id}` | Manager+ | Respond + update status |
+
+#### `POST /api/v1/my/employee-feedback`
+
+```json
+{
+  "feedback_type": "grievance",
+  "category": "working_conditions",
+  "subject": "AC broken in HQ for 3 weeks",
+  "description": "The AC units have been broken for 3 weeks. Staff are working in extreme heat.",
+  "is_anonymous": false,
+  "department_id": null,
+  "branch_id": null
+}
+```
+
+`feedback_type`: `grievance` | `suggestion` | `applause` | `inquiry`
+
+**Response:**
+```json
+{
+  "feedback_id": "f8a1e395-...",
+  "tracking_number": "EF-2026-0001",
+  "feedback_type": "grievance",
+  "status": "submitted",
+  "message": "Your feedback has been submitted. Thank you for helping improve our organisation."
+}
+```
+
+#### `PATCH /api/v1/employee-feedback/{id}` — admin respond
+
+```json
+{
+  "status": "acknowledged",
+  "management_response": "Maintenance request logged — AC will be repaired within 5 business days."
+}
+```
+
+Status values: `submitted` → `acknowledged` → `resolved` → `closed`
+
+When `management_response` is provided, status auto-advances to `acknowledged` if still `submitted`.
+
+### Analytics Endpoints — `analytics_service` (port 8095)
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /analytics/org/{org_id}/employee-feedback/summary` | Totals, applause rate, status breakdown, anonymous count |
+| `GET /analytics/org/{org_id}/employee-feedback/by-category` | Per-category breakdown with applause rate |
+| `GET /analytics/org/{org_id}/employee-feedback/by-department` | Per-department/branch breakdown |
+| `GET /analytics/org/{org_id}/employee-feedback/trend` | Time series — `granularity`: hour/day/week/month |
+| `GET /analytics/org/{org_id}/combined-performance` | Combined consumer + employee health view |
+
+All endpoints accept `date_from` / `date_to` query params (`YYYY-MM-DD`).
+
+#### `GET /analytics/org/{org_id}/combined-performance`
+
+Merges consumer GRM feedback with employee internal feedback into a single org health score:
+
+```json
+{
+  "org_id": "uuid",
+  "date_from": null,
+  "date_to": null,
+  "consumer": {
+    "total": 53,
+    "grievances": 27,
+    "suggestions": 10,
+    "applause": 10,
+    "inquiries": 6,
+    "resolved": 0,
+    "open_count": 53,
+    "applause_rate": "18.9",
+    "resolution_rate": "0.0",
+    "avg_resolution_hours": null
+  },
+  "employee": {
+    "total": 5,
+    "grievances": 2,
+    "suggestions": 2,
+    "applause": 1,
+    "inquiries": 0,
+    "anonymous_count": 1,
+    "pending": 4,
+    "acknowledged": 1,
+    "resolved": 0,
+    "closed": 0,
+    "applause_rate": "20.0",
+    "by_category": [...]
+  },
+  "combined": {
+    "total": 58,
+    "applause": 11,
+    "applause_rate": 19.0,
+    "health_score": "needs_improvement"
+  }
+}
+```
+
+**Health score bands (combined applause rate):**
+
+| Score | Applause rate |
+|-------|--------------|
+| `excellent` | ≥ 70 % |
+| `good` | 50 % – 69 % |
+| `fair` | 30 % – 49 % |
+| `needs_improvement` | < 30 % |
+
+### Database
+
+**Migration `f1a2b3c4d5e6`** creates `employee_feedbacks` table in `feedback_db`:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `tracking_number` | VARCHAR(20) unique | `EF-YYYY-NNNN` |
+| `org_id` | UUID | Required, indexed |
+| `feedback_type` | VARCHAR(20) | grievance/suggestion/applause/inquiry |
+| `category` | VARCHAR(40) | EmployeeCategory enum |
+| `subject` | VARCHAR(500) | Optional |
+| `description` | TEXT | Required |
+| `is_anonymous` | BOOLEAN | |
+| `employee_user_id` | UUID | Null when anonymous |
+| `employee_name` | VARCHAR(255) | |
+| `department_id` | UUID | Optional org sub-scope |
+| `branch_id` | UUID | Optional org sub-scope |
+| `status` | VARCHAR(20) | submitted/acknowledged/resolved/closed |
+| `management_response` | TEXT | Admin response |
+| `responded_at` | TIMESTAMP | |
+| `responded_by_user_id` | UUID | |
+| `submitted_at` | TIMESTAMP | |
+| `updated_at` | TIMESTAMP | |
+
+---
+
+*Riviwa Platform v2.5.0 — 2026-05-10*
