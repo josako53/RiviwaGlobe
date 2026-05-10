@@ -391,7 +391,7 @@ async def _dispatch(event_type: str, payload: dict, db: AsyncSession) -> None:
 # Consumer loop
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _consume_loop() -> None:
+async def _consume_once() -> None:
     consumer = AIOKafkaConsumer(
         KafkaTopics.ORG_EVENTS,
         KafkaTopics.USER_EVENTS,
@@ -411,13 +411,22 @@ async def _consume_loop() -> None:
             payload    = envelope.get("payload", {})
             async with AsyncSessionLocal() as db:
                 await _dispatch(event_type, payload, db)
-    except asyncio.CancelledError:
-        pass
-    except Exception as exc:
-        log.error("feedback.consumer.fatal", error=str(exc), exc_info=exc)
     finally:
         await consumer.stop()
         log.info("feedback.consumer.stopped")
+
+
+async def _consume_loop() -> None:
+    backoff = 5
+    while True:
+        try:
+            await _consume_once()
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            log.error("feedback.consumer.fatal_restarting", error=str(exc), exc_info=exc, backoff=backoff)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 60)
 
 
 async def start_consumer() -> None:
