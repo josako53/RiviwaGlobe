@@ -185,16 +185,16 @@ class EmployeeFeedbackAnalyticsRepo:
                 COUNT(*) FILTER (WHERE f.feedback_type = 'SUGGESTION')            AS suggestions,
                 COUNT(*) FILTER (WHERE f.feedback_type = 'APPLAUSE')              AS applause,
                 COUNT(*) FILTER (WHERE f.feedback_type = 'INQUIRY')               AS inquiries,
-                COUNT(*) FILTER (WHERE f.status NOT IN ('SUBMITTED','ACKNOWLEDGED','IN_PROGRESS'))
+                COUNT(*) FILTER (WHERE f.status IN ('RESOLVED','ACTIONED','NOTED','DISMISSED','CLOSED'))
                                                                                    AS resolved,
-                COUNT(*) FILTER (WHERE f.status IN ('SUBMITTED','ACKNOWLEDGED','IN_PROGRESS'))
+                COUNT(*) FILTER (WHERE f.status IN ('SUBMITTED','ACKNOWLEDGED','IN_REVIEW','ESCALATED','APPEALED'))
                                                                                    AS open_count,
                 ROUND(
                     100.0 * COUNT(*) FILTER (WHERE f.feedback_type = 'APPLAUSE')
                     / NULLIF(COUNT(*), 0), 1
                 )                                                                   AS applause_rate,
                 ROUND(
-                    100.0 * COUNT(*) FILTER (WHERE f.status NOT IN ('SUBMITTED','ACKNOWLEDGED','IN_PROGRESS'))
+                    100.0 * COUNT(*) FILTER (WHERE f.status IN ('RESOLVED','ACTIONED','NOTED','DISMISSED','CLOSED'))
                     / NULLIF(COUNT(*), 0), 1
                 )                                                                   AS resolution_rate,
                 ROUND(
