@@ -21,6 +21,7 @@ For full API references see the existing docs:
 
 | Version | Change |
 |---------|--------|
+| v2.4 | **Org-level feedback** — feedback no longer requires a project; `org_id` stored directly on every feedback record |
 | v2.4 | **Staff feedback redesigned** — 5-star rating replaced with Riviwa feedback vocabulary |
 | v2.4 | **Bug fix**: `auth_service` project activation silently dropped Kafka events (lazy-load crash) |
 | v2.4 | **Bug fix**: `feedback_service` Kafka consumer stopped on exception, never restarted |
@@ -493,6 +494,93 @@ The staff feedback endpoint previously accepted a numeric `rating` (integer 1–
 **Symptom:** Public fraud reports submitted without a `verification_event_id` have `org_id=null`. When an org admin tried to view or update these reports, the service compared `null != org_id` and raised 403.
 
 **Fix:** Service now treats `org_id=null` as "unaffiliated — any org admin may investigate." The first org admin to update a null-org report stamps their `org_id` on it for future scoping. Committed `8891d83`.
+
+---
+
+## 9. Org-Level Feedback — Project No Longer Required (v2.4)
+
+### Architecture
+
+Previously every feedback submission had to reference a GRM `project_id`. This created two problems:
+
+1. Organisations without an active GRM project could not receive feedback at all.
+2. Feedback about a branch, department, service, or product (e.g. "your billing team is slow") had no natural home if it didn't relate to a specific project.
+
+**v2.4 decouples feedback from projects.** `org_id` is now stored directly on every feedback record, denormalised at submission time. Feedback can target any combination of:
+
+| Scope | Field |
+|-------|-------|
+| Organisation (top-level) | `org_id` only — no `project_id` required |
+| Branch | `branch_id` |
+| Department | `department_id` |
+| Service / Programme | `service_id` |
+| Product | `product_id` |
+| Sub-project / Work package | `subproject_id` |
+
+A `project_id` is still accepted and is recommended for GRM-managed projects. When present, `org_id` is derived automatically from the project's owning organisation.
+
+### Database Change
+
+**Migration `e9f0a1b2c3d4`** (down: `d8e9f0a1b2c3`):
+
+```sql
+ALTER TABLE feedbacks ADD COLUMN org_id UUID;
+CREATE INDEX ix_feedbacks_org_id ON feedbacks (org_id);
+
+-- back-fill existing rows that have a project
+UPDATE feedbacks f
+SET    org_id = p.organisation_id
+FROM   fb_projects p
+WHERE  f.project_id = p.id
+  AND  f.org_id IS NULL;
+```
+
+### `org_id` Resolution at Submission
+
+```
+effective_org_id =
+    project.organisation_id   -- if project_id supplied
+    ?? explicit_org_id         -- field on StaffSubmitFeedback
+    ?? token.org_id            -- org scope of the submitting user's JWT
+```
+
+### `POST /api/v1/feedback` — schema change
+
+`project_id` is now **optional**. Either `project_id` or `org_id` must be provided (not both required, but at least one).
+
+**Before (v2.3):**
+```json
+{ "project_id": "uuid (required)", "feedback_type": "grievance", ... }
+```
+
+**After (v2.4):**
+```json
+{ "org_id": "uuid", "feedback_type": "grievance", ... }
+```
+or:
+```json
+{ "project_id": "uuid", "feedback_type": "grievance", ... }
+```
+
+Validation: if neither `project_id` nor `org_id` is supplied → HTTP 422 `"Provide either project_id or org_id"`.
+
+### `feedback_type` — `inquiry` added
+
+`StaffSubmitFeedback` now accepts `inquiry` alongside `grievance | suggestion | applause`.
+
+### Analytics Impact
+
+All 30 org-scoped analytics queries now filter on `feedbacks.org_id` directly instead of JOINing through `fb_projects`. This means:
+
+- Org analytics now include **project-less feedback** automatically.
+- No JOIN overhead on every analytics query.
+- Analytics work for orgs that have never created a GRM project.
+
+The five project-centric queries (e.g. `FROM fb_projects LEFT JOIN feedbacks`) are unchanged — they still require a `project_id`.
+
+### Consumer Submission
+
+`POST /api/v1/my/feedback` already accepted `project_id` as optional. Consumers do not supply `org_id` directly — it is resolved from the JWT's org scope or from the AI-detected project. No change to the consumer schema.
 
 ---
 
