@@ -56,6 +56,20 @@ class EscalationLevelCreate(BaseModel):
     responsible_role: Optional[str] = Field(default=None, max_length=100)
     notify_emails:    Optional[List[str]] = None
 
+    # Org structure link
+    responsible_org_unit: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Soft links to org entities responsible at this level. "
+            "Keys: department_id (UUID str), branch_id (UUID str), "
+            "user_ids (list of UUID str), committee_id (UUID str)."
+        ),
+    )
+    consumer_visible_name: Optional[str] = Field(
+        default=None, max_length=255,
+        description="Level name shown to the feedback submitter. Hides internal org structure terms.",
+    )
+
     # Backward compat
     grm_level_ref: Optional[str] = Field(
         default=None, max_length=30,
@@ -95,6 +109,8 @@ class EscalationLevelUpdate(BaseModel):
     auto_escalate_after_hours: Optional[int] = Field(default=None, ge=0)
     responsible_role:         Optional[str]  = Field(default=None, max_length=100)
     notify_emails:            Optional[List[str]] = None
+    responsible_org_unit:     Optional[Dict[str, Any]] = None
+    consumer_visible_name:    Optional[str]  = Field(default=None, max_length=255)
     grm_level_ref:            Optional[str]  = Field(default=None, max_length=30)
 
 
@@ -116,6 +132,8 @@ class EscalationLevelResponse(BaseModel):
     auto_escalate_after_hours: Optional[int] = None
     responsible_role:          Optional[str] = None
     notify_emails:             Optional[List[str]] = None
+    responsible_org_unit:      Optional[Dict[str, Any]] = None
+    consumer_visible_name:     Optional[str] = None
     grm_level_ref:             Optional[str] = None
 
     created_at: datetime
@@ -137,6 +155,10 @@ class EscalationPathCreate(BaseModel):
     is_default:  bool = Field(
         default=False,
         description="Set as the org's default path. Clears the previous default.",
+    )
+    applies_to_feedback_types: Optional[List[str]] = Field(
+        default=None,
+        description="Feedback types this path handles: grievance, suggestion, applause, inquiry. NULL = all types.",
     )
     levels: Optional[List[EscalationLevelCreate]] = Field(
         default=None,
@@ -177,14 +199,6 @@ class EscalationPathClone(BaseModel):
     }
 
 
-class EscalationPathUpdate(BaseModel):
-    """Body for PATCH /escalation-paths/{path_id}."""
-    name:        Optional[str]  = Field(default=None, min_length=2, max_length=255)
-    description: Optional[str] = None
-    is_default:  Optional[bool] = None
-    is_active:   Optional[bool] = None
-
-
 class EscalationLevelReorder(BaseModel):
     """Body for POST /escalation-paths/{path_id}/levels/reorder."""
     ordered_level_ids: List[uuid.UUID] = Field(
@@ -199,23 +213,141 @@ class EscalationLevelReorder(BaseModel):
         return self
 
 
+class EscalationPathUpdate(BaseModel):
+    """Body for PATCH /escalation-paths/{path_id}."""
+    name:        Optional[str]  = Field(default=None, min_length=2, max_length=255)
+    description: Optional[str] = None
+    is_default:  Optional[bool] = None
+    is_active:   Optional[bool] = None
+    applies_to_feedback_types: Optional[List[str]] = None
+
+
 class EscalationPathResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id:                 uuid.UUID
-    org_id:             Optional[uuid.UUID] = None
-    project_id:         Optional[uuid.UUID] = None
-    name:               str
-    description:        Optional[str] = None
-    is_default:         bool
-    is_system_template: bool
-    is_active:          bool
-    created_by_user_id: Optional[uuid.UUID] = None
-    created_at:         datetime
-    updated_at:         datetime
-    levels:             List[EscalationLevelResponse] = []
+    id:                         uuid.UUID
+    org_id:                     Optional[uuid.UUID] = None
+    project_id:                 Optional[uuid.UUID] = None
+    name:                       str
+    description:                Optional[str] = None
+    is_default:                 bool
+    is_system_template:         bool
+    is_active:                  bool
+    template_key:               Optional[str] = None
+    applies_to_feedback_types:  Optional[List[str]] = None
+    created_by_user_id:         Optional[uuid.UUID] = None
+    created_at:                 datetime
+    updated_at:                 datetime
+    levels:                     List[EscalationLevelResponse] = []
 
 
 class EscalationPathListResponse(BaseModel):
     total:  int
     items:  List[EscalationPathResponse]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Quick Setup Wizard schemas
+# ─────────────────────────────────────────────────────────────────────────────
+
+class LevelCustomization(BaseModel):
+    """
+    Override specific fields of a template level during quick setup.
+    Only supplied fields are changed — unset fields keep the template defaults.
+    """
+    level_order: int = Field(..., ge=1, description="Which template level to customise (1-based).")
+    name:                     Optional[str]  = Field(default=None, max_length=255, description="Override the level name.")
+    consumer_visible_name:    Optional[str]  = Field(default=None, max_length=255, description="Name shown to submitters.")
+    description:              Optional[str]  = None
+    ack_sla_hours:            Optional[int]  = Field(default=None, ge=1)
+    resolution_sla_hours:     Optional[int]  = Field(default=None, ge=1)
+    auto_escalate_on_breach:  Optional[bool] = None
+    auto_escalate_after_hours: Optional[int] = Field(default=None, ge=0)
+    notify_emails:            Optional[List[str]] = None
+    responsible_org_unit: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Link this level to your org structure. "
+            "Keys: department_id, branch_id, user_ids (list), committee_id."
+        ),
+    )
+    is_final: Optional[bool] = None
+
+
+class EscalationQuickSetup(BaseModel):
+    """
+    One-call wizard: pick a template, name it, customise any levels, done.
+
+    The system copies all levels from the chosen template, then applies your
+    `level_customizations` on top. You only need to specify the fields you
+    want to change — everything else keeps the template default.
+    """
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "name": "Yas Tanzania Customer Escalation",
+            "template_key": "CUSTOMER_SERVICE_3_LEVEL",
+            "set_as_default": True,
+            "applies_to_feedback_types": ["grievance"],
+            "level_customizations": [
+                {
+                    "level_order": 1,
+                    "name": "Customer Care",
+                    "consumer_visible_name": "Customer Support Team",
+                    "responsible_org_unit": {
+                        "department_id": "afd5b4e2-10f5-4874-b1da-248a74091805"
+                    },
+                    "notify_emails": ["customercare@yas.co.tz"],
+                    "resolution_sla_hours": 24
+                },
+                {
+                    "level_order": 2,
+                    "name": "CC Manager",
+                    "responsible_org_unit": {
+                        "user_ids": ["5183174a-bcad-4e68-bf06-700d1f1260dc"]
+                    },
+                    "notify_emails": ["cc.manager@yas.co.tz"],
+                    "auto_escalate_on_breach": True
+                },
+                {
+                    "level_order": 3,
+                    "name": "CEO Office",
+                    "consumer_visible_name": "Senior Leadership",
+                    "notify_emails": ["ceo@yas.co.tz"],
+                    "is_final": True
+                }
+            ]
+        }
+    })
+
+    name: str = Field(..., min_length=2, max_length=255, description="Name for the new escalation path.")
+    template_key: str = Field(
+        ...,
+        description=(
+            "Which built-in template to start from. "
+            "Use GET /escalation-paths/available-templates to see all options."
+        ),
+    )
+    set_as_default: bool = Field(
+        default=True,
+        description="Make this the org's default escalation path. Clears the previous default.",
+    )
+    applies_to_feedback_types: Optional[List[str]] = Field(
+        default=None,
+        description="Restrict this path to specific feedback types. NULL = applies to all.",
+    )
+    level_customizations: Optional[List[LevelCustomization]] = Field(
+        default=None,
+        description=(
+            "Per-level overrides applied on top of the template defaults. "
+            "Match by level_order. Levels not listed keep the template values unchanged."
+        ),
+    )
+
+
+class AvailableTemplateItem(BaseModel):
+    """One entry from the template catalogue."""
+    template_key:    str
+    display_name:    str
+    description:     str
+    org_types_hint:  List[str]
+    level_count:     int

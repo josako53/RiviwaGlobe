@@ -76,12 +76,26 @@ class EscalationRepository:
         return result.scalar_one_or_none()
 
     async def get_system_template(self) -> Optional[EscalationPath]:
-        """Return the system-wide default template with levels."""
+        """Return any one system template (legacy helper — prefer get_system_template_by_key)."""
         result = await self.db.execute(
             select(EscalationPath)
             .where(
                 EscalationPath.is_system_template == True,  # noqa: E712
                 EscalationPath.is_active == True,           # noqa: E712
+            )
+            .options(selectinload(EscalationPath.levels))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_system_template_by_key(self, template_key: str) -> Optional[EscalationPath]:
+        """Return the system template with the given template_key, with levels loaded."""
+        result = await self.db.execute(
+            select(EscalationPath)
+            .where(
+                EscalationPath.is_system_template == True,  # noqa: E712
+                EscalationPath.is_active == True,           # noqa: E712
+                EscalationPath.template_key == template_key,
             )
             .options(selectinload(EscalationPath.levels))
             .limit(1)
@@ -97,28 +111,64 @@ class EscalationRepository:
         )
         return list(result.scalars().all())
 
+    async def get_org_path_for_type(
+        self,
+        org_id: uuid.UUID,
+        feedback_type: str,
+    ) -> Optional[EscalationPath]:
+        """
+        Return the first active org path whose applies_to_feedback_types includes
+        the given feedback_type. Returns None if no type-specific path is configured.
+        """
+        result = await self.db.execute(
+            select(EscalationPath)
+            .where(
+                EscalationPath.org_id == org_id,
+                EscalationPath.is_active == True,           # noqa: E712
+                EscalationPath.is_system_template == False, # noqa: E712
+                # JSONB array contains the feedback_type string
+                EscalationPath.applies_to_feedback_types.contains([feedback_type]),  # type: ignore[union-attr]
+            )
+            .options(selectinload(EscalationPath.levels))
+            .order_by(EscalationPath.is_default.desc(), EscalationPath.created_at)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def resolve_path_for_project(
         self,
         project_id: uuid.UUID,
         org_id: uuid.UUID,
         explicit_path_id: Optional[uuid.UUID] = None,
+        feedback_type: Optional[str] = None,
     ) -> Optional[EscalationPath]:
         """
-        Resolve which escalation path applies to a project submission.
+        Resolve which escalation path applies to a feedback submission.
 
         Resolution order:
           1. explicit_path_id (project.escalation_path_id)
-          2. org default path
-          3. system template
+          2. org path scoped to this feedback_type (applies_to_feedback_types)
+          3. org default path (applies to all types)
+          4. None — no escalation configured for this org
+
+        The system template (TARURA/TANROADS etc.) is NOT used as a fallback.
+        Orgs must explicitly set up their own path or clone a template.
         """
         if explicit_path_id:
             path = await self.get_path_with_levels(explicit_path_id)
             if path and path.is_active:
                 return path
+
+        if feedback_type:
+            type_path = await self.get_org_path_for_type(org_id, feedback_type)
+            if type_path:
+                return type_path
+
         org_default = await self.get_org_default_path(org_id)
         if org_default:
             return org_default
-        return await self.get_system_template()
+
+        return None  # No escalation path configured — org has not set one up yet
 
     # ── Path writes ───────────────────────────────────────────────────────────
 

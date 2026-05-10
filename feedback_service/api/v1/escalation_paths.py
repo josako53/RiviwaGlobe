@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, status
 
 from core.dependencies import DbDep, GRMCoordinatorDep, GRMOfficerDep, StaffDep
 from schemas.escalation import (
+    AvailableTemplateItem,
     EscalationLevelCreate,
     EscalationLevelResponse,
     EscalationLevelUpdate,
@@ -37,6 +38,7 @@ from schemas.escalation import (
     EscalationPathResponse,
     EscalationPathUpdate,
     EscalationLevelReorder,
+    EscalationQuickSetup,
 )
 from services.escalation_service import EscalationService
 
@@ -45,6 +47,53 @@ router = APIRouter(prefix="/escalation-paths", tags=["Escalation Paths"])
 
 def _svc(db: DbDep) -> EscalationService:
     return EscalationService(db)
+
+
+# ── Template catalogue & quick setup ──────────────────────────────────────────
+
+@router.get(
+    "/available-templates",
+    response_model=List[AvailableTemplateItem],
+    summary="List all built-in template types with descriptions",
+)
+async def list_available_templates(
+    db: DbDep,
+    token: StaffDep,
+) -> List[AvailableTemplateItem]:
+    """
+    Returns all built-in template keys with descriptions and recommended org types.
+    Pass a template_key to POST /escalation-paths/quick-setup to create a path from it.
+    """
+    return [AvailableTemplateItem(**t) for t in _svc(db).get_available_templates()]
+
+
+@router.post(
+    "/quick-setup",
+    status_code=status.HTTP_201_CREATED,
+    response_model=EscalationPathResponse,
+    summary="Create a fully configured org escalation path from a template in one call",
+)
+async def quick_setup(
+    body: EscalationQuickSetup,
+    db: DbDep,
+    token: GRMCoordinatorDep,
+) -> EscalationPathResponse:
+    """
+    One-call wizard for configuring your org's escalation path.
+
+    1. Choose a template that matches your org structure (see GET /available-templates).
+    2. Name the path and optionally restrict it to specific feedback types.
+    3. Supply per-level customisations — override names, SLAs, notification emails,
+       and link each level to your actual org departments, branches, or users.
+
+    All levels not included in `level_customizations` keep the template defaults.
+    """
+    path = await _svc(db).quick_setup(
+        org_id=token.org_id,
+        data=body.model_dump(exclude_none=True),
+        created_by=token.sub,
+    )
+    return EscalationPathResponse.model_validate(path)
 
 
 # ── Path endpoints ─────────────────────────────────────────────────────────────
