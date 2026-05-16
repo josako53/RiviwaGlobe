@@ -42,6 +42,10 @@ import re
 import uuid
 from typing import Annotated, Optional
 
+import structlog
+
+log = structlog.get_logger(__name__)
+
 from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +59,7 @@ from core.exceptions import (
     UnauthorisedError,
     ValidationError,
 )
+from core.notifications import get_sms_provider
 from core.security import create_access_token, generate_refresh_token
 from models.user import AccountStatus, User
 from repositories.user_repository import UserRepository

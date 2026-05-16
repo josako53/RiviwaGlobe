@@ -68,6 +68,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
 
+import httpx
 import structlog
 
 from core.config import settings
@@ -588,6 +589,250 @@ class DevOTPProvider(BaseOTPProvider):
         return result
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Karibu OTP API  (Briq Tanzania)  — RECOMMENDED for Tanzania deployments
+# ─────────────────────────────────────────────────────────────────────────────
+
+class KaribuOTPProvider(BaseOTPProvider):
+    """
+    OTP via the Karibu OTP API (https://karibu.briq.tz).
+
+    Karibu generates, delivers, and verifies codes — we never see the plaintext.
+    The code is bcrypt-hashed on Karibu's side; only the recipient sees it via
+    SMS, voice call, or WhatsApp.
+
+    Channels supported:
+        "sms"       → SMS (default; sender_id and message_template customisable)
+        "call"      → TTS voice call
+        "whatsapp"  → platform-managed briq_otp Meta template (sender auto-resolved)
+
+    Phone format:
+        Karibu requires E.164 digits-only (no +).
+        Riviwa stores numbers with a leading +.  _normalise_phone() strips it.
+
+    Session payload stored in Redis:
+        { "provider": "karibu", "to": "255712345678", "channel": "sms" }
+        No hash is stored — Karibu holds the code internally.
+
+    Error mapping:
+        "Max verification attempts reached"  →  OTPMaxAttemptsError
+        "No valid OTP found"                 →  OTPExpiredError
+        HTTP 401 / 403                       →  Exception (operator config error)
+        WhatsApp 400 (template/sender error) →  Exception (caller should retry on sms)
+
+    Required config (env vars):
+        KARIBU_API_KEY   —  X-API-Key header value (your developer API key)
+        KARIBU_APP_KEY   —  app_key body field (your Developer App key)
+
+    Optional config:
+        KARIBU_BASE_URL      —  default https://karibu.briq.tz
+        KARIBU_SENDER_ID     —  SMS sender ID shown to recipient (blank = platform default)
+        KARIBU_OTP_TTL_MIN   —  OTP lifetime in minutes (default 10)
+    """
+
+    def __init__(self) -> None:
+        self._api_key  = settings.KARIBU_API_KEY
+        self._app_key  = settings.KARIBU_APP_KEY
+        self._base_url = getattr(settings, "KARIBU_BASE_URL", "https://karibu.briq.tz").rstrip("/")
+        self._sender   = getattr(settings, "KARIBU_SENDER_ID", "")
+        self._otp_len  = getattr(settings, "OTP_LENGTH", 6)
+        self._ttl_min  = getattr(settings, "KARIBU_OTP_TTL_MIN", 10)
+
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _normalise_phone(phone: str) -> str:
+        """Strip leading + — Karibu requires E.164 digits only (no +)."""
+        return phone.lstrip("+")
+
+    def _build_sms_template(self, purpose: str) -> str:
+        label = {
+            "login":          "login",
+            "registration":   "registration",
+            "password_reset": "password reset",
+            "phone_verify":   "phone verification",
+        }.get(purpose, "verification")
+        return (
+            f"Your Riviwa {label} code is {{code}}. "
+            f"Expires in {{expiry}} minutes. Never share it."
+        )
+
+    async def _post(self, path: str, payload: dict) -> dict:
+        """Async POST to Karibu API. Returns parsed JSON body."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{self._base_url}{path}",
+                headers={
+                    "X-API-Key": self._api_key,
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        # 401/403 come back as {"detail": "..."} — not the envelope
+        if resp.status_code in (401, 403):
+            raise Exception(
+                f"Karibu OTP auth error {resp.status_code}: {resp.text[:200]}"
+            )
+        return resp.json()
+
+    # ── BaseOTPProvider interface ─────────────────────────────────────────────
+
+    async def send_otp(
+        self,
+        to:           str,
+        channel:      str = "sms",
+        display_name: Optional[str] = None,
+        purpose:      str = "verification",
+    ) -> dict:
+        phone  = self._normalise_phone(to)
+        k_ch   = channel if channel in ("sms", "call", "whatsapp") else "sms"
+
+        payload: dict = {
+            "phone_number":      phone,
+            "app_key":           self._app_key,
+            "delivery_method":   k_ch,
+            "otp_length":        self._otp_len,
+            "minutes_to_expire": self._ttl_min,
+        }
+        # SMS-only optional fields — ignored on call/whatsapp
+        if k_ch == "sms":
+            if self._sender:
+                payload["sender_id"] = self._sender
+            payload["message_template"] = self._build_sms_template(purpose)
+
+        body = await self._post("/v1/otp/request", payload)
+
+        if not body.get("success"):
+            log.error(
+                "otp.karibu.send_failed",
+                to=_mask_recipient(to),
+                channel=k_ch,
+                message=body.get("message", "unknown"),
+            )
+            raise Exception(f"Karibu OTP send failed: {body.get('message')}")
+
+        log.info(
+            "otp.karibu.sent",
+            to=_mask_recipient(to),
+            channel=k_ch,
+            purpose=purpose,
+            expires_at=(body.get("data") or {}).get("expires_at"),
+        )
+        # No hash stored — Karibu holds the code internally (bcrypt)
+        return {"provider": "karibu", "to": phone, "channel": k_ch}
+
+    async def verify_otp(
+        self,
+        submitted_code:  str,
+        session_payload: dict,
+    ) -> bool:
+        from core.exceptions import OTPExpiredError, OTPMaxAttemptsError
+
+        phone = session_payload["to"]   # digits-only, set by send_otp()
+
+        body = await self._post("/v1/otp/verify", {
+            "phone_number": phone,
+            "app_key":      self._app_key,
+            "code":         submitted_code,
+        })
+
+        if body.get("success"):
+            log.info("otp.karibu.verified", to=_mask_recipient(phone))
+            return True
+
+        msg       = (body.get("message") or "").lower()
+        remaining = (body.get("data") or {}).get("remaining_attempts", 0)
+
+        log.info(
+            "otp.karibu.verify_failed",
+            to=_mask_recipient(phone),
+            message=body.get("message"),
+            remaining_attempts=remaining,
+        )
+
+        if "max verification attempts" in msg or remaining == 0:
+            raise OTPMaxAttemptsError()
+        if "no valid otp" in msg:
+            raise OTPExpiredError()
+
+        # Wrong code — caller increments attempt counter
+        return False
+
+    # ── Extra lifecycle methods (Karibu-specific) ─────────────────────────────
+
+    async def resend_otp(
+        self,
+        to:      str,
+        channel: str = "sms",
+        purpose: str = "verification",
+    ) -> dict:
+        """
+        Resend path — uses Karibu's /resend endpoint (same as /request but
+        logged separately on Karibu's side for analytics).
+        Invalidates the prior active OTP before issuing the new one.
+        """
+        phone  = self._normalise_phone(to)
+        k_ch   = channel if channel in ("sms", "call", "whatsapp") else "sms"
+
+        payload: dict = {
+            "phone_number":      phone,
+            "app_key":           self._app_key,
+            "delivery_method":   k_ch,
+            "otp_length":        self._otp_len,
+            "minutes_to_expire": self._ttl_min,
+        }
+        if k_ch == "sms":
+            if self._sender:
+                payload["sender_id"] = self._sender
+            payload["message_template"] = self._build_sms_template(purpose)
+
+        body = await self._post("/v1/otp/resend", payload)
+
+        if not body.get("success"):
+            log.error(
+                "otp.karibu.resend_failed",
+                to=_mask_recipient(to),
+                message=body.get("message"),
+            )
+            raise Exception(f"Karibu OTP resend failed: {body.get('message')}")
+
+        log.info("otp.karibu.resent", to=_mask_recipient(to), channel=k_ch)
+        return {"provider": "karibu", "to": phone, "channel": k_ch}
+
+    async def invalidate_otp(self, to: str) -> None:
+        """
+        Force-expire the active OTP for this phone.
+        Call on logout, phone number change, or any security event.
+        Idempotent — safe when no active OTP exists.
+        """
+        phone = self._normalise_phone(to)
+        await self._post("/v1/otp/invalidate", {
+            "phone_number": phone,
+            "app_key":      self._app_key,
+        })
+        log.info("otp.karibu.invalidated", to=_mask_recipient(to))
+
+    async def get_otp_status(self, to: str) -> dict:
+        """
+        Inspect the active OTP for a phone without triggering a send.
+        Returns Karibu's data payload: {is_valid, expires_at, remaining_attempts}
+        or an empty dict when no active OTP exists.
+        Useful for driving countdown timers and idempotent resend UX.
+        """
+        phone = self._normalise_phone(to)
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{self._base_url}/v1/otp/status",
+                headers={"X-API-Key": self._api_key},
+                params={"phone_number": phone, "app_key": self._app_key},
+            )
+        body = resp.json()
+        # 200 OK even when no active OTP (envelope status_code 404)
+        if body.get("success"):
+            return body.get("data") or {}
+        return {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Factory functions
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -613,6 +858,9 @@ def get_sms_provider() -> BaseOTPProvider:
         return DevOTPProvider()
 
     provider = getattr(settings, "OTP_SMS_PROVIDER", "stub").lower()
+
+    if provider == "karibu":
+        return KaribuOTPProvider()
 
     if provider == "twilio_verify":
         return TwilioVerifyProvider()

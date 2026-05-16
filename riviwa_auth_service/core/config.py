@@ -187,6 +187,33 @@ class Settings(BaseSettings):
         description="Email OTP provider. smtp | stub",
     )
 
+    # ── Karibu OTP API credentials (OTP_SMS_PROVIDER = "karibu") ──────────────
+    # Karibu is a Tanzanian OTP service — recommended for Tanzania deployments.
+    # Dashboard: https://briq.tz  |  Docs: https://docs.briq.tz
+    # Set via environment variables — never hardcode.
+
+    KARIBU_API_KEY: str = Field(
+        default="",
+        description="Karibu developer API key. Sent as X-API-Key header on every request.",
+    )
+    KARIBU_APP_KEY: str = Field(
+        default="",
+        description="Karibu Developer App key. Sent in the request body as app_key.",
+    )
+    KARIBU_BASE_URL: str = Field(
+        default="https://karibu.briq.tz",
+        description="Karibu API base URL. Override only for sandbox/testing.",
+    )
+    KARIBU_SENDER_ID: str = Field(
+        default="",
+        description="SMS sender ID shown to recipient (e.g. 'RIVIWA'). "
+                    "Leave blank to use the Karibu platform default. SMS-only.",
+    )
+    KARIBU_OTP_TTL_MIN: int = Field(
+        default=10,
+        description="OTP lifetime in minutes sent to Karibu. Default 10.",
+    )
+
     # ── Twilio credentials ─────────────────────────────────────────────────────
     # CRITICAL: Always set via environment variables. Never hardcode.
     # Rotate immediately if accidentally exposed.
