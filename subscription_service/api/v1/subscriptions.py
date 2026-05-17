@@ -7,7 +7,9 @@ from fastapi import APIRouter, Query
 from sqlalchemy import select, desc
 
 from core.deps import DbDep, TokenDep, OrgIdDep, AdminDep, ServiceKeyDep
-from core.exceptions import NotFoundError
+from core.exceptions import NotFoundError, SubscriptionError, ValidationError
+from models.subscription import PromoCode
+from services.subscription_svc import _now
 from models.subscription import (
     Invoice, InvoiceStatus, OrgAddOn, PaymentMethod,
     PromoCode, Subscription, SubscriptionEvent, SubscriptionStatus, UsageMeter, Plan
@@ -151,6 +153,184 @@ async def resume(db: DbDep, claims: TokenDep, org_id: OrgIdDep) -> dict:
     sub = await svc.resume(org_id, actor_id=claims.get("sub"))
     plan = await db.get(Plan, sub.plan_id)
     return {"subscription": _sub_out(sub, plan), "message": "Subscription resumed successfully."}
+
+
+# ── Switch billing cycle ──────────────────────────────────────────────────────
+
+@router.post("/switch-billing-cycle", summary="Switch between monthly and annual billing")
+async def switch_billing_cycle(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) -> dict:
+    """
+    Switch an active subscription between monthly and annual billing.
+
+    - monthly → annual: charged the prorated annual price immediately.
+      Annual pricing is ~20% cheaper. Saves money long-term.
+    - annual → monthly: takes effect at next renewal (no refund).
+
+    Body: { "billing_cycle": "annual" }   or   { "billing_cycle": "monthly" }
+    """
+    from models.subscription import BillingCycle
+    from datetime import timedelta
+
+    new_cycle = body.get("billing_cycle", "").lower()
+    if new_cycle not in ("monthly", "annual"):
+        raise ValidationError("billing_cycle must be 'monthly' or 'annual'.")
+
+    svc = SubscriptionService(db)
+    sub = await svc.get_org_subscription(org_id)
+    if not sub:
+        raise SubscriptionError("No active subscription found.")
+    if sub.status not in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIALING.value):
+        raise SubscriptionError(f"Cannot switch billing cycle — subscription is {sub.status}.")
+    if sub.billing_cycle == new_cycle:
+        raise SubscriptionError(f"Subscription is already on {new_cycle} billing.")
+
+    plan = await db.get(Plan, sub.plan_id)
+    now  = _now()
+
+    if new_cycle == "annual":
+        # Switching to annual — charge prorated difference immediately
+        days_remaining = max((sub.current_period_end - now).days, 0)
+        monthly_rate   = plan.monthly_price_usd
+        annual_monthly = plan.annual_price_usd
+        # Credit for unused monthly days
+        credit = monthly_rate * Decimal(days_remaining) / Decimal(30)
+        # Annual charge (12 × annual monthly rate)
+        annual_total = annual_monthly * 12
+        amount_due   = max(annual_total - credit, Decimal("0"))
+
+        sub.billing_cycle = "annual"
+        sub.current_period_start = now
+        sub.current_period_end   = now + timedelta(days=365)
+        sub.effective_monthly_usd = annual_monthly
+        sub.updated_at = now
+
+        # Generate invoice for the difference
+        invoice = await svc._generate_invoice(
+            sub, plan, "annual", sub.discount_pct,
+            description=f"Switch to annual billing (credit ${credit:.2f} for unused days)",
+            amount_override=amount_due if amount_due > 0 else None,
+        )
+        await db.commit()
+        return {
+            "subscription": _sub_out(sub, plan),
+            "message":      "Switched to annual billing. Invoice generated.",
+            "amount_due_usd": str(amount_due),
+            "invoice_number": invoice.invoice_number,
+            "new_period_end": sub.current_period_end.isoformat(),
+            "annual_savings_pct": 20,
+        }
+    else:
+        # Switching to monthly — takes effect at next renewal
+        sub.billing_cycle     = "monthly"
+        sub.effective_monthly_usd = plan.monthly_price_usd
+        sub.updated_at        = now
+        await db.commit()
+        return {
+            "subscription": _sub_out(sub, plan),
+            "message":      f"Switched to monthly billing. Takes effect at next renewal ({sub.current_period_end.isoformat()[:10]}).",
+            "effective_at": sub.current_period_end.isoformat(),
+        }
+
+
+# ── Billing preview ───────────────────────────────────────────────────────────
+
+@router.post("/billing-preview", summary="Preview exact cost before subscribing or changing plan")
+async def billing_preview(body: dict, db: DbDep) -> dict:
+    """
+    Calculate the exact price for a plan before committing.
+    Useful for checkout page order summary.
+
+    Body:
+    {
+      "plan_id":       "uuid",
+      "billing_cycle": "monthly" | "annual",
+      "promo_code":    "RIVIWA50",     # optional
+      "addons":        [{"slug": "extra-sms-1k", "quantity": 2}]  # optional
+    }
+    """
+    from models.subscription import AddOn
+    from core.config import settings as cfg
+
+    plan_id   = body.get("plan_id")
+    cycle     = body.get("billing_cycle", "monthly")
+    promo_code = body.get("promo_code", "").upper().strip()
+
+    if not plan_id:
+        raise ValidationError("plan_id is required.")
+
+    plan = await db.get(Plan, uuid.UUID(plan_id))
+    if not plan:
+        raise NotFoundError("Plan")
+
+    # Base price
+    base_monthly = plan.annual_price_usd if cycle == "annual" else plan.monthly_price_usd
+    base_total   = base_monthly * 12 if cycle == "annual" else base_monthly
+
+    # Promo discount
+    discount_amount = Decimal("0")
+    promo_info = None
+    if promo_code:
+        promo = (await db.execute(
+            select(PromoCode).where(PromoCode.code == promo_code, PromoCode.is_active == True)
+        )).scalar_one_or_none()
+        if promo:
+            if promo.discount_type == "percentage":
+                discount_amount = base_total * (promo.discount_value / 100)
+            elif promo.discount_type == "fixed_amount":
+                discount_amount = min(promo.discount_value, base_total)
+            elif promo.discount_type == "free_months":
+                discount_amount = base_monthly * promo.discount_value
+            promo_info = {
+                "code":    promo.code,
+                "name":    promo.name,
+                "label":   f"{promo.discount_value}{'%' if promo.discount_type == 'percentage' else ' USD'} off",
+                "duration": promo.duration,
+            }
+
+    # Add-ons
+    addon_total = Decimal("0")
+    addon_lines = []
+    for item in body.get("addons", []):
+        addon = (await db.execute(
+            select(AddOn).where(AddOn.slug == item.get("slug"), AddOn.is_active == True)
+        )).scalar_one_or_none()
+        if addon:
+            qty      = max(int(item.get("quantity", 1)), 1)
+            subtotal = addon.price_usd * qty
+            addon_total += subtotal
+            addon_lines.append({
+                "slug": addon.slug, "name": addon.name,
+                "unit_price_usd": str(addon.price_usd), "quantity": qty,
+                "subtotal_usd":   str(subtotal),
+            })
+
+    subtotal = base_total - discount_amount + addon_total
+    tax      = subtotal * cfg.TAX_RATE
+    total    = subtotal + tax
+
+    return {
+        "plan":          {"id": str(plan.id), "slug": plan.slug, "display_name": plan.display_name},
+        "billing_cycle": cycle,
+        "line_items": [
+            {"description": f"{plan.display_name} — {cycle.title()}", "amount_usd": str(base_total)},
+            *(
+                [{"description": f"Promo: {promo_info['name']}", "amount_usd": str(-discount_amount)}]
+                if promo_info else []
+            ),
+            *addon_lines,
+            {"description": f"VAT ({int(cfg.TAX_RATE * 100)}%)",    "amount_usd": str(tax)},
+        ],
+        "summary": {
+            "subtotal_usd":   str(base_total + addon_total),
+            "discount_usd":   str(discount_amount),
+            "addon_total_usd": str(addon_total),
+            "tax_usd":        str(tax),
+            "total_usd":      str(total),
+        },
+        "promo":          promo_info,
+        "trial_days":     plan.trial_days,
+        "next_renewal":   f"{'annually' if cycle == 'annual' else 'monthly'} after trial",
+    }
 
 
 # ── Apply promo ───────────────────────────────────────────────────────────────
