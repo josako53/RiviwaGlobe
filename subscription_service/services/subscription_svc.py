@@ -211,23 +211,27 @@ class SubscriptionService:
         if new_plan.sort_order <= old_plan.sort_order:
             raise SubscriptionError("Use downgrade endpoint to move to a lower plan.")
 
-        # Proration credit
+        # Proration — use the actual period price (monthly or annual total)
         now = _now()
-        days_remaining = (sub.current_period_end - now).days
-        total_days = (sub.current_period_end - sub.current_period_start).days
-        credit = old_plan.monthly_price_usd * Decimal(days_remaining) / Decimal(max(total_days, 1))
+        days_remaining = max((sub.current_period_end - now).days, 0)
+        total_days     = max((sub.current_period_end - sub.current_period_start).days, 1)
+        is_annual      = sub.billing_cycle == BillingCycle.ANNUAL.value
+
+        old_period_price = (old_plan.annual_price_usd * 12) if is_annual else old_plan.monthly_price_usd
+        new_period_price = (new_plan.annual_price_usd * 12) if is_annual else new_plan.monthly_price_usd
+
+        credit          = old_period_price * Decimal(days_remaining) / Decimal(total_days)
+        prorated_amount = max(new_period_price - credit, Decimal("0"))
 
         old_plan_id = sub.plan_id
         sub.plan_id = new_plan.id
-        sub.effective_monthly_usd = new_plan.monthly_price_usd
+        sub.effective_monthly_usd = new_plan.annual_price_usd if is_annual else new_plan.monthly_price_usd
         sub.updated_at = now
 
-        # Invoice for proration
-        prorated_amount = new_plan.monthly_price_usd - credit
         if prorated_amount > Decimal("0"):
             await self._generate_invoice(
-                sub, new_plan, sub.billing_cycle, Decimal("0"),
-                description=f"Upgrade from {old_plan.display_name} to {new_plan.display_name} (prorated)",
+                sub, new_plan, "monthly", Decimal("0"),
+                description=f"Upgrade from {old_plan.display_name} to {new_plan.display_name} (prorated {days_remaining}d)",
                 amount_override=prorated_amount,
             )
 

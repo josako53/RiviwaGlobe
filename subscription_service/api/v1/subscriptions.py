@@ -233,19 +233,21 @@ async def switch_billing_cycle(body: dict, db: DbDep, claims: TokenDep, org_id: 
         sub.effective_monthly_usd = annual_monthly
         sub.updated_at = now
 
-        # Generate invoice for the difference
-        invoice = await svc._generate_invoice(
-            sub, plan, "annual", sub.discount_pct,
-            description=f"Switch to annual billing (credit ${credit:.2f} for unused days)",
-            amount_override=amount_due if amount_due > 0 else None,
-        )
+        # Generate invoice only when there is a balance due
+        invoice = None
+        if amount_due > 0:
+            invoice = await svc._generate_invoice(
+                sub, plan, "monthly", sub.discount_pct,
+                description=f"Switch to annual billing (credit ${credit:.2f} for unused days)",
+                amount_override=amount_due,
+            )
         await db.commit()
         return {
-            "subscription": _sub_out(sub, plan),
-            "message":      "Switched to annual billing. Invoice generated.",
-            "amount_due_usd": str(amount_due),
-            "invoice_number": invoice.invoice_number,
-            "new_period_end": sub.current_period_end.isoformat(),
+            "subscription":    _sub_out(sub, plan),
+            "message":         "Switched to annual billing." + (" Invoice generated." if invoice else " No charge due."),
+            "amount_due_usd":  str(amount_due),
+            "invoice_number":  invoice.invoice_number if invoice else None,
+            "new_period_end":  sub.current_period_end.isoformat(),
             "annual_savings_pct": 20,
         }
     else:

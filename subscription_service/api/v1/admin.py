@@ -16,7 +16,7 @@ from models.subscription import (
     Subscription, SubscriptionEvent, SubscriptionStatus, UsageMeter,
 )
 
-router = APIRouter(prefix="/admin", tags=["Admin — Subscription Management"])
+router = APIRouter(prefix="/billing", tags=["Admin — Subscription Management"])
 
 
 # ── Dashboard metrics ─────────────────────────────────────────────────────────

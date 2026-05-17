@@ -18,7 +18,7 @@ from services.subscription_svc import SubscriptionService
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/checkout", tags=["Checkout"])
 
-SUPPORTED_PROVIDERS = {"mpesa", "azampay", "selcom", "paypal", "bank_transfer"}
+SUPPORTED_PROVIDERS = {"mpesa", "azampay", "selcom", "paypal", "airtel", "yas", "bank_transfer"}
 
 
 @router.post("", summary="Subscribe to a plan — checkout", status_code=201)
