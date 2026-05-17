@@ -44,14 +44,38 @@ async def checkout(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) ->
     if provider not in SUPPORTED_PROVIDERS:
         raise PaymentError(f"Unsupported provider '{provider}'. Use: {', '.join(SUPPORTED_PROVIDERS)}")
 
+    # Auto-apply best active sale if no promo code provided
+    promo_code = body.get("promo_code")
+    active_sale = None
+    if not promo_code:
+        from api.v1.sales import get_best_auto_apply_sale
+        plan = await db.get(__import__('models.subscription', fromlist=['Plan']).Plan,
+                            __import__('uuid').UUID(body["plan_id"]))
+        if plan:
+            existing_sub = await svc.get_org_subscription(org_id)
+            is_new = existing_sub is None
+            active_sale = await get_best_auto_apply_sale(
+                db, plan.slug, body.get("billing_cycle", "monthly"), is_new
+            )
+            if active_sale:
+                log.info("checkout.auto_sale_applied", sale=active_sale.name, org_id=org_id)
+
     # Create subscription + invoice
     sub, invoice = await svc.create_subscription(
         org_id=org_id,
         plan_id=body["plan_id"],
         billing_cycle=body.get("billing_cycle", "monthly"),
-        promo_code=body.get("promo_code"),
+        promo_code=promo_code,
         actor_id=claims.get("sub"),
     )
+
+    # If sale was auto-applied, increment redemption count
+    if active_sale:
+        from models.subscription import Sale
+        sale_obj = await db.get(Sale, active_sale.id)
+        if sale_obj:
+            sale_obj.redemption_count += 1
+            await db.flush()
 
     # Save payment method if requested
     if body.get("save_method") and body.get("phone_number"):

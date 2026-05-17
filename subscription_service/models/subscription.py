@@ -410,6 +410,85 @@ class SubscriptionEvent(SQLModel, table=True):
     created_at:      datetime         = Field(default_factory=datetime.utcnow, index=True)
 
 
+# ── Sale / Campaign ──────────────────────────────────────────────────────────
+
+class SaleStatus(str, Enum):
+    SCHEDULED = "scheduled"   # start_at is in the future
+    ACTIVE    = "active"      # currently running
+    ENDED     = "ended"       # end_at has passed
+    CANCELLED = "cancelled"   # manually cancelled
+
+
+class Sale(SQLModel, table=True):
+    """
+    A time-bounded sale campaign.
+
+    Unlike PromoCode (which requires a code), a Sale can auto-apply at
+    checkout — the discount is shown and applied automatically when the
+    sale is active, with no code needed.
+
+    Optionally, a Sale can also generate an associated PromoCode so that
+    people can share a link/code for the campaign.
+
+    Status is computed from start_at / end_at — no scheduler needed.
+    """
+    __tablename__ = "sales"
+
+    id:          uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name:        str       = Field(max_length=128)
+    description: str       = Field(default="", sa_column=Column(Text))
+    banner_text: str       = Field(default="", max_length=256)   # e.g. "⚡ Flash Sale — 40% off ends in 2 hours"
+
+    # ── Schedule ─────────────────────────────────────────────────────────────
+    start_at: datetime = Field(index=True)
+    end_at:   datetime = Field(index=True)
+
+    # ── Discount ─────────────────────────────────────────────────────────────
+    discount_type:   str     = Field(sa_column=Column(String(32), nullable=False))
+    discount_value:  Decimal = Field(sa_column=Column(Numeric(10, 2)))
+    duration:        str     = Field(default="once",   max_length=32)
+    duration_months: int     = Field(default=1)
+
+    # ── Targeting ────────────────────────────────────────────────────────────
+    eligible_plans:           Optional[Any] = Field(default=None, sa_column=Column(JSONB))  # list of plan slugs
+    eligible_billing_cycles:  Optional[Any] = Field(default=None, sa_column=Column(JSONB))  # ["monthly","annual"]
+    new_subscribers_only:     bool = Field(default=False)
+
+    # ── Limits ────────────────────────────────────────────────────────────────
+    max_redemptions:  int = Field(default=-1)   # -1 = unlimited
+    redemption_count: int = Field(default=0)
+
+    # ── Behaviour ────────────────────────────────────────────────────────────
+    auto_apply:    bool = Field(default=True)    # applies automatically — no code needed
+    promo_code_id: Optional[uuid.UUID] = Field(default=None, nullable=True)  # optional linked code
+
+    # ── Meta ─────────────────────────────────────────────────────────────────
+    is_active:  bool              = Field(default=True)
+    created_by: Optional[uuid.UUID] = Field(default=None, nullable=True)
+    created_at: datetime          = Field(default_factory=datetime.utcnow)
+    updated_at: datetime          = Field(default_factory=datetime.utcnow)
+
+    @property
+    def status(self) -> str:
+        now = datetime.utcnow()
+        if not self.is_active:
+            return SaleStatus.CANCELLED.value
+        if now < self.start_at:
+            return SaleStatus.SCHEDULED.value
+        if now > self.end_at:
+            return SaleStatus.ENDED.value
+        return SaleStatus.ACTIVE.value
+
+    @property
+    def is_currently_active(self) -> bool:
+        now = datetime.utcnow()
+        return (
+            self.is_active
+            and self.start_at <= now <= self.end_at
+            and (self.max_redemptions == -1 or self.redemption_count < self.max_redemptions)
+        )
+
+
 # ── DunningAttempt ────────────────────────────────────────────────────────────
 
 class DunningAttempt(SQLModel, table=True):
