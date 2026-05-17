@@ -144,7 +144,7 @@ async def grant_free_months(subscription_id: str, body: dict, db: DbDep, _: Admi
     db.add(SubscriptionEvent(
         org_id=sub.org_id, subscription_id=sub.id,
         event_type="free_months_granted", actor_type="admin",
-        metadata={"months": months},
+        event_meta={"months": months},
     ))
     await db.commit()
     return {"message": f"{months} free month(s) granted.", "new_period_end": sub.current_period_end.isoformat()}
@@ -169,7 +169,7 @@ async def sub_events(subscription_id: str, db: DbDep, _: AdminDep) -> dict:
     )).scalars().all()
     return {"events": [
         {"event_type": e.event_type, "actor_type": e.actor_type,
-         "metadata": e.metadata, "created_at": e.created_at.isoformat()}
+         "metadata": e.event_meta, "created_at": e.created_at.isoformat()}
         for e in events
     ]}
 

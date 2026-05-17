@@ -404,7 +404,7 @@ class SubscriptionEvent(SQLModel, table=True):
     to_plan_id:      Optional[uuid.UUID] = Field(default=None)
     actor_id:        Optional[uuid.UUID] = Field(default=None)
     actor_type:      str              = Field(default="org", max_length=32)   # org | admin | system
-    metadata:        Optional[Any]    = Field(default=None, sa_column=Column(JSONB))
+    event_meta:      Optional[Any]    = Field(default=None, sa_column=Column(JSONB))
     created_at:      datetime         = Field(default_factory=datetime.utcnow, index=True)
 
 

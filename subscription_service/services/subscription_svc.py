@@ -532,5 +532,5 @@ class SubscriptionService:
             to_plan_id=to_plan_id,
             actor_id=uuid.UUID(actor_id) if actor_id else None,
             actor_type=actor_type,
-            metadata=metadata,
+            event_meta=metadata,
         ))

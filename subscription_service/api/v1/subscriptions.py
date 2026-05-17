@@ -486,7 +486,7 @@ async def list_events(db: DbDep, org_id: OrgIdDep) -> dict:
             "event_type": e.event_type,
             "from_plan_id": str(e.from_plan_id) if e.from_plan_id else None,
             "to_plan_id": str(e.to_plan_id) if e.to_plan_id else None,
-            "metadata": e.metadata,
+            "metadata": e.event_meta,
             "created_at": e.created_at.isoformat(),
         }
         for e in events
