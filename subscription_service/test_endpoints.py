@@ -618,7 +618,7 @@ async def test_plans_admin(client: httpx.AsyncClient, token: str) -> None:
         ok(f"  {len(d['addons'])} addons")
 
     r = await _post(client, "/plans/admin/addons", {
-        "slug":         "extra-projects-3",
+        "slug":         f"extra-projects-{_RUN}",
         "name":         "Extra Projects (3)",
         "description":  "3 additional project slots beyond plan limit",
         "type":         "extra_users",
