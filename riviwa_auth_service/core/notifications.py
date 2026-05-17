@@ -454,18 +454,19 @@ def _send_smtp(
     smtp_port     = int(getattr(settings, "SMTP_PORT", 587))
     smtp_user     = getattr(settings, "SMTP_USER", "")
     smtp_password = getattr(settings, "SMTP_PASSWORD", "")
-    use_tls       = getattr(settings, "SMTP_USE_TLS", True)
 
-    if use_tls:
-        context = ssl.create_default_context()
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.ehlo()
-            server.starttls(context=context)
+    context = ssl.create_default_context()
+
+    # Port 465 = implicit SSL (SMTP_SSL).  Port 587/25 = STARTTLS.
+    if smtp_port == 465:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
             if smtp_user:
                 server.login(smtp_user, smtp_password)
             server.sendmail(msg["From"], to_email, msg.as_string())
     else:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.ehlo()
+            server.starttls(context=context)
             if smtp_user:
                 server.login(smtp_user, smtp_password)
             server.sendmail(msg["From"], to_email, msg.as_string())
