@@ -47,7 +47,10 @@ services:
   riviwa_auth_service:
     environment:
       DEBUG: "false"
-      ENVIRONMENT: production
+      # ENVIRONMENT=staging → DevOTPProvider: OTP is always 000000 for all channels.
+      # No real SMS/email is sent. Any user (any email domain, any phone) can login.
+      # Change to "production" when real OTP delivery is required.
+      ENVIRONMENT: staging
       OTP_SMS_PROVIDER: karibu
       KARIBU_API_KEY: dfcAFCke0rQOXmGxPak6Nccm1hc_wpuPIYkawm0Pmhc
       KARIBU_APP_KEY: briq_44o9gytxpyu510de
