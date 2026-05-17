@@ -154,7 +154,6 @@ class Plan(SQLModel, table=True):
     has_multi_org:            bool = Field(default=False)   # multi-org switching
 
     # Feedback service extended
-    has_bulk_import:          bool = Field(default=False)   # CSV bulk import
     has_bulk_staff_import:    bool = Field(default=False)   # staff bulk CSV
 
     # Staff service
@@ -169,10 +168,9 @@ class Plan(SQLModel, table=True):
     has_recommendations:      bool = Field(default=False)   # 4-signal scoring
     has_geo_proximity:        bool = Field(default=False)   # Haversine geo matching
 
-    # Payment features
-    has_payment_processing:   bool = Field(default=False)   # AzamPay/Selcom/M-Pesa
+    # Payment extended
     has_paypal:               bool = Field(default=False)   # PayPal (USD international)
-    has_mobile_money:         bool = Field(default=False)   # M-Pesa/AzamPay/Selcom
+    has_mobile_money:         bool = Field(default=False)   # M-Pesa/AzamPay/Selcom/Airtel/Yas
 
     # Integration service
     has_audit_logs:           bool = Field(default=False)   # AES-256-GCM audit trail
