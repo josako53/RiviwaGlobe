@@ -52,6 +52,8 @@ BOLD   = "\033[1m"
 
 passed = failed = skipped = 0
 _ids: dict = {}   # store IDs across tests
+# Unique suffix so every test run creates new records
+_RUN = datetime.utcnow().strftime("%H%M%S")
 
 
 def _log(symbol: str, colour: str, label: str, detail: str = "") -> None:
@@ -426,10 +428,10 @@ async def test_subscription_lifecycle(client: httpx.AsyncClient, token: str, org
     if d:
         ok(f"  amount_due=${d.get('amount_due_usd')}  invoice={d.get('invoice_number')}")
 
-    # Apply promo ANNUAL20
+    # Apply DONOR10 ($10 off forever, new_subscribers_only=False)
     r = await _post(client, "/subscriptions/apply-promo",
-                    {"code": "ANNUAL20"}, token=token, label="POST /subscriptions/apply-promo ANNUAL20")
-    d = _check(r, "Apply ANNUAL20 (20% off)")
+                    {"code": "DONOR10"}, token=token, label="POST /subscriptions/apply-promo DONOR10")
+    d = _check(r, "Apply DONOR10 ($10/mo fixed, forever)")
     if d:
         ok(f"  discount_pct={d.get('discount_pct')} months={d.get('discount_months')}")
 
@@ -532,9 +534,9 @@ async def test_plans_admin(client: httpx.AsyncClient, token: str) -> None:
     if d:
         ok(f"  {d['total']} plans total")
 
-    # Create a custom NGO plan
+    # Create a custom NGO plan (unique slug per run)
     r = await _post(client, "/plans/admin/plans", {
-        "slug":               "ngo-custom",
+        "slug":               f"ngo-custom-{_RUN}",
         "display_name":       "NGO Custom",
         "tagline":            "Discounted plan for verified NGOs",
         "description":        "Riviwa plan built for non-profits with limited budgets.",
@@ -594,7 +596,7 @@ async def test_plans_admin(client: httpx.AsyncClient, token: str) -> None:
 
     # Duplicate as NGO Enterprise
     r = await _post(client, f"/plans/admin/plans/{ngo_id}/duplicate",
-                    {"slug": "ngo-enterprise", "display_name": "NGO Enterprise",
+                    {"slug": f"ngo-enterprise-{_RUN}", "display_name": "NGO Enterprise",
                      "monthly_price_usd": "49.00", "annual_price_usd": "39.00"},
                     token=token, label=f"POST /plans/admin/plans/{ngo_id[:8]}/duplicate")
     d = _check(r, "Duplicate NGO → NGO Enterprise", expected_status=200)
@@ -654,8 +656,8 @@ async def test_promotions_admin(client: httpx.AsyncClient, token: str) -> None:
 
     # Create a new promo
     r = await _post(client, "/promotions/admin", {
-        "code":                 "TESTRUN25",
-        "name":                 "Test Run 25% Off",
+        "code":                 f"TESTRUN{_RUN}",
+        "name":                 f"Test Run 25% Off ({_RUN})",
         "description":          "Created by endpoint test runner",
         "discount_type":        "percentage",
         "discount_value":       25,
@@ -666,7 +668,7 @@ async def test_promotions_admin(client: httpx.AsyncClient, token: str) -> None:
         "new_subscribers_only": False,
         "expires_at":           (datetime.utcnow() + timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%S"),
     }, token=token, label="POST /promotions/admin TESTRUN25")
-    d = _check(r, "Create TESTRUN25 promo", expected_status=201)
+    d = _check(r, f"Create TESTRUN{_RUN} promo", expected_status=201)
     if d:
         _ids["promo_testrun"] = d["id"]
         ok(f"  id={d['id'][:8]}… code={d['code']}")
@@ -685,7 +687,7 @@ async def test_promotions_admin(client: httpx.AsyncClient, token: str) -> None:
         r = await _patch(client, f"/promotions/admin/{promo_id}",
                          {"max_redemptions": 100, "description": "Updated by test — max raised to 100"},
                          token=token, label=f"PATCH /promotions/admin/{promo_id[:8]}")
-        _check(r, "Update TESTRUN25 max_redemptions → 100")
+        _check(r, f"Update TESTRUN{_RUN} max_redemptions → 100")
 
     # Bulk generate partner codes
     r = await _post(client, "/promotions/admin/bulk-generate", {
@@ -711,11 +713,11 @@ async def test_promotions_admin(client: httpx.AsyncClient, token: str) -> None:
     if d:
         ok(f"  total={d['total_codes']}  active={d['active_codes']}  redemptions={d['total_redemptions']}")
 
-    # Deactivate TESTRUN25
+    # Deactivate test promo
     if _ids.get("promo_testrun"):
         r = await _delete(client, f"/promotions/admin/{_ids['promo_testrun']}", token=token,
                           label=f"DELETE /promotions/admin/{_ids['promo_testrun'][:8]}")
-        _check(r, "Deactivate TESTRUN25")
+        _check(r, f"Deactivate TESTRUN{_RUN}")
 
 
 async def test_sales_admin(client: httpx.AsyncClient, token: str) -> None:
@@ -835,14 +837,14 @@ async def test_billing_admin(client: httpx.AsyncClient, token: str, org_id: str)
 
     # Create promo via billing route
     r = await _post(client, "/billing/promo-codes", {
-        "code":          "BILLTEST10",
-        "name":          "Billing Admin Test Promo",
+        "code":          f"BILLTEST{_RUN}",
+        "name":          f"Billing Admin Test Promo ({_RUN})",
         "discount_type": "fixed_amount",
         "discount_value": 10,
         "duration":      "once",
         "max_redemptions": 5,
     }, token=token, label="POST /billing/promo-codes BILLTEST10")
-    d = _check(r, "Create BILLTEST10 via billing admin", expected_status=201)
+    d = _check(r, f"Create BILLTEST{_RUN} via billing admin", expected_status=201)
     if d:
         _ids["billing_promo_id"] = d["id"]
         ok(f"  id={d['id'][:8]}…")
@@ -851,7 +853,7 @@ async def test_billing_admin(client: httpx.AsyncClient, token: str, org_id: str)
         r2 = await _patch(client, f"/billing/promo-codes/{d['id']}",
                           {"max_redemptions": 10}, token=token,
                           label=f"PATCH /billing/promo-codes/{d['id'][:8]}")
-        _check(r2, "Update BILLTEST10 max_redemptions → 10")
+        _check(r2, f"Update BILLTEST{_RUN} max_redemptions → 10")
 
     # All invoices
     r = await _get(client, "/billing/invoices", token=token, label="GET /billing/invoices")
