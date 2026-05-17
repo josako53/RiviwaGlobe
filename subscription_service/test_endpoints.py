@@ -38,8 +38,9 @@ AUTH_URL  = os.environ.get("AUTH_URL",  "http://riviwa_auth_service:8000/api/v1"
 TEST_JWT  = os.environ.get("TEST_JWT",  "")
 ORG_ID    = os.environ.get("ORG_ID",   "")
 STAGING   = os.environ.get("STAGING",  "0") == "1"
-ADMIN_EMAIL = "johnsabaskomba@gmail.com"
-INTERNAL_KEY = os.environ.get("INTERNAL_SERVICE_KEY", "change-me-set-a-real-secret-in-production")
+TEST_EMAIL    = os.environ.get("TEST_EMAIL",    "testgrm@riviwa.com")
+TEST_PASSWORD = os.environ.get("TEST_PASSWORD", "TestGRM@2026!")
+INTERNAL_KEY  = os.environ.get("INTERNAL_SERVICE_KEY", "change-me-set-a-real-secret-in-production")
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 GREEN  = "\033[92m"
@@ -79,39 +80,44 @@ def section(title: str) -> None:
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 async def _get_token(client: httpx.AsyncClient) -> tuple[str, str]:
-    """Return (jwt_token, org_id). Uses TEST_JWT env var or logs in via OTP."""
+    """Return (jwt_token, org_id). Uses TEST_JWT env var or password+OTP login."""
     if TEST_JWT and ORG_ID:
         print(f"  {YELLOW}Using provided TEST_JWT{RESET}")
         return TEST_JWT, ORG_ID
 
-    # Step 1 — request OTP
-    r = await client.post(f"{AUTH_URL}/auth/channel-login/request-otp", json={
-        "identifier": ADMIN_EMAIL, "channel_type": "email",
+    # Step 1 — password login → login_token
+    r = await client.post(f"{AUTH_URL}/auth/login", json={
+        "identifier": TEST_EMAIL, "password": TEST_PASSWORD,
     }, timeout=15)
     if r.status_code not in (200, 201):
-        print(f"  {RED}OTP request failed: {r.status_code} {r.text[:200]}{RESET}")
+        print(f"  {RED}Login failed: {r.status_code} {r.text[:200]}{RESET}")
         sys.exit(1)
+    login_token = r.json().get("login_token", "")
 
-    otp = "000000" if STAGING else input(f"  Enter OTP sent to {ADMIN_EMAIL}: ").strip()
-
-    # Step 2 — verify OTP
-    r = await client.post(f"{AUTH_URL}/auth/channel-login/verify-otp", json={
-        "identifier": ADMIN_EMAIL, "otp": otp,
-        "channel_type": "email", "purpose": "login",
+    # Step 2 — OTP verify (000000 in staging, or prompt)
+    otp = "000000" if STAGING else input(f"  Enter OTP sent to {TEST_EMAIL}: ").strip()
+    r = await client.post(f"{AUTH_URL}/auth/login/verify-otp", json={
+        "login_token": login_token, "otp_code": otp,
     }, timeout=15)
     if r.status_code not in (200, 201):
-        print(f"  {RED}OTP verification failed: {r.status_code} {r.text[:300]}{RESET}")
+        print(f"  {RED}OTP verify failed: {r.status_code} {r.text[:300]}{RESET}")
         sys.exit(1)
 
-    data   = r.json()
-    token  = data.get("access_token") or data.get("data", {}).get("access_token", "")
-    org_id = data.get("org_id") or data.get("data", {}).get("org_id", "")
+    data  = r.json()
+    token = data.get("access_token", "")
     if not token:
         print(f"  {RED}No access_token in response: {json.dumps(data)[:300]}{RESET}")
         sys.exit(1)
 
-    print(f"  {GREEN}Logged in as {ADMIN_EMAIL}  org_id={org_id}{RESET}")
-    return token, str(org_id)
+    # Decode JWT to extract org_id (no signature verification needed)
+    import base64 as _b64
+    payload_b64 = token.split(".")[1]
+    payload_b64 += "=" * (-len(payload_b64) % 4)
+    claims  = json.loads(_b64.urlsafe_b64decode(payload_b64))
+    org_id  = str(claims.get("org_id", ""))
+
+    print(f"  {GREEN}Logged in as {TEST_EMAIL}  org_id={org_id[:8]}…  role={claims.get('org_role','?')}{RESET}")
+    return token, org_id
 
 
 # ── Request helpers ───────────────────────────────────────────────────────────
