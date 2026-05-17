@@ -1416,6 +1416,67 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── SUBSCRIPTION SERVICE ──────────────────────────────────────────────────
+  subscription_service:
+    build:
+      context: ./subscription_service
+      dockerfile: Dockerfile
+    container_name: subscription_service
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    ports: ["8140:8140"]
+    environment:
+      SUBSCRIPTION_DB_HOST:     subscription_db
+      SUBSCRIPTION_DB_USER:     ${SUBSCRIPTION_DB_USER:-subscription_admin}
+      SUBSCRIPTION_DB_PASSWORD: ${SUBSCRIPTION_DB_PASSWORD:-subscription_pass}
+      SUBSCRIPTION_DB_NAME:     ${SUBSCRIPTION_DB_NAME:-subscription_db}
+      AUTH_SECRET_KEY:          ${SECRET_KEY}
+      AUTH_ALGORITHM:           ${ALGORITHM}
+      INTERNAL_SERVICE_KEY:     ${INTERNAL_SERVICE_KEY}
+      KAFKA_BOOTSTRAP_SERVERS:  ${KAFKA_BOOTSTRAP_SERVERS}
+      AZAMPAY_APP_NAME:         ${AZAMPAY_APP_NAME:-Riviwa}
+      AZAMPAY_CLIENT_ID:        ${AZAMPAY_CLIENT_ID:-}
+      AZAMPAY_CLIENT_SECRET:    ${AZAMPAY_CLIENT_SECRET:-}
+      AZAMPAY_BASE_URL:         ${AZAMPAY_BASE_URL:-https://authenticator.azampay.co.tz}
+      AZAMPAY_CHECKOUT_URL:     ${AZAMPAY_CHECKOUT_URL:-https://checkout.azampay.co.tz}
+      SELCOM_BASE_URL:          ${SELCOM_BASE_URL:-https://apigw.selcommobile.com/v1}
+      SELCOM_API_KEY:           ${SELCOM_API_KEY:-}
+      SELCOM_API_SECRET:        ${SELCOM_API_SECRET:-}
+      SELCOM_VENDOR:            ${SELCOM_VENDOR:-}
+      MPESA_BASE_URL:           ${MPESA_BASE_URL:-https://openapi.m-pesa.com}
+      MPESA_API_KEY:            ${MPESA_API_KEY:-}
+      MPESA_PUBLIC_KEY:         ${MPESA_PUBLIC_KEY:-}
+      MPESA_SERVICE_PROVIDER_CODE: ${MPESA_SERVICE_PROVIDER_CODE:-}
+      STRIPE_SECRET_KEY:        ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET:    ${STRIPE_WEBHOOK_SECRET:-}
+      PAYMENT_CALLBACK_BASE_URL: ${PAYMENT_CALLBACK_BASE_URL:-https://api.riviwa.com}
+      ENVIRONMENT:              ${ENVIRONMENT:-production}
+      DEBUG:                    ${DEBUG:-false}
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      subscription_db:
+        condition: service_healthy
+
+  subscription_db:
+    image: postgres:15-alpine
+    container_name: subscription_db
+    init: true
+    restart: unless-stopped
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${SUBSCRIPTION_DB_USER:-subscription_admin}
+      POSTGRES_PASSWORD: ${SUBSCRIPTION_DB_PASSWORD:-subscription_pass}
+      POSTGRES_DB:       ${SUBSCRIPTION_DB_NAME:-subscription_db}
+    ports: ["5448:5432"]
+    volumes: [subscription_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SUBSCRIPTION_DB_USER:-subscription_admin} -d ${SUBSCRIPTION_DB_NAME:-subscription_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 networks:
   riviwa-net:
     driver: bridge
@@ -1449,4 +1510,5 @@ volumes:
   verification_db_data:
   waiting_db_data:
   staff_db_data:
+  subscription_db_data:
   certbot_certs:
