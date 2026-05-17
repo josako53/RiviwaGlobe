@@ -1480,7 +1480,7 @@ services:
       POSTGRES_USER:     ${SUBSCRIPTION_DB_USER:-subscription_admin}
       POSTGRES_PASSWORD: ${SUBSCRIPTION_DB_PASSWORD:-subscription_pass}
       POSTGRES_DB:       ${SUBSCRIPTION_DB_NAME:-subscription_db}
-    ports: ["5448:5432"]
+    ports: ["5449:5432"]
     volumes: [subscription_db_data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SUBSCRIPTION_DB_USER:-subscription_admin} -d ${SUBSCRIPTION_DB_NAME:-subscription_db}"]
