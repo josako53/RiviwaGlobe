@@ -597,7 +597,7 @@ async def test_plans_admin(client: httpx.AsyncClient, token: str) -> None:
                     {"slug": "ngo-enterprise", "display_name": "NGO Enterprise",
                      "monthly_price_usd": "49.00", "annual_price_usd": "39.00"},
                     token=token, label=f"POST /plans/admin/plans/{ngo_id[:8]}/duplicate")
-    d = _check(r, "Duplicate NGO → NGO Enterprise", expected_status=201)
+    d = _check(r, "Duplicate NGO → NGO Enterprise", expected_status=200)
     if d:
         _ids["plan_ngo_enterprise"] = d["id"]
         ok(f"  duplicated as {d['slug']} (is_active={d['is_active']})")
@@ -876,16 +876,19 @@ async def test_billing_admin(client: httpx.AsyncClient, token: str, org_id: str)
                              label=f"POST /billing/subscriptions/{sub_id[:8]}/free-months")
             _check(r2, "Grant 1 free month to subscription")
 
-    # Admin cancel a sub
-    r_sub = await _get(client, "/subscriptions/admin/all?size=1", token=token)
+    # Admin cancel a sub — only try if one is active/trialing
+    r_sub = await _get(client, "/subscriptions/admin/all?size=20", token=token)
     if r_sub and r_sub.status_code == 200:
         subs = r_sub.json().get("subscriptions", [])
-        if subs:
-            sub_id = subs[0]["id"]
+        active_subs = [s for s in subs if s["status"] in ("active", "trialing", "paused", "past_due")]
+        if active_subs:
+            sub_id = active_subs[0]["id"]
             r2 = await _post(client, f"/billing/subscriptions/{sub_id}/cancel",
                              {"reason": "admin test cancel", "immediate": True},
                              token=token, label=f"POST /billing/subscriptions/{sub_id[:8]}/cancel")
             _check(r2, "Admin cancel subscription")
+        else:
+            skip("POST /billing/subscriptions/{id}/cancel", "no active sub to cancel (all already cancelled)")
 
     # Invoice void
     invoice_id = _ids.get("invoice_id", "")

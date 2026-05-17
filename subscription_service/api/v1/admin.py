@@ -152,12 +152,25 @@ async def grant_free_months(subscription_id: str, body: dict, db: DbDep, _: Admi
 
 @router.post("/subscriptions/{subscription_id}/cancel", summary="Admin: cancel subscription on behalf of org")
 async def admin_cancel(subscription_id: str, body: dict, db: DbDep, _: AdminDep) -> dict:
-    from services.subscription_svc import SubscriptionService
     sub = await db.get(Subscription, uuid.UUID(subscription_id))
     if not sub:
         raise NotFoundError("Subscription")
-    svc = SubscriptionService(db)
-    sub = await svc.cancel(str(sub.org_id), reason=body.get("reason"), immediate=body.get("immediate", True))
+    if sub.status in (SubscriptionStatus.CANCELLED.value, SubscriptionStatus.EXPIRED.value):
+        return {"message": "Subscription already cancelled.", "status": sub.status}
+    now = datetime.utcnow()
+    if body.get("immediate", True):
+        sub.status       = SubscriptionStatus.CANCELLED.value
+        sub.cancelled_at = now
+    else:
+        sub.cancel_at_period_end = True
+    sub.cancellation_reason = body.get("reason")
+    sub.updated_at = now
+    db.add(SubscriptionEvent(
+        org_id=sub.org_id, subscription_id=sub.id,
+        event_type="cancelled", actor_type="admin",
+        event_meta={"reason": body.get("reason"), "immediate": body.get("immediate", True)},
+    ))
+    await db.commit()
     return {"message": "Subscription cancelled.", "status": sub.status}
 
 
