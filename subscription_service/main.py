@@ -15,6 +15,7 @@ from db.session import engine
 from db.seed import seed_plans_and_addons
 from db.session import AsyncSessionLocal
 from events.producer import get_producer, stop_producer
+from events.consumer import start_consumer, stop_consumer
 
 log = structlog.get_logger(__name__)
 
@@ -30,12 +31,14 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as session:
         await seed_plans_and_addons(session)
 
-    # Kafka producer
+    # Kafka producer + consumer
     await get_producer()
+    await start_consumer()
     log.info("subscription_service.startup.complete")
 
     yield
 
+    await stop_consumer()
     await stop_producer()
     await engine.dispose()
     log.info("subscription_service.shutdown")

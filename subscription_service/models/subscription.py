@@ -146,6 +146,43 @@ class Plan(SQLModel, table=True):
     has_dedicated_support:    bool = Field(default=False)
     has_custom_sla:           bool = Field(default=False)
 
+    # ── All 15-service features ───────────────────────────────────────────────
+    # Auth service extended
+    has_social_login:         bool = Field(default=False)   # Google/Apple/Facebook
+    has_id_verification:      bool = Field(default=False)   # Stripe/Onfido/Jumio
+    has_fraud_detection:      bool = Field(default=False)   # Argon2id + fraud score
+    has_multi_org:            bool = Field(default=False)   # multi-org switching
+
+    # Feedback service extended
+    has_bulk_import:          bool = Field(default=False)   # CSV bulk import
+    has_bulk_staff_import:    bool = Field(default=False)   # staff bulk CSV
+
+    # Staff service
+    has_staff_analytics:      bool = Field(default=False)   # staff performance analytics
+
+    # Product service
+    has_product_catalog:      bool = Field(default=False)   # 89 product types
+    has_product_variations:   bool = Field(default=False)   # variations (size/color etc.)
+    has_rsin:                 bool = Field(default=False)   # Riviwa Standard Item Number
+
+    # Recommendation service
+    has_recommendations:      bool = Field(default=False)   # 4-signal scoring
+    has_geo_proximity:        bool = Field(default=False)   # Haversine geo matching
+
+    # Payment features
+    has_payment_processing:   bool = Field(default=False)   # AzamPay/Selcom/M-Pesa
+    has_paypal:               bool = Field(default=False)   # PayPal (USD international)
+    has_mobile_money:         bool = Field(default=False)   # M-Pesa/AzamPay/Selcom
+
+    # Integration service
+    has_audit_logs:           bool = Field(default=False)   # AES-256-GCM audit trail
+
+    # Translation service
+    has_advanced_translation: bool = Field(default=False)   # cloud provider fallback
+
+    # Waiting service
+    has_waiting_queue:        bool = Field(default=False)   # multi-step queue + ETA SMS
+
     # SLA
     uptime_sla: str = Field(default="99.5%", max_length=16)
 

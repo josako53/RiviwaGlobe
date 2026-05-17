@@ -382,10 +382,12 @@ class MpesaProvider(BasePaymentProvider):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_provider(provider: PaymentProvider) -> BasePaymentProvider:
+    from providers.paypal import PayPalProvider
     mapping = {
         PaymentProvider.AZAMPAY: AzamPayProvider,
         PaymentProvider.SELCOM:  SelcomProvider,
         PaymentProvider.MPESA:   MpesaProvider,
+        PaymentProvider.PAYPAL:  PayPalProvider,
     }
     cls = mapping.get(provider)
     if not cls:

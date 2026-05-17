@@ -41,6 +41,7 @@ class PaymentProvider(str, Enum):
     AZAMPAY = "azampay"
     SELCOM  = "selcom"
     MPESA   = "mpesa"
+    PAYPAL  = "paypal"
 
 
 class PaymentStatus(str, Enum):

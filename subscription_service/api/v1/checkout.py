@@ -1,4 +1,4 @@
-"""api/v1/checkout.py — Subscription checkout and payment webhook handling."""
+"""api/v1/checkout.py — Subscription checkout via payment_service."""
 from __future__ import annotations
 
 import uuid
@@ -12,214 +12,228 @@ from sqlalchemy import select
 from core.deps import DbDep, OrgIdDep, TokenDep
 from core.exceptions import NotFoundError, PaymentError
 from models.subscription import Invoice, InvoiceStatus, PaymentMethod, Subscription, SubscriptionStatus
-from services.payment_gateway import process_payment
+from services.payment_client import create_payment, get_payment_status, initiate_payment
 from services.subscription_svc import SubscriptionService
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/checkout", tags=["Checkout"])
 
+SUPPORTED_PROVIDERS = {"mpesa", "azampay", "selcom", "paypal", "bank_transfer"}
+
 
 @router.post("", summary="Subscribe to a plan — checkout", status_code=201)
 async def checkout(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) -> dict:
     """
-    Full checkout flow:
-    1. Validate plan + promo
-    2. Create subscription + invoice
-    3. Charge payment method
-    4. Activate subscription on payment success
+    Full checkout flow — delegates payment to payment_service.
 
-    Body:
+    Request body:
     {
-      "plan_id": "uuid",
-      "billing_cycle": "monthly" | "annual",
-      "payment_method_id": "uuid",      # optional if already saved
-      "payment_method": {               # or inline new method
-        "type": "mpesa",
-        "phone_number": "+255712345678"
-      },
-      "promo_code": "RIVIWA50"          # optional
+      "plan_id":        "uuid",
+      "billing_cycle":  "monthly" | "annual",
+      "provider":       "mpesa" | "azampay" | "selcom" | "paypal" | "bank_transfer",
+      "phone_number":   "+255712345678",   # required for mobile money
+      "payer_name":     "John Komba",
+      "payer_email":    "john@example.com",
+      "promo_code":     "RIVIWA50",        # optional
+      "save_method":    true               # save payment method for future use
     }
     """
-    svc = SubscriptionService(db)
+    svc      = SubscriptionService(db)
+    provider = body.get("provider", "bank_transfer").lower()
 
-    # Resolve payment method
-    pm_id = body.get("payment_method_id")
-    pm_inline = body.get("payment_method")
-    pm: Optional[PaymentMethod] = None
-
-    if pm_id:
-        pm = await db.get(PaymentMethod, uuid.UUID(pm_id))
-        if not pm or str(pm.org_id) != org_id:
-            raise NotFoundError("Payment method")
-    elif pm_inline:
-        pm = PaymentMethod(
-            org_id=uuid.UUID(org_id),
-            type=pm_inline["type"],
-            phone_number=pm_inline.get("phone_number"),
-            display_name=pm_inline.get("display_name", ""),
-            provider_ref=pm_inline.get("provider_ref"),
-            is_default=pm_inline.get("is_default", False),
-        )
-        db.add(pm)
-        await db.flush()
+    if provider not in SUPPORTED_PROVIDERS:
+        raise PaymentError(f"Unsupported provider '{provider}'. Use: {', '.join(SUPPORTED_PROVIDERS)}")
 
     # Create subscription + invoice
     sub, invoice = await svc.create_subscription(
         org_id=org_id,
         plan_id=body["plan_id"],
         billing_cycle=body.get("billing_cycle", "monthly"),
-        payment_method_id=str(pm.id) if pm else None,
         promo_code=body.get("promo_code"),
         actor_id=claims.get("sub"),
     )
 
-    # Skip payment if trial (no charge yet)
-    if sub.status == SubscriptionStatus.TRIALING.value:
-        return _checkout_response(sub, invoice, payment_result=None)
+    # Save payment method if requested
+    if body.get("save_method") and body.get("phone_number"):
+        pm = PaymentMethod(
+            org_id=uuid.UUID(org_id),
+            type=provider,
+            phone_number=body.get("phone_number"),
+            display_name=body.get("payer_name", ""),
+            is_default=True,
+        )
+        db.add(pm)
+        sub.default_payment_method_id = pm.id
+        await db.flush()
 
-    # Enterprise / bank transfer — manual payment
-    if pm and pm.type == "bank_transfer":
-        payment_result = {"provider": "bank_transfer", "success": True, "manual": True,
-                          "instructions": f"Wire USD {invoice.total_usd} to Riviwa bank account. Reference: {invoice.invoice_number}"}
-        invoice.payment_method_type = "bank_transfer"
+    # Bank transfer — no gateway call, return invoice for manual payment
+    if provider == "bank_transfer":
         await db.commit()
-        return _checkout_response(sub, invoice, payment_result)
+        return {
+            "subscription_id": str(sub.id),
+            "status": sub.status,
+            "invoice": _invoice_out(invoice),
+            "payment": {
+                "provider": "bank_transfer",
+                "instructions": (
+                    f"Transfer USD {invoice.total_usd} to Riviwa. "
+                    f"Reference: {invoice.invoice_number}. "
+                    "Send proof to billing@riviwa.com."
+                ),
+            },
+            "message": "Invoice created. Complete bank transfer to activate.",
+        }
 
-    if not pm:
-        # Return invoice — org can pay later
-        return _checkout_response(sub, invoice, payment_result=None,
-                                  message="Subscription created. Complete payment to activate.")
+    # Create payment intent in payment_service
+    try:
+        payment = await create_payment(
+            org_id=org_id,
+            amount_usd=invoice.total_usd,
+            invoice_id=str(invoice.id),
+            invoice_number=invoice.invoice_number,
+            payer_phone=body.get("phone_number"),
+            payer_email=body.get("payer_email"),
+            payer_name=body.get("payer_name"),
+            internal_token=claims.get("_raw_token"),
+        )
+        payment_id = payment["id"]
 
-    # Process payment
-    payment_result = await process_payment(
-        method_type=pm.type,
-        phone=pm.phone_number,
-        stripe_pm_id=pm.provider_ref,
-        amount_usd=invoice.total_usd,
-        invoice_id=str(invoice.id),
-        invoice_number=invoice.invoice_number,
-    )
-
-    if payment_result.get("success"):
-        invoice.status = InvoiceStatus.PAID.value
-        invoice.paid_at = datetime.utcnow()
-        invoice.payment_method_type = pm.type
-        invoice.payment_reference = payment_result.get("external_id") or payment_result.get("payment_intent_id")
-        sub.status = SubscriptionStatus.ACTIVE.value
+        # Store payment_service payment_id in invoice
+        invoice.payment_reference = payment_id
+        invoice.payment_method_type = provider
         await db.commit()
-        log.info("checkout.payment_success", org_id=org_id, invoice=invoice.invoice_number)
-    else:
-        invoice.status = InvoiceStatus.OPEN.value
-        await db.commit()
-        log.warning("checkout.payment_failed", org_id=org_id, invoice=invoice.invoice_number)
-        raise PaymentError(f"Payment failed: {payment_result.get('raw', {}).get('message', 'Unknown error')}. "
-                           "Please try again or use a different payment method.")
 
-    return _checkout_response(sub, invoice, payment_result)
+        # Initiate with the provider (returns checkout_url for PayPal/Selcom)
+        txn = await initiate_payment(payment_id=payment_id, provider=provider,
+                                     internal_token=claims.get("_raw_token"))
 
+        checkout_url = txn.get("checkout_url")
+        log.info("checkout.initiated", org_id=org_id, provider=provider,
+                 invoice=invoice.invoice_number, has_redirect=bool(checkout_url))
+
+        return {
+            "subscription_id":  str(sub.id),
+            "status":           sub.status,
+            "payment_id":       payment_id,
+            "invoice":          _invoice_out(invoice),
+            "checkout_url":     checkout_url,
+            "payment": {
+                "provider":      provider,
+                "status":        "pending",
+                "transaction_id": txn.get("id"),
+                "message":       _provider_message(provider, checkout_url),
+            },
+            "message": (
+                "Redirecting to PayPal for payment." if checkout_url
+                else "USSD prompt sent to your phone. Enter your PIN to complete payment."
+            ),
+            "next_renewal": sub.current_period_end.isoformat(),
+        }
+
+    except Exception as exc:
+        log.error("checkout.payment_failed", org_id=org_id, provider=provider, error=str(exc))
+        raise PaymentError(f"Payment initiation failed: {str(exc)[:200]}")
+
+
+@router.get("/status/{payment_id}", summary="Check payment status (poll)")
+async def payment_status(payment_id: str, db: DbDep, claims: TokenDep, org_id: OrgIdDep) -> dict:
+    """Poll payment_service for payment status. Activate subscription on success."""
+    try:
+        payment = await get_payment_status(payment_id, internal_token=claims.get("_raw_token"))
+    except Exception as exc:
+        raise NotFoundError("Payment")
+
+    paid = payment.get("status") == "paid"
+    if paid:
+        # Find invoice and activate subscription
+        inv = (await db.execute(
+            select(Invoice).where(Invoice.payment_reference == payment_id)
+        )).scalar_one_or_none()
+        if inv and inv.status != InvoiceStatus.PAID.value:
+            inv.status = InvoiceStatus.PAID.value
+            inv.paid_at = datetime.utcnow()
+            sub = await db.get(Subscription, inv.subscription_id)
+            if sub and sub.status in (SubscriptionStatus.TRIALING.value, SubscriptionStatus.PAST_DUE.value):
+                sub.status = SubscriptionStatus.ACTIVE.value
+            await db.commit()
+
+    return {
+        "payment_id":   payment_id,
+        "payment_status": payment.get("status"),
+        "paid":         paid,
+        "subscription_active": paid,
+    }
+
+
+# ── Payment method management ─────────────────────────────────────────────────
 
 @router.post("/pay-invoice/{invoice_id}", summary="Pay an outstanding invoice")
-async def pay_invoice(invoice_id: str, body: dict, db: DbDep, org_id: OrgIdDep) -> dict:
+async def pay_invoice(invoice_id: str, body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) -> dict:
     inv = await db.get(Invoice, uuid.UUID(invoice_id))
     if not inv or str(inv.org_id) != org_id:
         raise NotFoundError("Invoice")
     if inv.status == InvoiceStatus.PAID.value:
-        return {"message": "Invoice is already paid.", "invoice_number": inv.invoice_number}
+        return {"message": "Invoice already paid.", "invoice_number": inv.invoice_number}
 
-    pm_id = body.get("payment_method_id")
-    pm = await db.get(PaymentMethod, uuid.UUID(pm_id)) if pm_id else None
-
-    payment_result = await process_payment(
-        method_type=pm.type if pm else body.get("type", "bank_transfer"),
-        phone=pm.phone_number if pm else body.get("phone_number"),
-        stripe_pm_id=pm.provider_ref if pm else None,
-        amount_usd=inv.total_usd,
-        invoice_id=str(inv.id),
-        invoice_number=inv.invoice_number,
-    )
-
-    if payment_result.get("success"):
-        inv.status = InvoiceStatus.PAID.value
-        inv.paid_at = datetime.utcnow()
-        inv.payment_method_type = pm.type if pm else "manual"
-        inv.payment_reference = payment_result.get("external_id") or payment_result.get("payment_intent_id")
-        # Reactivate if past_due
-        sub = await db.get(Subscription, inv.subscription_id)
-        if sub and sub.status == SubscriptionStatus.PAST_DUE.value:
-            sub.status = SubscriptionStatus.ACTIVE.value
+    provider = body.get("provider", "bank_transfer")
+    try:
+        payment = await create_payment(
+            org_id=org_id, amount_usd=inv.total_usd,
+            invoice_id=str(inv.id), invoice_number=inv.invoice_number,
+            payer_phone=body.get("phone_number"),
+            internal_token=claims.get("_raw_token"),
+        )
+        txn = await initiate_payment(payment["id"], provider,
+                                     internal_token=claims.get("_raw_token"))
+        inv.payment_reference = payment["id"]
+        inv.payment_method_type = provider
         await db.commit()
-        return {"message": "Payment successful.", "invoice_number": inv.invoice_number}
-
-    raise PaymentError("Payment failed. Please try again.")
-
-
-# ── Webhooks (provider callbacks) ─────────────────────────────────────────────
-
-@router.post("/success", include_in_schema=False)
-async def checkout_success(request: Request) -> dict:
-    return {"status": "ok"}
+        return {
+            "invoice_number": inv.invoice_number,
+            "payment_id": payment["id"],
+            "checkout_url": txn.get("checkout_url"),
+            "message": _provider_message(provider, txn.get("checkout_url")),
+        }
+    except Exception as exc:
+        raise PaymentError(str(exc)[:200])
 
 
-@router.post("/cancel", include_in_schema=False)
-async def checkout_cancel(request: Request) -> dict:
-    return {"status": "cancelled"}
+# ── Webhook receiver (from payment_service Kafka or direct callback) ──────────
 
-
-@router.post("/webhooks/azampay", include_in_schema=False)
-async def webhook_azampay(request: Request, db: DbDep) -> dict:
+@router.post("/webhooks/payment-confirmed", include_in_schema=False)
+async def payment_confirmed_callback(request: Request, db: DbDep) -> dict:
+    """Called by Kafka consumer when payment_service confirms a payment."""
     data = await request.json()
-    log.info("webhook.azampay", data=data)
-    await _handle_payment_callback(db, reference=data.get("externalId"), success=data.get("success"))
+    reference_id = data.get("reference_id")
+    if reference_id:
+        inv = await db.get(Invoice, uuid.UUID(reference_id))
+        if inv and inv.status != InvoiceStatus.PAID.value:
+            inv.status = InvoiceStatus.PAID.value
+            inv.paid_at = datetime.utcnow()
+            sub = await db.get(Subscription, inv.subscription_id)
+            if sub:
+                sub.status = SubscriptionStatus.ACTIVE.value
+            await db.commit()
     return {"status": "ok"}
 
 
-@router.post("/webhooks/selcom", include_in_schema=False)
-async def webhook_selcom(request: Request, db: DbDep) -> dict:
-    data = await request.json()
-    log.info("webhook.selcom", data=data)
-    await _handle_payment_callback(db, reference=data.get("order_id"), success=data.get("resultcode") == "000")
-    return {"status": "ok"}
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-
-@router.post("/webhooks/mpesa", include_in_schema=False)
-async def webhook_mpesa(request: Request, db: DbDep) -> dict:
-    data = await request.json()
-    log.info("webhook.mpesa", data=data)
-    await _handle_payment_callback(db, reference=data.get("input_ThirdPartyConversationID"),
-                                   success=data.get("output_ResponseCode") == "INS-0")
-    return {"status": "ok"}
-
-
-async def _handle_payment_callback(db, reference: Optional[str], success: bool) -> None:
-    if not reference:
-        return
-    # Find invoice by payment_reference or invoice_id
-    inv = (await db.execute(
-        select(Invoice).where(Invoice.payment_reference == reference)
-    )).scalar_one_or_none()
-    if not inv:
-        return
-    if success and inv.status != InvoiceStatus.PAID.value:
-        inv.status = InvoiceStatus.PAID.value
-        inv.paid_at = datetime.utcnow()
-        sub = await db.get(Subscription, inv.subscription_id)
-        if sub and sub.status in (SubscriptionStatus.PAST_DUE.value, SubscriptionStatus.TRIALING.value):
-            sub.status = SubscriptionStatus.ACTIVE.value
-        await db.commit()
-
-
-def _checkout_response(sub: Subscription, invoice: Invoice, payment_result, message: str = "") -> dict:
+def _invoice_out(inv: Invoice) -> dict:
     return {
-        "subscription_id": str(sub.id),
-        "status": sub.status,
-        "invoice": {
-            "invoice_number": invoice.invoice_number,
-            "total_usd": str(invoice.total_usd),
-            "status": invoice.status,
-            "due_date": invoice.due_date.isoformat(),
-        },
-        "payment": payment_result,
-        "message": message or ("Subscription active." if invoice.status == InvoiceStatus.PAID.value
-                               else "Invoice created. Complete payment to activate."),
-        "next_renewal": sub.current_period_end.isoformat(),
+        "invoice_number": inv.invoice_number,
+        "total_usd":      str(inv.total_usd),
+        "status":         inv.status,
+        "due_date":       inv.due_date.isoformat(),
+        "line_items":     inv.line_items,
     }
+
+
+def _provider_message(provider: str, checkout_url: Optional[str]) -> str:
+    if provider == "paypal" and checkout_url:
+        return f"Redirect user to: {checkout_url}"
+    if provider == "selcom" and checkout_url:
+        return f"Open payment page: {checkout_url}"
+    if provider in ("mpesa", "azampay"):
+        return "USSD prompt sent. Customer enters PIN on their phone."
+    return "Payment initiated."

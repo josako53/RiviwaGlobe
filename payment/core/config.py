@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     MPESA_PUBLIC_KEY:       str = Field(default="")  # RSA public key for token encryption
     MPESA_SERVICE_PROVIDER_CODE: str = Field(default="")
 
+    # ── PayPal ────────────────────────────────────────────────────────────────
+    PAYPAL_CLIENT_ID:     str  = Field(default="")
+    PAYPAL_CLIENT_SECRET: str  = Field(default="")
+    PAYPAL_WEBHOOK_ID:    str  = Field(default="")
+    PAYPAL_SANDBOX:       bool = Field(default=False)
+
     # ── Callback ──────────────────────────────────────────────────────────────
     PAYMENT_CALLBACK_BASE_URL: str = Field(
         default="https://api.riviwa.com",
