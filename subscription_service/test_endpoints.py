@@ -428,10 +428,17 @@ async def test_subscription_lifecycle(client: httpx.AsyncClient, token: str, org
     if d:
         ok(f"  amount_due=${d.get('amount_due_usd')}  invoice={d.get('invoice_number')}")
 
-    # Apply DONOR10 ($10 off forever, new_subscribers_only=False)
+    # Create a fresh run-specific promo so apply-promo always works
+    _promo_code = f"LIFECYCLE{_RUN}"
+    await _post(client, "/promotions/admin", {
+        "code": _promo_code, "name": f"Lifecycle test promo {_RUN}",
+        "discount_type": "percentage", "discount_value": 15,
+        "duration": "once", "new_subscribers_only": False,
+    }, token=token)
+
     r = await _post(client, "/subscriptions/apply-promo",
-                    {"code": "DONOR10"}, token=token, label="POST /subscriptions/apply-promo DONOR10")
-    d = _check(r, "Apply DONOR10 ($10/mo fixed, forever)")
+                    {"code": _promo_code}, token=token, label=f"POST /subscriptions/apply-promo {_promo_code}")
+    d = _check(r, f"Apply {_promo_code} (15% off, once)")
     if d:
         ok(f"  discount_pct={d.get('discount_pct')} months={d.get('discount_months')}")
 
