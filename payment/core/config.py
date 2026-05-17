@@ -51,6 +51,19 @@ class Settings(BaseSettings):
     PAYPAL_WEBHOOK_ID:    str  = Field(default="")
     PAYPAL_SANDBOX:       bool = Field(default=False)
 
+    # ── Airtel Money Tanzania ─────────────────────────────────────────────────
+    # Get from: https://developer.airtel.co.tz (partner portal)
+    AIRTEL_CLIENT_ID:     str  = Field(default="")
+    AIRTEL_CLIENT_SECRET: str  = Field(default="")
+    AIRTEL_SANDBOX:       bool = Field(default=True)
+
+    # ── Yas Money Tanzania (formerly Tigo Pesa) ───────────────────────────────
+    # Get from: https://developer.yasmoney.co.tz (partner portal)
+    YAS_CLIENT_ID:     str  = Field(default="")
+    YAS_CLIENT_SECRET: str  = Field(default="")
+    YAS_MERCHANT_CODE: str  = Field(default="")
+    YAS_SANDBOX:       bool = Field(default=True)
+
     # ── Callback ──────────────────────────────────────────────────────────────
     PAYMENT_CALLBACK_BASE_URL: str = Field(
         default="https://api.riviwa.com",
