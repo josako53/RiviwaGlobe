@@ -7,12 +7,12 @@ from fastapi import APIRouter, Query
 from sqlalchemy import select, desc
 
 from core.deps import DbDep, TokenDep, OrgIdDep, AdminDep, ServiceKeyDep
-from core.exceptions import NotFoundError, SubscriptionError, ValidationError
-from models.subscription import PromoCode
+from core.exceptions import NotFoundError, PromoError, SubscriptionError, ValidationError
 from services.subscription_svc import _now
 from models.subscription import (
-    Invoice, InvoiceStatus, OrgAddOn, PaymentMethod,
-    PromoCode, Subscription, SubscriptionEvent, SubscriptionStatus, UsageMeter, Plan
+    AddOn, Invoice, InvoiceStatus, OrgAddOn, PaymentMethod,
+    PromoCode, PromoRedemption, Subscription, SubscriptionEvent, SubscriptionStatus,
+    UsageMeter, Plan,
 )
 from services.subscription_svc import SubscriptionService
 
@@ -59,6 +59,35 @@ def _invoice_out(inv: Invoice) -> dict:
         "line_items": inv.line_items,
         "pdf_url": inv.pdf_url,
         "created_at": inv.created_at.isoformat(),
+    }
+
+
+# ── Start trial ──────────────────────────────────────────────────────────────
+
+@router.post("/trial", summary="Start a free trial", status_code=201)
+async def start_trial(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) -> dict:
+    """
+    Start a free trial for the organisation. Called automatically on first org creation
+    or explicitly by the org admin.
+
+    Body:
+    {
+      "plan_slug": "professional"   // optional, defaults to "professional"
+    }
+
+    Returns the new trialing subscription with trial end date.
+    """
+    svc = SubscriptionService(db)
+    plan_slug = body.get("plan_slug", "professional")
+    sub = await svc.start_trial(org_id, plan_slug=plan_slug)
+    plan = await db.get(Plan, sub.plan_id)
+    return {
+        "subscription": _sub_out(sub, plan),
+        "message": (
+            f"{plan.trial_days}-day free trial started on {plan.display_name}. "
+            f"Trial ends {sub.trial_end.strftime('%Y-%m-%d')}."
+        ),
+        "trial_end": sub.trial_end.isoformat(),
     }
 
 
@@ -248,7 +277,6 @@ async def billing_preview(body: dict, db: DbDep) -> dict:
       "addons":        [{"slug": "extra-sms-1k", "quantity": 2}]  # optional
     }
     """
-    from models.subscription import AddOn
     from core.config import settings as cfg
 
     plan_id   = body.get("plan_id")
@@ -337,7 +365,6 @@ async def billing_preview(body: dict, db: DbDep) -> dict:
 
 @router.post("/apply-promo", summary="Apply a promo code to existing subscription")
 async def apply_promo(body: dict, db: DbDep, org_id: OrgIdDep) -> dict:
-    from core.exceptions import PromoError
     svc = SubscriptionService(db)
     sub = await svc.get_org_subscription(org_id)
     if not sub:
@@ -346,12 +373,10 @@ async def apply_promo(body: dict, db: DbDep, org_id: OrgIdDep) -> dict:
     promo, discount_pct, discount_months = await svc._validate_promo(
         body["code"], plan, org_id, new_subscriber=False
     )
-    from models.subscription import PromoRedemption
-    import uuid as _uuid
     sub.promo_code_id = promo.id
     sub.discount_pct = discount_pct
     sub.discount_months_remaining = discount_months
-    db.add(PromoRedemption(promo_code_id=promo.id, org_id=_uuid.UUID(org_id), subscription_id=sub.id))
+    db.add(PromoRedemption(promo_code_id=promo.id, org_id=uuid.UUID(org_id), subscription_id=sub.id))
     promo.redemption_count += 1
     await db.commit()
     return {

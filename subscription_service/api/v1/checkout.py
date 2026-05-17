@@ -10,8 +10,8 @@ from fastapi import APIRouter, Request
 from sqlalchemy import select
 
 from core.deps import DbDep, OrgIdDep, TokenDep
-from core.exceptions import NotFoundError, PaymentError
-from models.subscription import Invoice, InvoiceStatus, PaymentMethod, Subscription, SubscriptionStatus
+from core.exceptions import NotFoundError, PaymentError, ValidationError
+from models.subscription import Invoice, InvoiceStatus, PaymentMethod, Plan, Subscription, SubscriptionStatus
 from services.payment_client import create_payment, get_payment_status, initiate_payment
 from services.subscription_svc import SubscriptionService
 
@@ -38,6 +38,10 @@ async def checkout(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) ->
       "save_method":    true               # save payment method for future use
     }
     """
+    plan_id = body.get("plan_id")
+    if not plan_id:
+        raise ValidationError("plan_id is required.")
+
     svc      = SubscriptionService(db)
     provider = body.get("provider", "bank_transfer").lower()
 
@@ -49,8 +53,7 @@ async def checkout(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) ->
     active_sale = None
     if not promo_code:
         from api.v1.sales import get_best_auto_apply_sale
-        plan = await db.get(__import__('models.subscription', fromlist=['Plan']).Plan,
-                            __import__('uuid').UUID(body["plan_id"]))
+        plan = await db.get(Plan, uuid.UUID(plan_id))
         if plan:
             existing_sub = await svc.get_org_subscription(org_id)
             is_new = existing_sub is None
@@ -63,7 +66,7 @@ async def checkout(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) ->
     # Create subscription + invoice
     sub, invoice = await svc.create_subscription(
         org_id=org_id,
-        plan_id=body["plan_id"],
+        plan_id=plan_id,
         billing_cycle=body.get("billing_cycle", "monthly"),
         promo_code=promo_code,
         actor_id=claims.get("sub"),

@@ -444,10 +444,14 @@ class SubscriptionService:
         description: str = "",
         amount_override: Optional[Decimal] = None,
     ) -> Invoice:
-        if billing_cycle == BillingCycle.ANNUAL.value:
-            subtotal = (amount_override or plan.annual_price_usd) * 12
+        # amount_override is always the final subtotal — never multiplied.
+        # Only when no override is given do we compute from the cycle.
+        if amount_override is not None:
+            subtotal = amount_override
+        elif billing_cycle == BillingCycle.ANNUAL.value:
+            subtotal = plan.annual_price_usd * 12
         else:
-            subtotal = amount_override or plan.monthly_price_usd
+            subtotal = plan.monthly_price_usd
 
         discount = subtotal * (discount_pct / Decimal("100")) if discount_pct else Decimal("0")
         taxable = subtotal - discount

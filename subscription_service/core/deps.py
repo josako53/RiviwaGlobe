@@ -22,12 +22,14 @@ def _decode_token(authorization: str = Header(default="")) -> Optional[dict]:
         return None
     token = authorization[7:]
     try:
-        return jwt.decode(
+        claims = jwt.decode(
             token,
             settings.AUTH_SECRET_KEY,
             algorithms=[settings.AUTH_ALGORITHM],
             options={"verify_aud": False},
         )
+        claims["_raw_token"] = token   # passed downstream to payment_service
+        return claims
     except Exception:
         return None
 
