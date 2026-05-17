@@ -47,7 +47,20 @@ services:
   riviwa_auth_service:
     environment:
       DEBUG: "false"
-      ENVIRONMENT: staging
+      ENVIRONMENT: production
+      OTP_SMS_PROVIDER: karibu
+      KARIBU_API_KEY: dfcAFCke0rQOXmGxPak6Nccm1hc_wpuPIYkawm0Pmhc
+      KARIBU_APP_KEY: briq_44o9gytxpyu510de
+      KARIBU_BASE_URL: https://karibu.briq.tz
+      KARIBU_SENDER_ID: RIVIWA
+      KARIBU_OTP_TTL_MIN: "10"
+      OTP_EMAIL_PROVIDER: smtp
+      SMTP_HOST: premium33-2.web-hosting.com
+      SMTP_PORT: "465"
+      SMTP_USER: noreply@riviwa.com
+      SMTP_PASSWORD: "Zaburi121-3**"
+      SMTP_USE_TLS: "True"
+      EMAIL_FROM_ADDRESS: "Riviwa <noreply@riviwa.com>"
     deploy:
       resources:
         limits:
@@ -101,6 +114,30 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
+
+  # ── subscription_service production overrides ─────────────────────────────
+  subscription_service:
+    environment:
+      DEBUG: "false"
+      ENVIRONMENT: production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  subscription_db:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
   # ── [NEW] notification_service production resources ───────────────────────
   # Memory sized for APScheduler + 5 channel workers + Kafka consumer.
