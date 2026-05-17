@@ -652,7 +652,7 @@ class KaribuOTPProvider(BaseOTPProvider):
             "phone_verify":   "phone verification",
         }.get(purpose, "verification")
         return (
-            f"Your Riviwa {label} code is {{code}}. "
+            f"Your Riviwa {label} OTP is: {{otp}}. "
             f"Expires in {{expiry}} minutes. Never share it."
         )
 
@@ -697,7 +697,7 @@ class KaribuOTPProvider(BaseOTPProvider):
         if k_ch == "sms":
             if self._sender:
                 payload["sender_id"] = self._sender
-            payload["message_template"] = self._build_sms_template(purpose)
+            payload["message"] = self._build_sms_template(purpose)
 
         body = await self._post("/v1/otp/request", payload)
 
@@ -783,7 +783,7 @@ class KaribuOTPProvider(BaseOTPProvider):
         if k_ch == "sms":
             if self._sender:
                 payload["sender_id"] = self._sender
-            payload["message_template"] = self._build_sms_template(purpose)
+            payload["message"] = self._build_sms_template(purpose)
 
         body = await self._post("/v1/otp/resend", payload)
 
