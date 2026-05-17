@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Optional
 from fastapi import APIRouter, Query
 from sqlalchemy import select, desc
