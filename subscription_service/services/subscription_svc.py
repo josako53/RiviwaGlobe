@@ -7,15 +7,17 @@ from decimal import Decimal
 from typing import Optional
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.exceptions import (
     ConflictError, NotFoundError, SubscriptionError, PromoError
 )
+import services.notification_client as notif
 from models.subscription import (
-    BillingCycle, Invoice, InvoiceStatus, OrgAddOn, Plan, PromoCode,
+    BillingCycle, Invoice, InvoiceStatus, OrgAddOn, OrgFeatureOverride,
+    OverrideType, Plan, PromoCode,
     PromoRedemption, Subscription, SubscriptionEvent, SubscriptionEventType,
     SubscriptionStatus, UsageMeter,
 )
@@ -119,6 +121,7 @@ class SubscriptionService:
 
         log.info("subscription.trial_started", org_id=org_id, plan=plan_slug,
                  trial_end=trial_end.isoformat())
+        notif.notify_trial_started(org_id=org_id, plan_name=plan.display_name, trial_days=plan.trial_days, trial_end_date=trial_end.strftime("%Y-%m-%d"))
         return sub
 
     # ── Subscribe (checkout) ──────────────────────────────────────────────────
@@ -196,6 +199,7 @@ class SubscriptionService:
                               metadata={"plan": plan.slug, "billing_cycle": billing_cycle})
         await self.db.commit()
         log.info("subscription.created", org_id=org_id, plan=plan.slug, cycle=billing_cycle)
+        notif.notify_subscribed(org_id=org_id, plan_name=plan.display_name, billing_cycle=billing_cycle, price_usd=str(price), next_renewal_date=period_end.strftime("%Y-%m-%d"), invoice_number=invoice.invoice_number)
         return sub, invoice
 
     # ── Upgrade ───────────────────────────────────────────────────────────────
@@ -238,6 +242,7 @@ class SubscriptionService:
         await self._log_event(sub, SubscriptionEventType.UPGRADED, actor_id=actor_id,
                               from_plan_id=old_plan_id, to_plan_id=new_plan.id)
         await self.db.commit()
+        notif.notify_upgraded(org_id=org_id, old_plan=old_plan.display_name, new_plan=new_plan.display_name)
         log.info("subscription.upgraded", org_id=org_id, from_plan=old_plan.slug, to_plan=new_plan.slug)
         return sub
 
@@ -265,6 +270,7 @@ class SubscriptionService:
                               metadata={"effective_at": sub.current_period_end.isoformat()})
         await self.db.commit()
         log.info("subscription.downgraded", org_id=org_id, from_plan=old_plan.slug, to_plan=new_plan.slug)
+        notif.notify_downgraded(org_id=org_id, old_plan=old_plan.display_name, new_plan=new_plan.display_name, effective_date=sub.current_period_end.strftime("%Y-%m-%d"))
         return sub
 
     # ── Cancel ────────────────────────────────────────────────────────────────
@@ -295,6 +301,7 @@ class SubscriptionService:
                               actor_type="org",
                               metadata={"reason": reason, "immediate": immediate})
         await self.db.commit()
+        notif.notify_cancelled(org_id=org_id, plan_name="your plan", access_end_date=sub.current_period_end.strftime("%Y-%m-%d"))
         return sub
 
     # ── Pause ─────────────────────────────────────────────────────────────────
@@ -319,6 +326,7 @@ class SubscriptionService:
         await self._log_event(sub, SubscriptionEventType.PAUSED, actor_id=actor_id,
                               metadata={"months": months, "resume_at": sub.pause_resume_at.isoformat()})
         await self.db.commit()
+        notif.notify_paused(org_id=org_id, plan_name=plan.display_name, pause_months=months, resume_date=sub.pause_resume_at.strftime("%Y-%m-%d"))
         return sub
 
     # ── Resume ────────────────────────────────────────────────────────────────
@@ -338,6 +346,7 @@ class SubscriptionService:
         sub.current_period_end = _period_end(now, sub.billing_cycle)
         sub.updated_at = now
 
+        notif.notify_resumed(org_id=org_id, plan_name="your plan", next_renewal_date=sub.current_period_end.strftime("%Y-%m-%d"))
         await self._log_event(sub, SubscriptionEventType.RESUMED, actor_id=actor_id)
         await self.db.commit()
         return sub
@@ -371,6 +380,21 @@ class SubscriptionService:
         sub = await self.get_org_subscription(org_id)
         if not sub or sub.status not in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIALING.value):
             return False
+
+        now = _now()
+        override = (await self.db.execute(
+            select(OrgFeatureOverride).where(
+                OrgFeatureOverride.org_id == uuid.UUID(org_id),
+                OrgFeatureOverride.feature_key == feature,
+                OrgFeatureOverride.override_type.in_([OverrideType.GRANT.value, OverrideType.REVOKE.value]),
+                OrgFeatureOverride.is_active == True,
+                or_(OrgFeatureOverride.expires_at.is_(None), OrgFeatureOverride.expires_at > now),
+            )
+        )).scalar_one_or_none()
+
+        if override:
+            return override.override_type == OverrideType.GRANT.value
+
         plan = await self.get_plan(str(sub.plan_id))
         return getattr(plan, f"has_{feature}", False)
 
@@ -379,7 +403,7 @@ class SubscriptionService:
         if not sub:
             return {}
         plan = await self.get_plan(str(sub.plan_id))
-        return {
+        limits = {
             "max_team_members":          plan.max_team_members,
             "max_projects":              plan.max_projects,
             "max_submissions_per_month": plan.max_submissions_per_month,
@@ -388,6 +412,131 @@ class SubscriptionService:
             "max_storage_gb":            plan.max_storage_gb,
             "max_qr_per_month":          plan.max_qr_per_month,
             "max_staff_profiles":        plan.max_staff_profiles,
+        }
+        now = _now()
+        overrides = (await self.db.execute(
+            select(OrgFeatureOverride).where(
+                OrgFeatureOverride.org_id == uuid.UUID(org_id),
+                OrgFeatureOverride.override_type == OverrideType.LIMIT.value,
+                OrgFeatureOverride.is_active == True,
+                or_(OrgFeatureOverride.expires_at.is_(None), OrgFeatureOverride.expires_at > now),
+            )
+        )).scalars().all()
+        for ov in overrides:
+            if ov.feature_key in limits and ov.limit_value is not None:
+                limits[ov.feature_key] = ov.limit_value
+        return limits
+
+    async def get_org_entitlements(self, org_id: str) -> dict:
+        from api.v1.plans import FEATURE_CATALOG, _KEY_TO_FIELD
+
+        sub  = await self.get_org_subscription(org_id)
+        plan = await self.get_plan(str(sub.plan_id)) if sub else None
+        usage = await self.get_usage(org_id) if sub else None
+
+        is_active_sub = bool(
+            sub and sub.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIALING.value)
+        )
+        now = _now()
+
+        all_overrides = (await self.db.execute(
+            select(OrgFeatureOverride).where(
+                OrgFeatureOverride.org_id == uuid.UUID(org_id),
+                OrgFeatureOverride.is_active == True,
+                or_(OrgFeatureOverride.expires_at.is_(None), OrgFeatureOverride.expires_at > now),
+            )
+        )).scalars().all()
+        override_map = {ov.feature_key: ov for ov in all_overrides}
+
+        features = []
+        for feat in FEATURE_CATALOG:
+            key   = feat["key"]
+            field = _KEY_TO_FIELD.get(key, f"has_{key}")
+            plan_val = getattr(plan, field, False) if plan else False
+            ov = override_map.get(key)
+            if ov and ov.override_type == OverrideType.GRANT.value:
+                enabled = is_active_sub
+                source  = "override"
+                override_reason = ov.reason
+            elif ov and ov.override_type == OverrideType.REVOKE.value:
+                enabled = False
+                source  = "override"
+                override_reason = ov.reason
+            else:
+                enabled = is_active_sub and plan_val
+                source  = "plan"
+                override_reason = None
+            features.append({
+                "key":             key,
+                "label":           feat["label"],
+                "category":        feat["category"],
+                "service":         feat["service"],
+                "enabled":         enabled,
+                "plan_value":      plan_val,
+                "source":          source,
+                "override_reason": override_reason,
+                "override_expires": ov.expires_at.isoformat() if (ov and ov.expires_at) else None,
+            })
+
+        limit_keys = [
+            "max_team_members", "max_projects", "max_submissions_per_month",
+            "max_sms_per_month", "max_api_calls_per_month", "max_storage_gb",
+            "max_qr_per_month", "max_staff_profiles",
+        ]
+        usage_map = {
+            "max_team_members":          getattr(usage, "team_members_count",   0) if usage else 0,
+            "max_projects":              0,
+            "max_submissions_per_month": getattr(usage, "submissions_count",    0) if usage else 0,
+            "max_sms_per_month":         getattr(usage, "sms_count",            0) if usage else 0,
+            "max_api_calls_per_month":   getattr(usage, "api_calls_count",      0) if usage else 0,
+            "max_storage_gb":            round(getattr(usage, "storage_bytes",  0) / 1_073_741_824, 2) if usage else 0,
+            "max_qr_per_month":          getattr(usage, "qr_codes_count",       0) if usage else 0,
+            "max_staff_profiles":        getattr(usage, "staff_profiles_count", 0) if usage else 0,
+        }
+        limits = []
+        for key in limit_keys:
+            plan_limit = getattr(plan, key, 0) if plan else 0
+            ov = override_map.get(key)
+            effective = ov.limit_value if (ov and ov.override_type == OverrideType.LIMIT.value and ov.limit_value is not None) else plan_limit
+            used = usage_map.get(key, 0)
+            pct  = round(used / effective * 100, 1) if effective > 0 else 0
+            limits.append({
+                "key":             key,
+                "plan_limit":      plan_limit,
+                "effective_limit": effective,
+                "used":            used,
+                "pct_used":        pct,
+                "source":          "override" if (ov and ov.override_type == OverrideType.LIMIT.value) else "plan",
+                "override_reason": ov.reason if (ov and ov.override_type == OverrideType.LIMIT.value) else None,
+            })
+
+        overrides_out = [
+            {
+                "id":            str(ov.id),
+                "feature_key":   ov.feature_key,
+                "override_type": ov.override_type,
+                "limit_value":   ov.limit_value,
+                "reason":        ov.reason,
+                "note":          ov.note,
+                "expires_at":    ov.expires_at.isoformat() if ov.expires_at else None,
+                "granted_by":    str(ov.granted_by) if ov.granted_by else None,
+                "created_at":    ov.created_at.isoformat(),
+            }
+            for ov in all_overrides
+        ]
+
+        return {
+            "org_id":              org_id,
+            "has_subscription":    bool(sub),
+            "subscription_status": sub.status if sub else None,
+            "plan": {
+                "id":           str(plan.id),
+                "slug":         plan.slug,
+                "display_name": plan.display_name,
+            } if plan else None,
+            "features":  features,
+            "limits":    limits,
+            "overrides": overrides_out,
         }
 
     # ── Promo validation ──────────────────────────────────────────────────────

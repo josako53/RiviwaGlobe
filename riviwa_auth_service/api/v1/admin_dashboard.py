@@ -523,3 +523,148 @@ async def recent_admin_actions(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> List[RecentAdminActionItem]:
     return await _svc(db).get_recent_admin_actions(limit=limit)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 19. Platform live statistics
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/platform/stats",
+    dependencies=[_admin_guard],
+    summary="Platform live statistics — users, orgs, active counts, countries",
+    description=(
+        "Single-call platform health metrics: total users, active today, "
+        "active last 7 days, active last 30 days, new users today, total orgs, "
+        "active orgs, new orgs today, distinct countries registered."
+    ),
+)
+async def platform_stats(db: DbDep) -> dict:
+    from sqlalchemy import text
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    row = (await db.execute(text("""
+        SELECT
+            (SELECT COUNT(*)
+                FROM users)                                                                      AS total_users,
+            (SELECT COUNT(*)
+                FROM users WHERE last_login_at >= :today)                                        AS active_today,
+            (SELECT COUNT(*)
+                FROM users WHERE last_login_at >= NOW() - INTERVAL '7 days')                     AS active_7d,
+            (SELECT COUNT(*)
+                FROM users WHERE last_login_at >= NOW() - INTERVAL '30 days')                    AS active_30d,
+            (SELECT COUNT(*)
+                FROM users WHERE created_at >= :today)                                           AS new_users_today,
+            (SELECT COUNT(*)
+                FROM organisations WHERE deleted_at IS NULL)                                     AS total_orgs,
+            (SELECT COUNT(*)
+                FROM organisations WHERE deleted_at IS NULL AND status = 'ACTIVE')               AS active_orgs,
+            (SELECT COUNT(*)
+                FROM organisations WHERE created_at >= :today AND deleted_at IS NULL)            AS new_orgs_today,
+            (SELECT COUNT(DISTINCT country_code)
+                FROM organisations WHERE country_code IS NOT NULL AND deleted_at IS NULL)        AS countries_count
+    """), {"today": today})).mappings().one()
+    return dict(row)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 20. Orgs by country
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/platform/by-country",
+    dependencies=[_admin_guard],
+    summary="Organisations and users grouped by country",
+    description=(
+        "Aggregates organisations by their country_code. Returns org count, "
+        "active/verified orgs, total users, and active users (last 30 days) "
+        "per country. Ordered by org count descending."
+    ),
+)
+async def platform_by_country(db: DbDep) -> dict:
+    from sqlalchemy import text
+    org_rows = (await db.execute(text("""
+        SELECT
+            COALESCE(country_code, 'UNKNOWN')                   AS country_code,
+            COUNT(*)                                             AS org_count,
+            COUNT(*) FILTER (WHERE status = 'ACTIVE')           AS active_orgs,
+            COUNT(*) FILTER (WHERE is_verified = TRUE)          AS verified_orgs,
+            MIN(created_at)::date                                AS first_registered,
+            MAX(created_at)::date                                AS last_registered
+        FROM organisations
+        WHERE deleted_at IS NULL
+        GROUP BY COALESCE(country_code, 'UNKNOWN')
+        ORDER BY org_count DESC
+    """))).mappings().all()
+
+    user_rows = (await db.execute(text("""
+        SELECT
+            COALESCE(o.country_code, 'UNKNOWN')                 AS country_code,
+            COUNT(DISTINCT ur.user_id)                           AS user_count,
+            COUNT(DISTINCT ur.user_id) FILTER (
+                WHERE u.last_login_at >= NOW() - INTERVAL '30 days'
+            )                                                    AS active_users_30d
+        FROM user_roles ur
+        JOIN organisations o ON ur.org_id::uuid    = o.id
+        JOIN users         u ON ur.user_id::uuid   = u.id
+        WHERE o.deleted_at IS NULL
+        GROUP BY COALESCE(o.country_code, 'UNKNOWN')
+    """))).mappings().all()
+
+    user_map = {r["country_code"]: dict(r) for r in user_rows}
+    breakdown = []
+    for row in org_rows:
+        cc = row["country_code"]
+        ud = user_map.get(cc, {})
+        breakdown.append({
+            "country_code":     cc,
+            "org_count":        row["org_count"],
+            "active_orgs":      row["active_orgs"],
+            "verified_orgs":    row["verified_orgs"],
+            "user_count":       ud.get("user_count", 0),
+            "active_users_30d": ud.get("active_users_30d", 0),
+            "first_registered": str(row["first_registered"]),
+            "last_registered":  str(row["last_registered"]),
+        })
+    return {"countries_count": len(breakdown), "breakdown": breakdown}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 21. Orgs by region
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/platform/by-region",
+    dependencies=[_admin_guard],
+    summary="Organisations grouped by administrative region",
+    description=(
+        "Groups org address records by region field. Filter by country_code to "
+        "drill into a specific country's regions (e.g. TZ → Dar es Salaam, Coast, Morogoro)."
+    ),
+)
+async def platform_by_region(
+    db:           DbDep,
+    country_code: Optional[str] = Query(default=None, description="ISO 2-letter country code, e.g. TZ"),
+) -> dict:
+    from sqlalchemy import text
+    where_parts = ["a.entity_type = 'organisation'", "a.region IS NOT NULL"]
+    params: dict = {}
+    if country_code:
+        where_parts.append("a.country_code = :cc")
+        params["cc"] = country_code.upper()
+    where = " AND ".join(where_parts)
+    rows = (await db.execute(text(f"""
+        SELECT
+            COALESCE(a.country_code, 'UNKNOWN')  AS country_code,
+            a.region,
+            COUNT(DISTINCT a.entity_id)           AS org_count
+        FROM addresses a
+        WHERE {where}
+        GROUP BY COALESCE(a.country_code, 'UNKNOWN'), a.region
+        ORDER BY org_count DESC
+    """), params)).mappings().all()
+    return {
+        "country_code":  country_code,
+        "total_regions": len(rows),
+        "breakdown":     [dict(r) for r in rows],
+    }

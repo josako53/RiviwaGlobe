@@ -176,6 +176,13 @@ class FingerprintPayload(BaseModel):
     language:   Optional[str] = Field(default=None, max_length=20)
     platform:   Optional[str] = Field(default=None, max_length=50)
 
+    # ── Network ───────────────────────────────────────────────────────────────
+    ip_address: Optional[str] = Field(
+        default=None,
+        max_length=45,
+        description="Client IP captured server-side when the fingerprint was submitted.",
+    )
+
     # ── Bot / anti-detect signals ─────────────────────────────────────────────
     # These three are accessed by ScoringEngine._score_fingerprint()
     webdriver_detected: bool = Field(

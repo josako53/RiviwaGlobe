@@ -421,6 +421,9 @@ class AdminDashboardRepository:
         )
         if action:
             q = q.where(FraudAssessment.action == action)
+        else:
+            # Default: only high-risk accounts (review + block), not allow/warn
+            q = q.where(FraudAssessment.action.in_(["review", "block"]))
 
         total = await self.db.scalar(
             select(func.count()).select_from(q.subquery())

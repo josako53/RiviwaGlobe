@@ -501,3 +501,37 @@ class DunningAttempt(SQLModel, table=True):
     next_retry_at:   Optional[datetime] = Field(default=None)
     succeeded:       bool      = Field(default=False)
     error_message:   Optional[str] = Field(default=None, max_length=512)
+
+
+# ── OrgFeatureOverride ────────────────────────────────────────────────────────
+
+class OverrideType(str, Enum):
+    GRANT  = "grant"   # enable a feature the plan does not include
+    REVOKE = "revoke"  # disable a feature the plan includes
+    LIMIT  = "limit"   # override a numeric usage limit
+
+
+class OrgFeatureOverride(SQLModel, table=True):
+    """
+    Per-org entitlement overrides — used for enterprise deals, beta access,
+    NGO grants, and manual corrections.
+
+    override_type=GRANT   : org gets feature even if plan lacks it
+    override_type=REVOKE  : org loses feature even if plan includes it
+    override_type=LIMIT   : numeric limit is replaced with limit_value
+                            feature_key must match a max_* limit key
+    """
+    __tablename__ = "org_feature_overrides"
+
+    id:           uuid.UUID          = Field(default_factory=uuid.uuid4, primary_key=True)
+    org_id:       uuid.UUID          = Field(index=True)
+    feature_key:  str                = Field(max_length=64, index=True)
+    override_type: str               = Field(sa_column=Column(String(16), nullable=False))
+    limit_value:  Optional[int]      = Field(default=None)   # for LIMIT type
+    reason:       Optional[str]      = Field(default=None, max_length=512)
+    note:         Optional[str]      = Field(default=None, max_length=256)
+    granted_by:   Optional[uuid.UUID] = Field(default=None)
+    expires_at:   Optional[datetime]  = Field(default=None)
+    is_active:    bool               = Field(default=True)
+    created_at:   datetime           = Field(default_factory=datetime.utcnow)
+    updated_at:   datetime           = Field(default_factory=datetime.utcnow)

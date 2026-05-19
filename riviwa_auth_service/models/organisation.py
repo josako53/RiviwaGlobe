@@ -275,7 +275,7 @@ class Organisation(SQLModel, table=True):
     )
     tax_id: Optional[str] = Field(default=None, max_length=100, nullable=True)
 
-    # ── Verification ──────────────────────────────────────────────────────────
+    # ── Verification (legacy single flag — kept for backwards compat) ─────────
     is_verified:    bool = Field(default=False, index=True, nullable=False)
     verified_at:    Optional[datetime] = Field(
         default=None,
@@ -283,6 +283,28 @@ class Organisation(SQLModel, table=True):
     )
     # UUID of the platform admin who approved the verification
     verified_by_id: Optional[uuid.UUID] = Field(default=None, nullable=True)
+
+    # ── Payment Verification (auto-set on first active subscription) ──────────
+    # True once the org has paid for any subscription plan.
+    # Controls access to all plan features. Set automatically by subscription_service.
+    is_payment_verified: bool = Field(default=False, index=True, nullable=False)
+    payment_verified_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+    # ── KYC Verification (manual, admin-vetted) ───────────────────────────────
+    # True after a platform admin reviews and approves the org's KYC documents.
+    # Shown as the "Verified" badge on public org profiles and search results.
+    # Independent of payment_verified — an org can be KYC-verified on a free plan,
+    # or payment-verified without KYC documents (for unlisted/internal orgs).
+    is_kyc_verified:      bool = Field(default=False, index=True, nullable=False)
+    kyc_verified_at:      Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    kyc_verified_by_id:   Optional[uuid.UUID] = Field(default=None, nullable=True)
+    kyc_rejection_reason: Optional[str]       = Field(default=None, max_length=512, nullable=True)
 
     # ── Ownership ─────────────────────────────────────────────────────────────
     # RESTRICT: cannot delete a User who is the creator of an org.
@@ -741,3 +763,90 @@ class OrganisationInvite(SQLModel, table=True):
             f"to={recipient!r} "
             f"role={self.invited_role} [{self.status}]>"
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KYC Submission
+# ─────────────────────────────────────────────────────────────────────────────
+
+class KYCStatus(str, Enum):
+    PENDING       = "pending"        # submitted, awaiting admin assignment
+    UNDER_REVIEW  = "under_review"   # admin opened the submission
+    APPROVED      = "approved"       # KYC passed — org.is_kyc_verified set True
+    REJECTED      = "rejected"       # KYC failed — reason provided
+    MORE_INFO     = "more_info"      # admin requested additional documents
+
+
+class KYCDocumentType(str, Enum):
+    BUSINESS_LICENSE          = "business_license"
+    CERTIFICATE_OF_INC        = "certificate_of_incorporation"
+    TAX_CLEARANCE             = "tax_clearance"
+    TAX_ID                    = "tax_id"
+    DIRECTORS_NATIONAL_ID     = "directors_national_id"
+    UTILITY_BILL              = "utility_bill"
+    BANK_STATEMENT            = "bank_statement"
+    MEMORANDUM_OF_ASSOCIATION = "memorandum_of_association"
+    AUDITED_ACCOUNTS          = "audited_accounts"
+    OTHER                     = "other"
+
+
+class OrgKYCSubmission(SQLModel, table=True):
+    """
+    A KYC submission from an organisation requesting manual verification.
+    One org can have at most one active (pending/under_review) submission at a time.
+    Previous approved/rejected submissions are retained for audit.
+    """
+    __tablename__ = "org_kyc_submissions"
+
+    id:              uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    org_id:          uuid.UUID = Field(index=True, nullable=False)
+    submitted_by_id: uuid.UUID = Field(nullable=False)
+
+    status: str = Field(
+        default=KYCStatus.PENDING.value,
+        sa_column=Column(String(32), nullable=False, index=True),
+    )
+
+    # Org-provided context at time of submission
+    business_type:   Optional[str] = Field(default=None, max_length=64, nullable=True)
+    reg_number:      Optional[str] = Field(default=None, max_length=100, nullable=True)
+    tax_id:          Optional[str] = Field(default=None, max_length=100, nullable=True)
+    notes_for_admin: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+
+    # Admin fields
+    admin_notes:      Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    rejection_reason: Optional[str] = Field(default=None, max_length=512, nullable=True)
+    reviewed_by_id:   Optional[uuid.UUID] = Field(default=None, nullable=True)
+
+    submitted_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )
+    reviewed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )
+
+
+class OrgKYCDocument(SQLModel, table=True):
+    """
+    A single document attached to a KYC submission.
+    Documents are stored in MinIO at /reviwa-kyc/{org_id}/{submission_id}/{filename}.
+    """
+    __tablename__ = "org_kyc_documents"
+
+    id:            uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    org_id:        uuid.UUID = Field(index=True, nullable=False)
+    submission_id: uuid.UUID = Field(
+        sa_column=Column(ForeignKey("org_kyc_submissions.id", ondelete="CASCADE"), index=True, nullable=False)
+    )
+    document_type:   str = Field(sa_column=Column(String(64), nullable=False))
+    file_url:        str = Field(max_length=512, nullable=False)
+    file_name:       Optional[str] = Field(default=None, max_length=255, nullable=True)
+    file_size_bytes: Optional[int] = Field(default=None, nullable=True)
+    uploaded_by_id:  uuid.UUID = Field(nullable=False)
+    is_verified:     bool = Field(default=False, nullable=False)
+    uploaded_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )

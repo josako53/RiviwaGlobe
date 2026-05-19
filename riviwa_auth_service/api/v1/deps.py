@@ -147,6 +147,7 @@ async def get_oauth_service(
 # ─────────────────────────────────────────────────────────────────────────────
 
 DbDep                  = Annotated[AsyncSession,          Depends(get_db)]
+RedisDep               = Annotated[Redis,                 Depends(get_redis)]
 AuthServiceDep         = Annotated[AuthService,           Depends(get_auth_service)]
 UserServiceDep         = Annotated[UserService,           Depends(get_user_service)]
 OrgServiceDep          = Annotated[OrganisationService,   Depends(get_org_service)]

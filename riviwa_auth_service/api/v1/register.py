@@ -5,6 +5,8 @@ Account registration endpoints — email/phone 3-step flow.
 
 Routes
 ──────
+  POST /api/v1/auth/register/fingerprint   Pre-reg — store full browser fingerprint
+  POST /api/v1/auth/register/behavioral    Pre-reg — store behavioral session signals
   POST /api/v1/auth/register/init          Step 1 — submit identifier, start OTP
   POST /api/v1/auth/register/verify-otp    Step 2 — verify OTP
   POST /api/v1/auth/register/complete      Step 3 — set password, activate account
@@ -13,22 +15,95 @@ Routes
 """
 from __future__ import annotations
 
+import json
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
-from api.v1.deps import RegistrationServiceDep
+from api.v1.deps import DbDep, RedisDep, RegistrationServiceDep
 from core.dependencies import get_client_ip, get_user_agent
+from repositories.fraud_repository import FraudRepository
 from schemas.auth.register import OTPResendRequest, OTPResendResponse
+from schemas.fraud import BehavioralSummary, FingerprintPayload
 from services.registration_service import (
     CompleteRequest,
     InitiateRequest,
     InitiateResponse,
     VerifyOTPRequest,
     VerifyOTPResponse,
+    _FP_SESSION_PREFIX,
+    _FP_SESSION_TTL,
 )
 
 router = APIRouter(prefix="/auth/register", tags=["Registration"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pre-registration — fingerprint signals
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post(
+    "/fingerprint",
+    status_code=status.HTTP_200_OK,
+    summary="Pre-registration — store full browser fingerprint signals",
+    description=(
+        "Called by `fraud-collector.js` on page load, **before** the user submits the form.\n\n"
+        "Stores the complete `FingerprintPayload` in Redis for 15 minutes, keyed by "
+        "`session_token`. The server also captures and appends the client IP address.\n\n"
+        "Pass the same `session_token` as `fingerprint_session` in "
+        "`POST /register/init` to have all signals (component hashes, "
+        "`webdriver_detected`, `headless_detected`, `ip_address`, etc.) written into "
+        "`device_fingerprints` and used by the fraud-scoring engine."
+    ),
+    tags=["Registration"],
+)
+async def register_fingerprint(
+    body:    FingerprintPayload,
+    request: Request,
+    redis:   RedisDep,
+) -> dict:
+    payload = body.model_dump()
+    # Capture IP server-side — client cannot spoof this field
+    payload["ip_address"] = (request.client.host if request.client else None)
+    await redis.setex(
+        f"{_FP_SESSION_PREFIX}{body.session_token}",
+        _FP_SESSION_TTL,
+        json.dumps(payload),
+    )
+    return {"session_token": body.session_token, "accepted": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pre-registration — behavioral signals
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post(
+    "/behavioral",
+    status_code=status.HTTP_200_OK,
+    summary="Pre-registration — store behavioral session signals",
+    description=(
+        "Called by `fraud-collector.js` on form submit, **before** `POST /register/init`.\n\n"
+        "Creates (or updates) a `BehavioralSession` row keyed by `session_token`. "
+        "The row's `user_id` is `NULL` until `POST /register/init` links it.\n\n"
+        "Pass the same `session_token` as `behavioral` in `POST /register/init` "
+        "so the fraud engine can read typing speed, mouse movement, "
+        "`rapid_completion`, and other signals for scoring."
+    ),
+    tags=["Registration"],
+)
+async def register_behavioral(
+    body: BehavioralSummary,
+    db:   DbDep,
+) -> dict:
+    repo = FraudRepository(db)
+    existing = await repo.get_session_by_token(body.session_token)
+    fields = body.model_dump(exclude={"session_token"})
+    if existing:
+        await repo.update_behavioral_session(existing, **fields)
+    else:
+        await repo.create_behavioral_session({"session_token": body.session_token, **fields})
+    await db.commit()
+    return {"session_token": body.session_token, "accepted": True}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

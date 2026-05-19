@@ -5,7 +5,10 @@ COPY requirements.txt .
 RUN uv pip install --system --no-cache -r requirements.txt --target /opt/venv
 
 FROM python:3.11-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client fonts-dejavu && rm -rf /var/lib/apt/lists/*
+# Bundled font for offline/fallback — also in assets/DejaVuSans-Bold.ttf
+RUN mkdir -p /app/qr_service/assets && \
+    cp /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf /app/qr_service/assets/
 RUN useradd -m -u 1000 josako
 WORKDIR /app/qr_service
 COPY --from=builder /opt/venv /opt/venv

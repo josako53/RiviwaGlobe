@@ -89,14 +89,21 @@ class FraudRepository:
         fp = existing.scalar_one_or_none()
 
         if fp:
-            # Atomic increment — avoids read-modify-write race
+            update_vals: dict = {
+                "seen_count": DeviceFingerprint.seen_count + 1,
+                "last_seen":  datetime.now(timezone.utc),
+            }
+            # Backfill rich fields that were absent on the first (hash-only) insert
+            for col in ("canvas_hash", "audio_hash", "webgl_hash", "fonts_hash",
+                        "screen_hash", "timezone", "language", "platform",
+                        "webdriver_detected", "headless_detected",
+                        "inconsistencies_count", "ip_address", "user_agent"):
+                if data.get(col) is not None:
+                    update_vals[col] = data[col]
             await self.db.execute(
                 update(DeviceFingerprint)
                 .where(DeviceFingerprint.id == fp.id)
-                .values(
-                    seen_count=DeviceFingerprint.seen_count + 1,
-                    last_seen=datetime.now(timezone.utc),
-                )
+                .values(**update_vals)
             )
             await self.db.refresh(fp)
         else:

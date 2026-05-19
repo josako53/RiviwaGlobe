@@ -234,3 +234,65 @@ async def get_org_sms_code(
         "slug":         row["slug"],
         "display_name": row["display_name"],
     }
+
+
+@router.get(
+    "/orgs/{org_id}/owner-contact",
+    summary="[Internal] Get org owner contact for notification dispatch",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_org_owner_contact(
+    org_id: uuid.UUID,
+    db:     AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Returns the org owner's user_id, email, phone, display_name, and language,
+    plus the org display_name. Used by subscription_service to address
+    billing/subscription notifications to the correct person.
+    Falls back to first OWNER found; if none, returns org support_email.
+    """
+    from sqlalchemy import text
+    row = (await db.execute(text("""
+        SELECT
+            u.id            AS user_id,
+            u.email         AS email,
+            u.phone_number  AS phone,
+            u.display_name  AS display_name,
+            u.language      AS language,
+            o.display_name  AS org_name,
+            o.support_email AS org_support_email
+        FROM organisation_members om
+        JOIN users         u ON u.id = om.user_id
+        JOIN organisations o ON o.id = om.organisation_id
+        WHERE om.organisation_id = :org_id
+          AND om.org_role = 'OWNER'
+          AND om.status   = 'ACTIVE'
+          AND o.deleted_at IS NULL
+        ORDER BY om.joined_at ASC
+        LIMIT 1
+    """), {"org_id": str(org_id)})).mappings().first()
+
+    if row:
+        return {
+            "user_id":      str(row["user_id"]),
+            "email":        row["email"],
+            "phone":        row["phone"],
+            "display_name": row["display_name"],
+            "language":     row["language"] or "en",
+            "org_name":     row["org_name"],
+        }
+
+    # Fallback — no active owner found (org may be admin-created)
+    org = (await db.execute(text(
+        "SELECT display_name, support_email FROM organisations WHERE id = :id AND deleted_at IS NULL"
+    ), {"id": str(org_id)})).mappings().first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organisation not found.")
+    return {
+        "user_id":      None,
+        "email":        org["support_email"],
+        "phone":        None,
+        "display_name": None,
+        "language":     "en",
+        "org_name":     org["display_name"],
+    }

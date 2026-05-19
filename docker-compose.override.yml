@@ -217,3 +217,14 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+
+  # ── subscription_service dev override ───────────────────────────────────────
+  subscription_service:
+    command: "uvicorn main:app --host 0.0.0.0 --port 8140 --reload --reload-dir /app/subscription_service"
+    environment:
+      DEBUG: "true"
+      ENVIRONMENT: development
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092
+    volumes:
+      - ./subscription_service:/app/subscription_service
+      - /opt/venv

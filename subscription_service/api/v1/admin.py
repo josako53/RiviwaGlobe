@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -233,4 +233,170 @@ def _promo_out(p: PromoCode) -> dict:
         "expires_at": p.expires_at.isoformat() if p.expires_at else None,
         "is_active": p.is_active,
         "created_at": p.created_at.isoformat(),
+    }
+
+
+# ── Subscription monitoring ───────────────────────────────────────────────────
+
+@router.get("/subscriptions/overview", summary="All orgs subscription status with renewal dates")
+async def subscriptions_overview(
+    db:            DbDep,
+    _:             AdminDep,
+    status:        Optional[str] = Query(default=None, description="active | trialing | past_due | paused | cancelled | expired"),
+    plan_slug:     Optional[str] = Query(default=None, description="starter | professional | business | enterprise"),
+    expiring_days: Optional[int] = Query(default=None, description="Only show subs renewing within N days"),
+    page:          int = Query(default=1, ge=1),
+    size:          int = Query(default=50, ge=1, le=100),
+) -> dict:
+    """
+    Paginated list of all org subscriptions with plan, billing cycle, renewal date,
+    days until renewal, and cancellation flag. Ideal for a live subscription
+    monitoring dashboard. Filter by status, plan, or expiry horizon.
+    """
+    now = datetime.utcnow()
+    q = select(Subscription, Plan).join(Plan, Plan.id == Subscription.plan_id)
+    if status:
+        q = q.where(Subscription.status == status)
+    if plan_slug:
+        q = q.where(Plan.slug == plan_slug)
+    if expiring_days is not None:
+        q = q.where(Subscription.current_period_end <= now + timedelta(days=expiring_days))
+
+    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
+    rows  = (await db.execute(
+        q.order_by(Subscription.current_period_end.asc())
+         .offset((page - 1) * size).limit(size)
+    )).all()
+
+    items = []
+    for sub, plan in rows:
+        days_left  = (sub.current_period_end - now).days
+        hours_left = max(int((sub.current_period_end - now).total_seconds() / 3600), 0)
+        items.append({
+            "subscription_id":       str(sub.id),
+            "org_id":                str(sub.org_id),
+            "plan":                  {"slug": plan.slug, "display_name": plan.display_name},
+            "billing_cycle":         sub.billing_cycle,
+            "status":                sub.status,
+            "current_period_start":  sub.current_period_start.isoformat(),
+            "current_period_end":    sub.current_period_end.isoformat(),
+            "days_until_renewal":    days_left,
+            "hours_until_renewal":   hours_left,
+            "cancel_at_period_end":  sub.cancel_at_period_end,
+            "will_cancel":           sub.cancel_at_period_end,
+            "effective_monthly_usd": str(sub.effective_monthly_usd),
+            "discount_pct":          str(sub.discount_pct),
+            "trial_end":             sub.trial_end.isoformat() if sub.trial_end else None,
+            "created_at":            sub.created_at.isoformat(),
+        })
+
+    return {"total": total, "page": page, "size": size, "items": items}
+
+
+@router.get("/subscriptions/due-soon", summary="Subscriptions renewing or expiring within N days")
+async def subscriptions_due_soon(
+    db:   DbDep,
+    _:    AdminDep,
+    days: int = Query(default=7, ge=1, le=90, description="Look-ahead window in days"),
+) -> dict:
+    """
+    Returns all active/trialing subscriptions whose current period ends within
+    the next N days. Splits results into 'renewing' (will auto-renew) and
+    'cancelling' (cancel_at_period_end=true — org will lose access).
+    Essential for proactive customer success outreach.
+    """
+    now    = datetime.utcnow()
+    cutoff = now + timedelta(days=days)
+    rows   = (await db.execute(
+        select(Subscription, Plan)
+        .join(Plan, Plan.id == Subscription.plan_id)
+        .where(
+            Subscription.status.in_(["active", "trialing", "past_due"]),
+            Subscription.current_period_end >= now,
+            Subscription.current_period_end <= cutoff,
+        )
+        .order_by(Subscription.current_period_end.asc())
+    )).all()
+
+    items = []
+    for sub, plan in rows:
+        days_left  = (sub.current_period_end - now).days
+        hours_left = max(int((sub.current_period_end - now).total_seconds() / 3600), 0)
+        items.append({
+            "org_id":               str(sub.org_id),
+            "subscription_id":      str(sub.id),
+            "plan":                 plan.slug,
+            "plan_display":         plan.display_name,
+            "billing_cycle":        sub.billing_cycle,
+            "status":               sub.status,
+            "renews_at":            sub.current_period_end.isoformat(),
+            "days_left":            days_left,
+            "hours_left":           hours_left,
+            "will_cancel":          sub.cancel_at_period_end,
+            "effective_monthly_usd": str(sub.effective_monthly_usd),
+        })
+
+    renewing   = [i for i in items if not i["will_cancel"]]
+    cancelling = [i for i in items if i["will_cancel"]]
+
+    return {
+        "horizon_days":     days,
+        "total":            len(items),
+        "renewing_count":   len(renewing),
+        "cancelling_count": len(cancelling),
+        "renewing":         renewing,
+        "cancelling":       cancelling,
+    }
+
+
+@router.get("/subscriptions/by-plan", summary="Plan distribution — orgs per plan with MRR breakdown")
+async def subscriptions_by_plan(db: DbDep, _: AdminDep) -> dict:
+    """
+    Counts active/trialing orgs per plan, broken down by billing cycle,
+    with per-plan MRR contribution. Ordered by org count descending.
+    """
+    rows = (await db.execute(
+        select(
+            Plan.slug,
+            Plan.display_name,
+            Plan.monthly_price_usd,
+            Plan.annual_price_usd,
+            func.count(Subscription.id).label("total_orgs"),
+            func.count(Subscription.id).filter(Subscription.status == "active").label("active"),
+            func.count(Subscription.id).filter(Subscription.status == "trialing").label("trialing"),
+            func.count(Subscription.id).filter(Subscription.status == "past_due").label("past_due"),
+            func.count(Subscription.id).filter(Subscription.billing_cycle == "monthly").label("monthly_count"),
+            func.count(Subscription.id).filter(Subscription.billing_cycle == "annual").label("annual_count"),
+        )
+        .join(Plan, Plan.id == Subscription.plan_id)
+        .where(Subscription.status.in_(["active", "trialing", "past_due"]))
+        .group_by(Plan.id, Plan.slug, Plan.display_name, Plan.monthly_price_usd, Plan.annual_price_usd)
+        .order_by(func.count(Subscription.id).desc())
+    )).all()
+
+    by_plan = []
+    total_orgs = 0
+    total_mrr  = Decimal("0")
+    for r in rows:
+        mrr = (r.monthly_price_usd * r.monthly_count) + (r.annual_price_usd * r.annual_count)
+        total_mrr  += mrr
+        total_orgs += r.total_orgs
+        by_plan.append({
+            "plan":         r.slug,
+            "display_name": r.display_name,
+            "total_orgs":   r.total_orgs,
+            "active":       r.active,
+            "trialing":     r.trialing,
+            "past_due":     r.past_due,
+            "billing": {
+                "monthly": r.monthly_count,
+                "annual":  r.annual_count,
+            },
+            "mrr_usd":      str(mrr),
+        })
+
+    return {
+        "total_orgs": total_orgs,
+        "total_mrr_usd": str(total_mrr),
+        "by_plan": by_plan,
     }

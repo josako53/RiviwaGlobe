@@ -16,6 +16,7 @@ from db.seed import seed_plans_and_addons
 from db.session import AsyncSessionLocal
 from events.producer import get_producer, stop_producer
 from events.consumer import start_consumer, stop_consumer
+from scheduler import create_scheduler
 
 log = structlog.get_logger(__name__)
 
@@ -34,10 +35,15 @@ async def lifespan(app: FastAPI):
     # Kafka producer + consumer
     await get_producer()
     await start_consumer()
+
+    # APScheduler — renewal reminders, trial ending alerts, past-due check
+    scheduler = create_scheduler()
+    scheduler.start()
     log.info("subscription_service.startup.complete")
 
     yield
 
+    scheduler.shutdown(wait=False)
     await stop_consumer()
     await stop_producer()
     await engine.dispose()

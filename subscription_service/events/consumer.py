@@ -53,6 +53,10 @@ async def _consume_loop() -> None:
 
 
 async def _handle(event: dict) -> None:
+    from sqlalchemy import select
+    from models.subscription import Plan
+    import services.notification_client as notif
+
     event_type = event.get("event_type", "")
 
     if event_type == "payment.completed":
@@ -83,6 +87,20 @@ async def _handle(event: dict) -> None:
 
             await db.commit()
 
+            # Fire payment receipt notification
+            if sub:
+                plan = await db.get(Plan, sub.plan_id)
+                notif.notify_payment_receipt(
+                    org_id=str(sub.org_id),
+                    plan_name=plan.display_name if plan else "your plan",
+                    billing_cycle=sub.billing_cycle,
+                    invoice_number=inv.invoice_number,
+                    amount_usd=str(inv.total_usd),
+                    period_start=sub.current_period_start.strftime("%Y-%m-%d"),
+                    period_end=sub.current_period_end.strftime("%Y-%m-%d"),
+                    next_renewal_date=sub.current_period_end.strftime("%Y-%m-%d"),
+                )
+
     elif event_type == "payment.failed":
         payload      = event.get("payload", {})
         reference_id = payload.get("reference_id")
@@ -96,3 +114,15 @@ async def _handle(event: dict) -> None:
                 await db.commit()
                 log.warning("subscription.payment_failed",
                             invoice=inv.invoice_number, retries=inv.retry_count)
+
+                # Fire payment failed notification
+                sub = await db.get(Subscription, inv.subscription_id)
+                if sub:
+                    plan = await db.get(Plan, sub.plan_id)
+                    notif.notify_payment_failed(
+                        org_id=str(sub.org_id),
+                        plan_name=plan.display_name if plan else "your plan",
+                        invoice_number=inv.invoice_number,
+                        amount_usd=str(inv.total_usd),
+                        failure_reason=payload.get("failure_reason", "Payment declined"),
+                    )

@@ -133,6 +133,7 @@ class DeviceFingerprint(SQLModel, table=True):
     user_agent: Optional[str] = Field(default=None, max_length=512, nullable=True)
     language:   Optional[str] = Field(default=None, max_length=20,  nullable=True)
     platform:   Optional[str] = Field(default=None, max_length=50,  nullable=True)
+    ip_address: Optional[str] = Field(default=None, max_length=45,  nullable=True)
 
     # ── Bot / anti-detect signals ─────────────────────────────────────────────
     webdriver_detected:   bool = Field(default=False, nullable=False)

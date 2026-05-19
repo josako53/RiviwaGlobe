@@ -296,6 +296,9 @@ class Settings(BaseSettings):
     FRAUD_SCORE_REVIEW_THRESHOLD: int = 50
     FRAUD_SCORE_BLOCK_THRESHOLD: int = 80
 
+    # ── Cross-service URLs ────────────────────────────────────────────────────
+    PRODUCT_SERVICE_URL: str = Field(default="http://product_service:8110")
+
     # ── Object storage (MinIO / S3) ───────────────────────────────────────────
     MINIO_ENDPOINT:   str = Field(default="http://minio:9000")
     MINIO_ACCESS_KEY: str = Field(default="minioadmin")

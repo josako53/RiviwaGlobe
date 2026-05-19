@@ -91,8 +91,11 @@ from models.fraud import FraudAction
 from models.user import AccountStatus
 from repositories.fraud_repository import FraudRepository
 from repositories.user_repository import UserRepository
-from schemas.fraud import BehavioralSummary
+from schemas.fraud import BehavioralSummary, FingerprintPayload
 from services.fraud_scoring import ScoringEngine, ScoringInput
+
+_FP_SESSION_PREFIX = "fp_sig:"
+_FP_SESSION_TTL    = 900  # 15 minutes
 
 # ── Correct module names ──────────────────────────────────────────────────────
 # geo_service.py   → lookup_ip() async function + GeoResult dataclass.
@@ -126,9 +129,13 @@ class InitiateRequest(BaseModel):
 
     Exactly one of `email` or `phone_number` must be non-empty.
 
-    `fingerprint` and `behavioral` are PLAIN STRINGS:
-      - fingerprint : composite SHA-256 hash (hex, 64 chars)
-      - behavioral  : JS session token issued on page load
+    Fingerprint fields (two modes, use one):
+      - fingerprint         : raw SHA-256 composite hash (64 hex chars) — legacy/simple
+      - fingerprint_session : session token from POST /register/fingerprint — enriched mode;
+                              the full FingerprintPayload (component hashes, bot signals,
+                              ip_address) is fetched from Redis using this token.
+    behavioral:
+      - session token from POST /register/behavioral, linking to the BehavioralSession row.
     """
     email:        str = ""
     phone_number: str = ""
@@ -141,8 +148,9 @@ class InitiateRequest(BaseModel):
         description="ISO-3166-1 alpha-2 country code (e.g. 'TZ', 'US'). "
                     "Must be exactly 2 letters when provided.",
     )
-    fingerprint:  Optional[str] = None   # composite hash string — NOT an object
-    behavioral:   Optional[str] = None   # session token string — NOT an object
+    fingerprint:         Optional[str] = None  # raw SHA-256 hash — NOT an object
+    fingerprint_session: Optional[str] = None  # session token → full payload in Redis
+    behavioral:          Optional[str] = None  # session token → BehavioralSession row
 
     @field_validator("country_code", mode="before")
     @classmethod
@@ -261,13 +269,32 @@ class RegistrationService:
         ip_users    = await self.fraud_repo.get_users_by_ip(ip_address)
         velocity_ip = await self._count_recent_by_ip(ip_address)
 
+        # ── Resolve full fingerprint payload from Redis (enriched mode) ───────
+        # If the client called POST /register/fingerprint first, the full payload
+        # (component hashes, webdriver_detected, headless_detected, etc.) is
+        # stored in Redis under fp_sig:<session_token>.
+        # Fall back to data.fingerprint (raw hash) for backward compatibility.
+        full_fp: Optional[dict] = None
+        if data.fingerprint_session:
+            raw = await self.redis.get(f"{_FP_SESSION_PREFIX}{data.fingerprint_session}")
+            if raw:
+                full_fp = json.loads(raw)
+
+        fp_hash = (full_fp["fingerprint_hash"] if full_fp else data.fingerprint) or None
+
         fp_users    = []
         velocity_fp = 0
-        # data.fingerprint is a plain str (composite SHA-256 hash).
-        # Do NOT access data.fingerprint.fingerprint_hash — it is not an object.
-        if data.fingerprint:
-            fp_users    = await self.fraud_repo.get_users_by_fingerprint(data.fingerprint)
-            velocity_fp = await self._count_recent_by_fp(data.fingerprint)
+        if fp_hash:
+            fp_users    = await self.fraud_repo.get_users_by_fingerprint(fp_hash)
+            velocity_fp = await self._count_recent_by_fp(fp_hash)
+
+        # Build FingerprintPayload for scoring — only possible in enriched mode.
+        fingerprint_payload: Optional[FingerprintPayload] = None
+        if full_fp:
+            try:
+                fingerprint_payload = FingerprintPayload(**full_fp)
+            except Exception:
+                fingerprint_payload = None
 
         # data.behavioral is a plain str (JS session token).
         # Use it to look up the BehavioralSession ORM row if it already exists.
@@ -276,14 +303,11 @@ class RegistrationService:
             behavioral_session = await self.fraud_repo.get_session_by_token(data.behavioral)
 
         # ── Build BehavioralSummary from ORM session ──────────────────────────
-        # ScoringInput.behavioral expects BehavioralSummary (Pydantic schema),
-        # NOT the BehavioralSession ORM model.  Convert explicitly.
-        # If the session is missing or signals are null, pass None — the scorer
-        # returns 15 (mildly suspicious) for absent behavioral data.
         behavioral_summary: Optional[BehavioralSummary] = None
         if behavioral_session is not None:
             try:
                 behavioral_summary = BehavioralSummary(
+                    session_token        = behavioral_session.session_token,
                     rapid_completion     = behavioral_session.rapid_completion,
                     paste_detected       = behavioral_session.paste_detected,
                     mouse_movement_count = behavioral_session.mouse_movement_count,
@@ -291,24 +315,16 @@ class RegistrationService:
                     touch_device         = behavioral_session.touch_device,
                 )
             except Exception:
-                # Session row exists but behavioral fields are still None
-                # (collector events haven't been flushed yet).
                 behavioral_summary = None
 
         # ── Score ─────────────────────────────────────────────────────────────
-        # ScoringEngine.score() takes ONE argument: a ScoringInput dataclass.
-        # Do NOT pass individual keyword arguments directly to score().
         scoring_inp = ScoringInput(
-            email                           = email_norm or "",          # "" for phone-only — scorer only, not DB
-            email_normalized                = email_normalized or "",    # "" for phone-only — scorer only, not DB
+            email                           = email_norm or "",
+            email_normalized                = email_normalized or "",
             ip_address                      = ip_address,
             geo                             = geo,
-            # FingerprintPayload (full browser signals) is unavailable at init
-            # — we only have the composite hash string. fingerprint_user_count
-            # carries the duplicate-device signal via len(fp_users).
-            fingerprint                     = None,
+            fingerprint                     = fingerprint_payload,  # full signals when available
             behavioral                      = behavioral_summary,
-            # Always False on live path: uniqueness gate fires before scoring.
             email_normalized_exists         = False,
             ip_user_count                   = len(ip_users),
             fingerprint_user_count          = len(fp_users),
@@ -325,7 +341,7 @@ class RegistrationService:
                     "email":             email_norm or "",
                     "email_normalized":  email_normalized or "",   # ← correct normalized form
                     "ip_address":        ip_address,
-                    "fingerprint_hash":  data.fingerprint,
+                    "fingerprint_hash":  fp_hash,
                     "phone_number":      data.phone_number or None,
                     "score_email":       score_result.score_email,
                     "score_ip":          score_result.score_ip,
@@ -373,16 +389,20 @@ class RegistrationService:
         )
 
         # ── DeviceFingerprint ─────────────────────────────────────────────────
-        # data.fingerprint is the raw hash string.
-        # upsert_fingerprint() expects {"fingerprint_hash": str, ...} dict.
-        if data.fingerprint:
-            await self.fraud_repo.upsert_fingerprint(
-                user.id,
-                {
-                    "fingerprint_hash": data.fingerprint,
-                    "user_agent":       user_agent,
-                },
-            )
+        if fp_hash:
+            fp_data: dict = {"fingerprint_hash": fp_hash, "user_agent": user_agent, "ip_address": ip_address}
+            if full_fp:
+                # Merge all rich signals — excludes session_token (not a DB column)
+                for key in ("canvas_hash", "audio_hash", "webgl_hash", "fonts_hash",
+                            "screen_hash", "timezone", "language", "platform",
+                            "webdriver_detected", "headless_detected", "inconsistencies_count"):
+                    if full_fp.get(key) is not None:
+                        fp_data[key] = full_fp[key]
+            await self.fraud_repo.upsert_fingerprint(user.id, fp_data)
+
+        # ── Link behavioral session to user now that user row exists ──────────
+        if behavioral_session is not None:
+            await self.fraud_repo.update_behavioral_session(behavioral_session, user_id=user.id)
 
         # ── IPRecord ──────────────────────────────────────────────────────────
         await self.fraud_repo.create_ip_record(

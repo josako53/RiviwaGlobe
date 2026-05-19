@@ -14,6 +14,7 @@ from core.exceptions import NotFoundError, PaymentError, ValidationError
 from models.subscription import Invoice, InvoiceStatus, PaymentMethod, Plan, Subscription, SubscriptionStatus
 from services.payment_client import create_payment, get_payment_status, initiate_payment
 from services.subscription_svc import SubscriptionService
+from services.auth_client import notify_payment_verified
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/checkout", tags=["Checkout"])
@@ -96,6 +97,7 @@ async def checkout(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) ->
     # Bank transfer — no gateway call, return invoice for manual payment
     if provider == "bank_transfer":
         await db.commit()
+        # Payment verification happens when bank transfer is confirmed (see payment_confirmed_callback)
         return {
             "subscription_id": str(sub.id),
             "status": sub.status,
@@ -183,6 +185,8 @@ async def payment_status(payment_id: str, db: DbDep, claims: TokenDep, org_id: O
             if sub and sub.status in (SubscriptionStatus.TRIALING.value, SubscriptionStatus.PAST_DUE.value):
                 sub.status = SubscriptionStatus.ACTIVE.value
             await db.commit()
+            # Auto-verify org on payment confirmation
+            notify_payment_verified(org_id)
 
     return {
         "payment_id":   payment_id,
@@ -240,6 +244,7 @@ async def payment_confirmed_callback(request: Request, db: DbDep) -> dict:
             sub = await db.get(Subscription, inv.subscription_id)
             if sub:
                 sub.status = SubscriptionStatus.ACTIVE.value
+                notify_payment_verified(str(sub.org_id))
             await db.commit()
     return {"status": "ok"}
 

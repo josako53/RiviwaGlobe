@@ -68,3 +68,43 @@ def get_org_id(claims: TokenDep) -> str:
 
 
 OrgIdDep = Annotated[str, Depends(get_org_id)]
+
+
+# ── Feature gate dependency ───────────────────────────────────────────────────
+
+def require_feature(feature_key: str):
+    """
+    FastAPI dependency factory for feature-gating endpoints.
+
+    Usage:
+        @router.post("/endpoint", dependencies=[Depends(require_feature("webhooks"))])
+
+    Raises HTTP 403 with FEATURE_NOT_AVAILABLE if the org subscription
+    does not include the feature or the subscription is not active.
+    """
+    async def _check(
+        authorization: str = Header(default=""),
+        db: AsyncSession = Depends(get_async_session),
+    ) -> None:
+        claims = _decode_token(authorization)
+        if not claims:
+            raise HTTPException(status_code=401, detail={"error": "UNAUTHORISED"})
+        org_id = claims.get("org_id")
+        if not org_id:
+            raise HTTPException(status_code=400, detail={"error": "NO_ORG"})
+        from services.subscription_svc import SubscriptionService
+        svc = SubscriptionService(db)
+        has_access = await svc.check_feature(org_id, feature_key)
+        if not has_access:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error":   "FEATURE_NOT_AVAILABLE",
+                    "message": f"Your plan does not include {feature_key!r}. Upgrade at /api/v1/plans.",
+                    "feature": feature_key,
+                },
+            )
+    return Depends(_check)
+
+
+FeatureGateDep = require_feature  # alias for readability

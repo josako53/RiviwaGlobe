@@ -11,9 +11,9 @@ from core.deps import DbDep, TokenDep, OrgIdDep, AdminDep, ServiceKeyDep
 from core.exceptions import NotFoundError, PromoError, SubscriptionError, ValidationError
 from services.subscription_svc import _now
 from models.subscription import (
-    AddOn, Invoice, InvoiceStatus, OrgAddOn, PaymentMethod,
-    PromoCode, PromoRedemption, Subscription, SubscriptionEvent, SubscriptionStatus,
-    UsageMeter, Plan,
+    AddOn, Invoice, InvoiceStatus, OrgAddOn, OrgFeatureOverride, OverrideType,
+    PaymentMethod, PromoCode, PromoRedemption, Subscription, SubscriptionEvent,
+    SubscriptionStatus, UsageMeter, Plan,
 )
 from services.subscription_svc import SubscriptionService
 
@@ -542,3 +542,185 @@ async def admin_update_subscription(
     sub.updated_at = datetime.utcnow()
     await db.commit()
     return _sub_out(sub)
+
+# ── My features (full entitlement map) ────────────────────────────────────────
+
+@router.get("/my/features", summary="Get full feature entitlement map for my organisation")
+async def my_features(db: DbDep, org_id: OrgIdDep) -> dict:
+    """
+    Returns every feature and limit entitlement for the authenticated org.
+    Each feature shows: enabled, source (plan|override), and override reason.
+    Each limit shows: plan_limit, effective_limit (after any override), used, pct_used.
+    """
+    svc = SubscriptionService(db)
+    return await svc.get_org_entitlements(org_id)
+
+
+# ── Internal: usage increment ─────────────────────────────────────────────────
+
+@router.post("/internal/usage/increment", summary="Internal: increment a usage meter counter")
+async def internal_usage_increment(body: dict, db: DbDep, _: ServiceKeyDep) -> dict:
+    """
+    Called by other services to track resource consumption.
+
+    Body:
+    {
+      "org_id": "uuid",
+      "metric": "submissions_count|sms_count|api_calls_count|storage_bytes|qr_codes_count",
+      "amount": 1
+    }
+    """
+    svc = SubscriptionService(db)
+    await svc.increment_usage(
+        org_id=body["org_id"],
+        metric=body["metric"],
+        amount=int(body.get("amount", 1)),
+    )
+    return {"ok": True, "org_id": body["org_id"], "metric": body["metric"]}
+
+
+# ── Admin: org entitlements view ──────────────────────────────────────────────
+
+@router.get("/admin/orgs/{org_id}/entitlements", summary="Admin: view full entitlement map for any org")
+async def admin_org_entitlements(org_id: str, db: DbDep, _: AdminDep) -> dict:
+    svc = SubscriptionService(db)
+    return await svc.get_org_entitlements(org_id)
+
+
+# ── Admin: grant / revoke / limit overrides ───────────────────────────────────
+
+@router.post("/admin/orgs/{org_id}/overrides", summary="Admin: grant a feature or limit override to an org", status_code=201)
+async def admin_grant_override(org_id: str, body: dict, db: DbDep, claims: AdminDep) -> dict:
+    """
+    Body:
+    {
+      "feature_key":   "sms_channel",
+      "override_type": "grant" | "revoke" | "limit",
+      "limit_value":   5000,
+      "reason":        "NGO partnership deal",
+      "note":          "Approved by CEO",
+      "expires_at":    "2027-05-18T00:00:00"
+    }
+    """
+    from datetime import datetime as dt
+
+    feature_key   = body.get("feature_key", "").strip()
+    override_type = body.get("override_type", "").lower()
+    if not feature_key:
+        raise ValidationError("feature_key is required.")
+    if override_type not in ("grant", "revoke", "limit"):
+        raise ValidationError("override_type must be grant, revoke, or limit.")
+    if override_type == "limit" and body.get("limit_value") is None:
+        raise ValidationError("limit_value is required when override_type=limit.")
+
+    existing_ovs = (await db.execute(
+        select(OrgFeatureOverride).where(
+            OrgFeatureOverride.org_id == uuid.UUID(org_id),
+            OrgFeatureOverride.feature_key == feature_key,
+            OrgFeatureOverride.override_type == override_type,
+            OrgFeatureOverride.is_active == True,
+        )
+    )).scalars().all()
+    for ov in existing_ovs:
+        ov.is_active = False
+
+    expires_at = None
+    if body.get("expires_at"):
+        expires_at = dt.fromisoformat(body["expires_at"].replace("Z", "+00:00")).replace(tzinfo=None)
+
+    override = OrgFeatureOverride(
+        org_id        = uuid.UUID(org_id),
+        feature_key   = feature_key,
+        override_type = override_type,
+        limit_value   = int(body["limit_value"]) if body.get("limit_value") is not None else None,
+        reason        = body.get("reason"),
+        note          = body.get("note"),
+        granted_by    = uuid.UUID(claims.get("sub")) if claims.get("sub") else None,
+        expires_at    = expires_at,
+    )
+    db.add(override)
+    await db.commit()
+    await db.refresh(override)
+
+    return {
+        "id":            str(override.id),
+        "org_id":        org_id,
+        "feature_key":   override.feature_key,
+        "override_type": override.override_type,
+        "limit_value":   override.limit_value,
+        "reason":        override.reason,
+        "note":          override.note,
+        "expires_at":    override.expires_at.isoformat() if override.expires_at else None,
+        "granted_by":    str(override.granted_by) if override.granted_by else None,
+        "created_at":    override.created_at.isoformat(),
+        "message":       f"Override {override_type!r} for {feature_key!r} granted to org {org_id}.",
+    }
+
+
+@router.patch("/admin/orgs/{org_id}/overrides/{override_id}", summary="Admin: update an override")
+async def admin_update_override(org_id: str, override_id: str, body: dict, db: DbDep, _: AdminDep) -> dict:
+    from datetime import datetime as dt
+    ov = await db.get(OrgFeatureOverride, uuid.UUID(override_id))
+    if not ov or str(ov.org_id) != org_id:
+        raise NotFoundError("Override")
+    for k in ("reason", "note", "limit_value", "is_active"):
+        if k in body:
+            setattr(ov, k, body[k])
+    if "expires_at" in body:
+        ov.expires_at = dt.fromisoformat(body["expires_at"].replace("Z", "+00:00")).replace(tzinfo=None) if body["expires_at"] else None
+    ov.updated_at = dt.utcnow()
+    await db.commit()
+    return {
+        "id":            str(ov.id),
+        "feature_key":   ov.feature_key,
+        "override_type": ov.override_type,
+        "limit_value":   ov.limit_value,
+        "reason":        ov.reason,
+        "note":          ov.note,
+        "is_active":     ov.is_active,
+        "expires_at":    ov.expires_at.isoformat() if ov.expires_at else None,
+        "updated_at":    ov.updated_at.isoformat(),
+    }
+
+
+@router.delete("/admin/orgs/{org_id}/overrides/{override_id}", summary="Admin: revoke an override")
+async def admin_revoke_override(org_id: str, override_id: str, db: DbDep, _: AdminDep) -> dict:
+    from datetime import datetime as _dt
+    ov = await db.get(OrgFeatureOverride, uuid.UUID(override_id))
+    if not ov or str(ov.org_id) != org_id:
+        raise NotFoundError("Override")
+    ov.is_active  = False
+    ov.updated_at = _dt.utcnow()
+    await db.commit()
+    return {"message": f"Override {ov.feature_key!r} ({ov.override_type}) revoked.", "id": override_id}
+
+
+@router.get("/admin/orgs/{org_id}/overrides", summary="Admin: list all overrides for an org")
+async def admin_list_overrides(
+    org_id: str, db: DbDep, _: AdminDep,
+    active_only: bool = Query(default=True),
+) -> dict:
+    q = select(OrgFeatureOverride).where(OrgFeatureOverride.org_id == uuid.UUID(org_id))
+    if active_only:
+        q = q.where(OrgFeatureOverride.is_active == True)
+    result = await db.execute(q.order_by(OrgFeatureOverride.created_at.desc()))
+    overrides = list(result.scalars().all())
+    return {
+        "org_id":    org_id,
+        "total":     len(overrides),
+        "overrides": [
+            {
+                "id":            str(ov.id),
+                "feature_key":   ov.feature_key,
+                "override_type": ov.override_type,
+                "limit_value":   ov.limit_value,
+                "reason":        ov.reason,
+                "note":          ov.note,
+                "is_active":     ov.is_active,
+                "expires_at":    ov.expires_at.isoformat() if ov.expires_at else None,
+                "granted_by":    str(ov.granted_by) if ov.granted_by else None,
+                "created_at":    ov.created_at.isoformat(),
+            }
+            for ov in overrides
+        ],
+    }

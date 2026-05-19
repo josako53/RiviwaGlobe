@@ -19,14 +19,19 @@ class QRCode(SQLModel, table=True):
                                                description="{ORG_SMS_CODE}-{SHORT_CODE}")
     qr_type:          str              = Field(sa_column=Column(String(32), nullable=False, index=True))
     organisation_id:  uuid.UUID        = Field(index=True)
-    org_sms_code:     Optional[str]    = Field(default=None, max_length=10, index=True,
-                                               description="Org's registered SMS prefix (UTT, CRDB …)")
+    org_sms_code:     Optional[str]    = Field(default=None, max_length=64, index=True,
+                                               description="Org SMS prefix derived from display_name, e.g. YAS-TANZANIA")
 
     # Context links (soft, no DB-level FK across service boundaries)
     project_id:          Optional[uuid.UUID] = Field(default=None, nullable=True)
     service_id:          Optional[uuid.UUID] = Field(default=None, nullable=True)
     product_id:          Optional[uuid.UUID] = Field(default=None, nullable=True)
+    branch_id:           Optional[uuid.UUID] = Field(default=None, nullable=True, index=True)
+    department_id:       Optional[uuid.UUID] = Field(default=None, nullable=True, index=True)
     receipt_session_id:  Optional[uuid.UUID] = Field(default=None, nullable=True, index=True)
+
+    # Human-readable label for dashboards (e.g. "Counter 3 – DSM Branch")
+    label:               Optional[str]       = Field(default=None, max_length=256, nullable=True)
 
     # QR artefacts
     redirect_url:    str              = Field(max_length=2048)
