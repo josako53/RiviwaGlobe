@@ -58,13 +58,14 @@ async def get_committee_performance(
         if records:
             items = [
                 CommitteePerformanceItem(
-                    committee_id         = rec.committee_id,
-                    project_id           = rec.project_id,
-                    cases_assigned       = rec.cases_assigned,
-                    cases_resolved       = rec.cases_resolved,
-                    cases_overdue        = rec.cases_overdue,
-                    avg_resolution_hours = rec.avg_resolution_hours,
-                    resolution_rate      = rec.resolution_rate,
+                    committee_id         = str(rec["committee_id"]),
+                    committee_name       = rec.get("committee_name"),
+                    project_id           = None,
+                    cases_assigned       = int(rec.get("cases_assigned", 0)),
+                    cases_resolved       = int(rec.get("cases_resolved", 0)),
+                    cases_overdue        = int(rec.get("cases_overdue", 0)),
+                    avg_resolution_hours = float(rec["avg_resolution_hours"]) if rec.get("avg_resolution_hours") is not None else None,
+                    resolution_rate      = float(rec["resolution_rate"]) if rec.get("resolution_rate") is not None else None,
                 )
                 for rec in records
             ]

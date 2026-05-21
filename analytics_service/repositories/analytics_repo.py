@@ -77,17 +77,18 @@ class AnalyticsRepository:
         date_to: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Returns last login and login count in last 7 days per user.
-        Uses raw SQL for window function efficiency.
+        Returns last login and login count per user from the pre-aggregated
+        analytics_db.staff_logins table (populated by Spark jobs).
+        Actual columns: user_id, last_login, login_count_24h, computed_at.
         """
         params: Dict[str, Any] = {}
         where_clauses = []
 
         if date_from:
-            where_clauses.append("login_at >= :date_from")
+            where_clauses.append("last_login >= :date_from")
             params["date_from"] = date_from
         if date_to:
-            where_clauses.append("login_at <= :date_to")
+            where_clauses.append("last_login <= :date_to")
             params["date_to"] = date_to
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
@@ -95,26 +96,23 @@ class AnalyticsRepository:
         sql = f"""
             SELECT
                 user_id,
-                MAX(login_at)                                    AS last_login_at,
-                COUNT(*) FILTER (
-                    WHERE login_at >= NOW() - INTERVAL '7 days'
-                )                                                AS login_count_7d,
-                (ARRAY_AGG(platform ORDER BY login_at DESC))[1]  AS platform
+                last_login            AS last_login_at,
+                login_count_24h       AS login_count_7d,
+                NULL::text            AS platform
             FROM staff_logins
             {where_sql}
-            GROUP BY user_id
-            ORDER BY last_login_at DESC
+            ORDER BY last_login DESC
         """
         result = await self.db.execute(text(sql), params)
         rows = result.mappings().all()
         return [dict(r) for r in rows]
 
     async def get_logins_today_user_ids(self) -> List[uuid.UUID]:
-        """Return user_ids of staff who logged in today."""
+        """Return user_ids of staff whose last_login was today."""
         sql = """
             SELECT DISTINCT user_id
             FROM staff_logins
-            WHERE DATE(login_at AT TIME ZONE 'UTC') = CURRENT_DATE
+            WHERE DATE(last_login AT TIME ZONE 'UTC') = CURRENT_DATE
         """
         result = await self.db.execute(text(sql))
         rows = result.fetchall()
@@ -201,17 +199,41 @@ class AnalyticsRepository:
         project_id: uuid.UUID,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
-    ) -> List[CommitteePerformance]:
-        q = select(CommitteePerformance).where(
-            CommitteePerformance.project_id == project_id
-        )
+    ) -> List[Dict[str, Any]]:
+        """
+        Reads from the pre-aggregated analytics_db.committee_performance table.
+        Actual columns: committee_id, committee_name, cases_assigned,
+        cases_resolved, cases_overdue, avg_resolution_hours, resolution_rate,
+        partition_date, computed_at.  No project_id or id column.
+        """
+        params: Dict[str, Any] = {}
+        where_clauses = []
         if date_from:
-            q = q.where(CommitteePerformance.computed_date >= date_from)
+            where_clauses.append("partition_date >= :date_from")
+            params["date_from"] = str(date_from)
         if date_to:
-            q = q.where(CommitteePerformance.computed_date <= date_to)
-        q = q.order_by(CommitteePerformance.computed_date.desc())
-        result = await self.db.execute(q)
-        return list(result.scalars().all())
+            where_clauses.append("partition_date <= :date_to")
+            params["date_to"] = str(date_to)
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        sql = f"""
+            SELECT
+                committee_id,
+                committee_name,
+                cases_assigned,
+                cases_resolved,
+                cases_overdue,
+                avg_resolution_hours,
+                resolution_rate,
+                partition_date,
+                computed_at
+            FROM committee_performance
+            {where_sql}
+            ORDER BY computed_at DESC
+        """
+        result = await self.db.execute(text(sql), params)
+        rows = result.mappings().all()
+        return [dict(r) for r in rows]
 
     async def upsert_committee_performance(
         self, data: Dict[str, Any]

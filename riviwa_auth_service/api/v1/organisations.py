@@ -361,8 +361,33 @@ async def ban_org(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Membership — add / remove / change role / transfer ownership
+# Membership — list / add / remove / change role / transfer ownership
 # ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/{org_id}/members",
+    response_model=list[MemberResponse],
+    summary="List organisation members",
+    responses={
+        403: {"description": "MEMBER role required"},
+        404: {"description": "Organisation not found"},
+    },
+)
+async def list_members(
+    org_id:     uuid.UUID,
+    svc:        OrgServiceDep,
+    membership: Annotated[OrganisationMember, Depends(require_org_role(OrgMemberRole.MEMBER))],
+    active_only: bool = False,
+) -> list[MemberResponse]:
+    """
+    List all members of an organisation.
+
+    Requires at least `MEMBER` role in the org.
+    Pass `?active_only=true` to exclude suspended/removed members.
+    """
+    members = await svc.repo.list_active_members(org_id) if active_only else await svc.repo.list_members(org_id)
+    return [MemberResponse.model_validate(m) for m in members]
+
 
 @router.post(
     "/{org_id}/members",
