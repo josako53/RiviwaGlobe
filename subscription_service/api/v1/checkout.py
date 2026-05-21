@@ -182,7 +182,11 @@ async def payment_status(payment_id: str, db: DbDep, claims: TokenDep, org_id: O
             inv.status = InvoiceStatus.PAID.value
             inv.paid_at = datetime.utcnow()
             sub = await db.get(Subscription, inv.subscription_id)
-            if sub and sub.status in (SubscriptionStatus.TRIALING.value, SubscriptionStatus.PAST_DUE.value):
+            if sub and sub.status in (
+                SubscriptionStatus.TRIALING.value,
+                SubscriptionStatus.PAST_DUE.value,
+                SubscriptionStatus.PENDING_PAYMENT.value,
+            ):
                 sub.status = SubscriptionStatus.ACTIVE.value
             await db.commit()
             # Auto-verify org on payment confirmation
@@ -242,7 +246,11 @@ async def payment_confirmed_callback(request: Request, db: DbDep) -> dict:
             inv.status = InvoiceStatus.PAID.value
             inv.paid_at = datetime.utcnow()
             sub = await db.get(Subscription, inv.subscription_id)
-            if sub:
+            if sub and sub.status in (
+                SubscriptionStatus.PENDING_PAYMENT.value,
+                SubscriptionStatus.PAST_DUE.value,
+                SubscriptionStatus.TRIALING.value,
+            ):
                 sub.status = SubscriptionStatus.ACTIVE.value
                 notify_payment_verified(str(sub.org_id))
             await db.commit()

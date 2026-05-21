@@ -20,6 +20,7 @@ class BillingCycle(str, Enum):
 
 
 class SubscriptionStatus(str, Enum):
+    PENDING_PAYMENT = "pending_payment"  # created, awaiting payment confirmation
     TRIALING     = "trialing"
     ACTIVE       = "active"
     PAUSED       = "paused"

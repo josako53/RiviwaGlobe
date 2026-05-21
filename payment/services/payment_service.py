@@ -119,8 +119,13 @@ class PaymentService:
                 f"Cannot initiate payment with status '{payment.status.value}'. "
                 "Only PENDING or FAILED payments can be re-initiated."
             )
-        if not payment.payer_phone:
-            raise ValidationError("payer_phone is required to initiate a payment.")
+
+        _MOBILE_MONEY_PROVIDERS = {
+            PaymentProvider.AZAMPAY, PaymentProvider.MPESA, PaymentProvider.SELCOM,
+            PaymentProvider.AIRTEL, PaymentProvider.YAS,
+        }
+        if provider in _MOBILE_MONEY_PROVIDERS and not payment.payer_phone:
+            raise ValidationError("payer_phone is required for mobile money payments.")
 
         prov = get_provider(provider)
         try:

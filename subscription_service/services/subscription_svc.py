@@ -140,10 +140,13 @@ class SubscriptionService:
         if plan.is_custom:
             raise SubscriptionError("Enterprise plans require contacting sales. Email sales@riviwa.com")
 
-        # Cancel any existing trial
+        # Cancel any existing trial or failed payment attempt so org can retry
         existing = await self.get_org_subscription(org_id)
         if existing:
-            if existing.status not in (SubscriptionStatus.TRIALING.value,):
+            if existing.status not in (
+                SubscriptionStatus.TRIALING.value,
+                SubscriptionStatus.PENDING_PAYMENT.value,
+            ):
                 raise ConflictError("Organisation already has an active subscription. Upgrade or downgrade instead.")
             existing.status = SubscriptionStatus.CANCELLED.value
             existing.cancelled_at = _now()
@@ -166,7 +169,7 @@ class SubscriptionService:
         sub = Subscription(
             org_id=uuid.UUID(org_id),
             plan_id=plan.id,
-            status=SubscriptionStatus.ACTIVE.value,
+            status=SubscriptionStatus.PENDING_PAYMENT.value,
             billing_cycle=billing_cycle,
             current_period_start=now,
             current_period_end=period_end,
