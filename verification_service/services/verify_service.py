@@ -56,25 +56,20 @@ async def increment_scan_count(
 
 
 async def fetch_product_details(product_id: str) -> Optional[dict]:
-    """Fetch product information from product_service."""
+    """
+    Fetch full product detail from product_service internal endpoint.
+    Returns everything needed for a consumer scan result page:
+    images, description, bullet points, price, brand, RSIN, and a
+    deep-link so consumers can tap 'View product details'.
+    """
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(
-                f"{settings.PRODUCT_SERVICE_URL}/api/v1/products/{product_id}",
+                f"{settings.PRODUCT_SERVICE_URL}/api/v1/internal/products/{product_id}",
                 headers={"X-Service-Key": settings.INTERNAL_SERVICE_KEY},
             )
             if resp.status_code == 200:
-                data = resp.json()
-                return {
-                    "product_id":     product_id,
-                    "title":          data.get("title"),
-                    "brand":          data.get("brand"),
-                    "rsin":           data.get("rsin"),
-                    "product_type":   data.get("product_type"),
-                    "listing_status": data.get("listing_status"),
-                    "price":          data.get("price"),
-                    "organisation_id": data.get("organisation_id"),
-                }
+                return resp.json()
     except Exception as exc:
         log.warning("verify.product_fetch_failed", product_id=product_id, error=str(exc))
     return None

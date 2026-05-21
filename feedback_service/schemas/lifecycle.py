@@ -79,6 +79,22 @@ class CloseFeedback(BaseModel):
     notes: Optional[str] = Field(default=None, description="Closing notes")
 
 
+class ActionSuggestion(BaseModel):
+    """Mark a suggestion as implemented (ACTIONED status)."""
+    model_config = ConfigDict(json_schema_extra={"example": {
+        "implementation_summary": "New signage installed at all three bus stops. GPS tracking enabled.",
+        "implemented_at": None,
+    }})
+    implementation_summary: str = Field(
+        ..., min_length=10,
+        description="What was actually done to implement this suggestion",
+    )
+    implemented_at: Optional[datetime] = Field(
+        default=None,
+        description="Override implementation datetime (defaults to now). ISO 8601.",
+    )
+
+
 class DismissFeedback(BaseModel):
     """Dismiss a feedback item as unfounded, duplicate, or out of scope."""
     model_config = ConfigDict(json_schema_extra={"example": {

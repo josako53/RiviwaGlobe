@@ -60,11 +60,19 @@ async def require_staff(token: TokenClaims = Depends(get_current_token)) -> Toke
     raise ForbiddenError()
 
 
+async def require_platform_admin(token: TokenClaims = Depends(get_current_token)) -> TokenClaims:
+    """Restrict to platform_role=admin or super_admin only. Used for disbursements."""
+    if token.platform_role in {"admin", "super_admin"}:
+        return token
+    raise ForbiddenError()
+
+
 async def get_client_ip(request: Request) -> str:
     xff = request.headers.get("X-Forwarded-For")
     return xff.split(",")[0].strip() if xff else (request.client.host if request.client else "unknown")
 
 
-DbDep    = Annotated[AsyncSession, Depends(get_db)]
-AuthDep  = Annotated[TokenClaims, Depends(require_auth)]
-StaffDep = Annotated[TokenClaims, Depends(require_staff)]
+DbDep                = Annotated[AsyncSession, Depends(get_db)]
+AuthDep              = Annotated[TokenClaims, Depends(require_auth)]
+StaffDep             = Annotated[TokenClaims, Depends(require_staff)]
+PlatformAdminDep     = Annotated[TokenClaims, Depends(require_platform_admin)]

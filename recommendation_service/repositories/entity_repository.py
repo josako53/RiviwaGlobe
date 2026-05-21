@@ -181,6 +181,27 @@ class EntityRepository:
                 tag_sets.append(tags)
         return tag_sets
 
+    async def get_feedback_activity(
+        self, entity_id: uuid.UUID, actor_id: uuid.UUID, event_types: list[str]
+    ) -> Optional[ActivityEvent]:
+        result = await self.db.execute(
+            select(ActivityEvent)
+            .where(
+                ActivityEvent.entity_id == entity_id,
+                ActivityEvent.actor_id == actor_id,
+                ActivityEvent.event_type.in_(event_types),
+            )
+            .order_by(ActivityEvent.occurred_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def delete_activity_by_id(self, activity_id: uuid.UUID) -> None:
+        await self.db.execute(
+            delete(ActivityEvent).where(ActivityEvent.id == activity_id)
+        )
+        await self.db.flush()
+
     async def mark_indexed(self, entity_id: uuid.UUID, text_hash: str) -> None:
         await self.db.execute(
             update(RecommendationEntity)

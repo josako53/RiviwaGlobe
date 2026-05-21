@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from api.v1 import translate
+from api.v1 import languages, preferences, translate
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(translate.router)
+api_v1_router.include_router(languages.router)
+api_v1_router.include_router(preferences.router)

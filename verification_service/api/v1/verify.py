@@ -157,10 +157,18 @@ async def verify_code(
         "sms_code":              qr_data.get("sms_code"),
         "qr_type":               qr_type,
         "organisation_id":       qr_data.get("organisation_id"),
+        "product_id":            qr_data.get("product_id"),
         "scan_count":            qr_data.get("scan_count", 0) + 1,
     }
     if product_details:
         response["product"] = product_details
+        # Deep-link so the consumer can tap "View full product details"
+        rsin = product_details.get("rsin")
+        pid  = product_details.get("product_id") or qr_data.get("product_id")
+        if rsin:
+            response["view_product_url"] = f"https://app.riviwa.com/products/{rsin}"
+        elif pid:
+            response["view_product_url"] = f"https://app.riviwa.com/products/{pid}"
     if result == VerificationResult.AUTHENTIC:
         response["redirect_url"] = qr_data.get("redirect_url")
         response["actions"] = ["submit_feedback"]

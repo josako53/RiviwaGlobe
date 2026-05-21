@@ -146,6 +146,16 @@ class ProductType(str, Enum):
     AGRICULTURAL        = "AGRICULTURAL"
     INDUSTRIAL          = "INDUSTRIAL"
 
+    # ── Services ─────────────────────────────────────────────────────────────
+    SERVICE             = "SERVICE"             # Generic service offering
+    CONSULTING_SERVICE  = "CONSULTING_SERVICE"  # Advisory / professional services
+    DIGITAL_SERVICE     = "DIGITAL_SERVICE"     # SaaS, APIs, digital subscriptions
+    MAINTENANCE_SERVICE = "MAINTENANCE_SERVICE" # Repairs, upkeep, AMC contracts
+    INSTALLATION_SERVICE= "INSTALLATION_SERVICE"# Setup, deployment, commissioning
+    TRAINING_SERVICE    = "TRAINING_SERVICE"    # Workshops, courses, certifications
+    HEALTHCARE_SERVICE  = "HEALTHCARE_SERVICE"  # Medical, wellness, lab services
+    LOGISTICS_SERVICE   = "LOGISTICS_SERVICE"   # Freight, delivery, warehousing
+
 
 class ListingStatus(str, Enum):
     DRAFT           = "DRAFT"           # Not yet submitted
@@ -341,6 +351,14 @@ class Product(SQLModel, table=True):
         sa_column=Column(Text),
         description="Intended use, target application, or use-case context.",
     )
+    how_to_use: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text),
+        description=(
+            "Step-by-step instructions on how to use, install, or operate the product or service. "
+            "Supports Markdown formatting. Shown on the product detail page as a collapsible section."
+        ),
+    )
 
     # ── Production & Origin ──────────────────────────────────────────────────
     production_location: Optional[str] = Field(
@@ -348,7 +366,14 @@ class Product(SQLModel, table=True):
         max_length=300,
         description="Country, city, or facility where the product was manufactured.",
     )
-    country_of_origin: Optional[str] = Field(default=None, max_length=100)
+    country_of_origin: Optional[str] = Field(
+        default=None, max_length=100,
+        description="ISO 2-letter country code or full country name, e.g. 'TZ' or 'Tanzania'.",
+    )
+    made_in: Optional[str] = Field(
+        default=None, max_length=150,
+        description="Display label shown on the product listing, e.g. 'Made in Tanzania' or 'Assembled in Kenya'.",
+    )
 
     # ── Offer Details ────────────────────────────────────────────────────────
     price: Decimal = Field(sa_column=Column(Numeric(14, 2)))
@@ -452,3 +477,161 @@ class ProductAttribute(SQLModel, table=True):
     group: Optional[str] = Field(default=None, max_length=100, description="e.g. 'Engine', 'Safety', 'Dimensions'")
     position: int = Field(default=0, description="Display order within group")
     is_searchable: bool = Field(default=False, description="Index this value for search filtering")
+    # Optional link to an org custom field definition (null = ad-hoc attribute)
+    custom_field_def_id: Optional[UUID] = Field(
+        default=None, nullable=True, index=True,
+        description="FK to org_product_custom_field_defs.id — links to org-defined field template",
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ORG CUSTOM FIELD DEFINITIONS
+# Each organisation can define their own required / optional product attributes.
+# These become templates that appear in the product edit form for that org.
+#
+# Examples:
+#   - Hospital org might add: "Batch Number", "Expiry Date", "License Number"
+#   - Food org might add: "Nutritional Grade", "Halal Certified"
+#   - Pharma org might add: "NDC Code", "Controlled Substance Level"
+#   - Manufacturer might add: "Warranty Terms", "Compliance Standards"
+# ══════════════════════════════════════════════════════════════════════════════
+
+class OrgProductCustomFieldDef(SQLModel, table=True):
+    """
+    Organisation-defined custom attribute templates.
+    Org admins create these once; they appear as extra fields on all product
+    edit forms within that org (optionally scoped to specific product types).
+    """
+    __tablename__ = "org_product_custom_field_defs"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    org_id: UUID = Field(index=True, nullable=False)
+
+    # ── Field definition ──────────────────────────────────────────────────────
+    field_name: str = Field(
+        max_length=200, index=True,
+        description="Internal key, e.g. 'batch_number'. Unique per org.",
+    )
+    field_label: str = Field(
+        max_length=200,
+        description="Human-readable label shown in the form, e.g. 'Batch Number'.",
+    )
+    field_type: str = Field(
+        default="text",
+        sa_column=Column(String(20), nullable=False),
+        description="text | number | date | url | select | boolean | textarea",
+    )
+    # JSON list of options for 'select' type, e.g. ["Option A", "Option B"]
+    options: Optional[List[Any]] = Field(default=None, sa_column=Column(JSON))
+    placeholder: Optional[str] = Field(default=None, max_length=300)
+    help_text: Optional[str] = Field(default=None, max_length=500)
+
+    # ── Validation ────────────────────────────────────────────────────────────
+    is_required: bool = Field(default=False, description="If true, product cannot be published without this field")
+    max_length: Optional[int] = Field(default=None, description="Max character length for text/textarea fields")
+
+    # ── Scoping ───────────────────────────────────────────────────────────────
+    # Null = applies to ALL product types for this org
+    # List = only appears for listed product types, e.g. ["FOOD_AND_BEVERAGE", "GROCERY"]
+    applies_to_product_types: Optional[List[str]] = Field(
+        default=None, sa_column=Column(JSON),
+        description="List of ProductType values this field applies to. Null = all types.",
+    )
+
+    # ── Display ───────────────────────────────────────────────────────────────
+    group: Optional[str] = Field(default=None, max_length=100, description="Section heading in the form")
+    position: int = Field(default=0, description="Display order within group")
+    unit: Optional[str] = Field(default=None, max_length=50, description="Unit suffix shown in the form, e.g. 'days', 'mg'")
+
+    # ── State ─────────────────────────────────────────────────────────────────
+    is_active: bool = Field(default=True)
+    created_by: Optional[UUID] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PRODUCT DOCUMENTS
+# PDFs, Markdown files, Word documents — manuals, guides, datasheets,
+# safety sheets, certificates, terms of use. Stored in MinIO and referenced here.
+#
+# Examples:
+#   - User Manual (PDF) — attached to a washing machine listing
+#   - Installation Guide (PDF/MD) — attached to a router listing
+#   - Safety Data Sheet (PDF) — required for chemicals / medication
+#   - Service Agreement (PDF) — attached to a maintenance service listing
+#   - API Reference (MD) — attached to a DIGITAL_SERVICE listing
+#   - Training Syllabus (PDF) — attached to a TRAINING_SERVICE listing
+# ══════════════════════════════════════════════════════════════════════════════
+
+class DocumentType(str, Enum):
+    MANUAL           = "MANUAL"           # User/operator manual
+    INSTALLATION     = "INSTALLATION"     # Setup and installation guide
+    DATASHEET        = "DATASHEET"        # Technical specifications sheet
+    SAFETY_SHEET     = "SAFETY_SHEET"     # MSDS / safety data sheet
+    CERTIFICATE      = "CERTIFICATE"      # Compliance / certification document
+    WARRANTY         = "WARRANTY"         # Warranty terms and conditions
+    TERMS            = "TERMS"            # Terms of service / use
+    API_REFERENCE    = "API_REFERENCE"    # Developer/API documentation (services)
+    TRAINING_GUIDE   = "TRAINING_GUIDE"   # Course materials or syllabus
+    QUICK_START      = "QUICK_START"      # Quick-start / getting-started guide
+    BROCHURE         = "BROCHURE"         # Product brochure / catalogue page
+    OTHER            = "OTHER"
+
+
+class DocumentFormat(str, Enum):
+    PDF   = "PDF"
+    MD    = "MD"      # Markdown (rendered in-browser)
+    DOCX  = "DOCX"
+    TXT   = "TXT"
+    HTML  = "HTML"
+
+
+class ProductDocument(SQLModel, table=True):
+    """
+    A file (PDF, Markdown, DOCX, etc.) attached to a product or service listing.
+    Stored in MinIO; this table holds the metadata and download URL.
+    """
+    __tablename__ = "product_documents"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    product_id: UUID = Field(index=True, foreign_key="products.product_id")
+
+    # ── File identity ─────────────────────────────────────────────────────────
+    title: str = Field(max_length=300, description="Display name, e.g. 'User Manual v2.1'")
+    document_type: str = Field(
+        default="OTHER",
+        sa_column=Column(String(30), nullable=False, index=True),
+    )
+    file_format: str = Field(
+        default="PDF",
+        sa_column=Column(String(10), nullable=False),
+    )
+
+    # ── Storage ───────────────────────────────────────────────────────────────
+    file_url: str = Field(max_length=1000, description="MinIO object URL or signed URL")
+    file_size_bytes: Optional[int] = Field(default=None, description="File size for display")
+    # Markdown content (optional) — for MD-format docs that are rendered inline
+    # If present, file_url may still point to the raw .md file in MinIO
+    content_md: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text),
+        description="Raw Markdown content — rendered inline on the product page",
+    )
+
+    # ── Metadata ──────────────────────────────────────────────────────────────
+    version: Optional[str] = Field(default=None, max_length=50, description="e.g. '2.1', '2026-05'")
+    language: str = Field(default="en", max_length=10, description="BCP-47 language tag, e.g. 'en', 'sw'")
+    description: Optional[str] = Field(default=None, max_length=500)
+
+    # ── Access control ────────────────────────────────────────────────────────
+    is_public: bool = Field(
+        default=True,
+        description="True = visible to anyone who can view the product (including public scanners). "
+                    "False = visible only to org staff.",
+    )
+
+    # ── Audit ─────────────────────────────────────────────────────────────────
+    uploaded_by: Optional[UUID] = Field(default=None, nullable=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

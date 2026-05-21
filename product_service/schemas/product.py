@@ -8,6 +8,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from models.product import (
+    DocumentFormat,
+    DocumentType,
     FulfillmentMethod,
     ImageRole,
     ListingStatus,
@@ -82,10 +84,18 @@ class ProductCreate(BaseModel):
     model_number: Optional[str] = Field(default=None, max_length=100)
     description: Optional[str] = Field(default=None, max_length=2000)
     usage: Optional[str] = Field(default=None, max_length=2000)
+    how_to_use: Optional[str] = Field(
+        default=None,
+        description="Step-by-step usage/installation instructions. Supports Markdown.",
+    )
 
     # Production
     production_location: Optional[str] = Field(default=None, max_length=300)
     country_of_origin: Optional[str] = Field(default=None, max_length=100)
+    made_in: Optional[str] = Field(
+        default=None, max_length=150,
+        description="Display label e.g. 'Made in Tanzania', 'Assembled in Kenya'.",
+    )
     product_supervisor: Optional[str] = Field(default=None, max_length=200)
 
     # Offer
@@ -148,9 +158,11 @@ class ProductUpdate(BaseModel):
     model_number: Optional[str] = Field(default=None, max_length=100)
     description: Optional[str] = Field(default=None, max_length=2000)
     usage: Optional[str] = Field(default=None, max_length=2000)
+    how_to_use: Optional[str] = Field(default=None)
 
     production_location: Optional[str] = Field(default=None, max_length=300)
     country_of_origin: Optional[str] = Field(default=None, max_length=100)
+    made_in: Optional[str] = Field(default=None, max_length=150)
     product_supervisor: Optional[str] = Field(default=None, max_length=200)
 
     price: Optional[Decimal] = Field(default=None, gt=0, decimal_places=2)
@@ -200,10 +212,12 @@ class ProductResponse(BaseModel):
     model_number: Optional[str]
     description: Optional[str]
     usage: Optional[str]
+    how_to_use: Optional[str]
 
     # Production
     production_location: Optional[str]
     country_of_origin: Optional[str]
+    made_in: Optional[str]
     product_supervisor: Optional[str]
 
     # Offer
@@ -245,6 +259,7 @@ class ProductResponse(BaseModel):
     bullet_points: List[BulletPointOut] = []
     images: List[ProductImageOut] = []
     attributes: List[ProductAttributeOut] = []
+    documents: List["ProductDocumentOut"] = []
 
     model_config = {"from_attributes": True}
 
@@ -283,3 +298,70 @@ class PublishResponse(BaseModel):
     rsin: str
     listing_status: ListingStatus
     published_at: datetime
+
+
+# ── Org Custom Field Definitions ──────────────────────────────────────────────
+
+class OrgCustomFieldDefIn(BaseModel):
+    field_name:   str  = Field(min_length=1, max_length=200, description="Internal key, e.g. 'batch_number'")
+    field_label:  str  = Field(min_length=1, max_length=200, description="Form label, e.g. 'Batch Number'")
+    field_type:   str  = Field(default="text", description="text | number | date | url | select | boolean | textarea")
+    options:      Optional[List[Any]] = Field(default=None, description="For select type: ['Option A', 'Option B']")
+    placeholder:  Optional[str] = Field(default=None, max_length=300)
+    help_text:    Optional[str] = Field(default=None, max_length=500)
+    is_required:  bool = False
+    max_length:   Optional[int] = None
+    applies_to_product_types: Optional[List[str]] = Field(
+        default=None,
+        description="List of ProductType values. Null = applies to all product types.",
+    )
+    group:    Optional[str] = Field(default=None, max_length=100)
+    position: int = 0
+    unit:     Optional[str] = Field(default=None, max_length=50)
+
+
+class OrgCustomFieldDefOut(OrgCustomFieldDefIn):
+    id:         UUID
+    org_id:     UUID
+    is_active:  bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── Product Documents ─────────────────────────────────────────────────────────
+
+class ProductDocumentIn(BaseModel):
+    title:         str           = Field(min_length=1, max_length=300)
+    document_type: DocumentType  = DocumentType.OTHER
+    file_format:   DocumentFormat = DocumentFormat.PDF
+    file_url:      str           = Field(min_length=1, max_length=1000, description="MinIO URL or signed URL")
+    file_size_bytes: Optional[int] = None
+    content_md:    Optional[str] = Field(default=None, description="Raw Markdown content (for MD format docs)")
+    version:       Optional[str] = Field(default=None, max_length=50)
+    language:      str           = Field(default="en", max_length=10)
+    description:   Optional[str] = Field(default=None, max_length=500)
+    is_public:     bool          = True
+
+
+class ProductDocumentOut(ProductDocumentIn):
+    id:          UUID
+    product_id:  UUID
+    uploaded_by: Optional[UUID]
+    created_at:  datetime
+    updated_at:  datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProductDocumentUpdate(BaseModel):
+    title:         Optional[str]           = Field(default=None, max_length=300)
+    document_type: Optional[DocumentType]  = None
+    file_url:      Optional[str]           = Field(default=None, max_length=1000)
+    file_size_bytes: Optional[int]         = None
+    content_md:    Optional[str]           = None
+    version:       Optional[str]           = Field(default=None, max_length=50)
+    language:      Optional[str]           = Field(default=None, max_length=10)
+    description:   Optional[str]           = Field(default=None, max_length=500)
+    is_public:     Optional[bool]          = None

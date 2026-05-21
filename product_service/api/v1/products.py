@@ -11,10 +11,15 @@ from models.product import ListingStatus, ProductType
 from repositories.product_repo import ProductRepository
 from schemas.product import (
     BulletPointIn,
+    OrgCustomFieldDefIn,
+    OrgCustomFieldDefOut,
     ProductAttributeIn,
     ProductAttributeOut,
     BulletPointOut,
     ProductCreate,
+    ProductDocumentIn,
+    ProductDocumentOut,
+    ProductDocumentUpdate,
     ProductImageIn,
     ProductImageOut,
     ProductListItem,
@@ -88,6 +93,129 @@ async def list_products(
         page_size=page_size,
         pages=math.ceil(total / page_size) if total else 0,
     )
+
+
+# ── Org Custom Field Definitions (STATIC — must be before /{product_id}) ─────
+
+@router.get(
+    "/org-custom-fields",
+    response_model=List[OrgCustomFieldDefOut],
+    summary="List org's custom product field definitions",
+    description=(
+        "Returns all custom attribute field templates defined by this organisation. "
+        "These fields appear as extra inputs on the product edit form for all products "
+        "in this org (optionally scoped to specific product types)."
+    ),
+)
+async def list_org_custom_fields(
+    db: DbDep,
+    kafka: KafkaDep,
+    claims: StaffDep,
+    active_only: bool = Query(default=True),
+) -> List[OrgCustomFieldDefOut]:
+    from models.product import OrgProductCustomFieldDef
+    from sqlalchemy import select
+    org_id = UUID(claims.org_id)
+    q = select(OrgProductCustomFieldDef).where(OrgProductCustomFieldDef.org_id == org_id)
+    if active_only:
+        q = q.where(OrgProductCustomFieldDef.is_active == True)
+    q = q.order_by(OrgProductCustomFieldDef.group, OrgProductCustomFieldDef.position)
+    result = await db.execute(q)
+    return [OrgCustomFieldDefOut.model_validate(r) for r in result.scalars().all()]
+
+
+@router.post(
+    "/org-custom-fields",
+    response_model=OrgCustomFieldDefOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a custom product field definition for this org",
+    description=(
+        "Define a new custom attribute field for your organisation's products. "
+        "Once created, this field appears on the product edit form for all org products "
+        "(or only for the specified `applies_to_product_types`).\n\n"
+        "**Field types:** `text` | `textarea` | `number` | `date` | `url` | `select` | `boolean`\n\n"
+        "**Example use cases:**\n"
+        "- Pharmacy: `batch_number` (text, required), `expiry_date` (date, required)\n"
+        "- Food org: `halal_certified` (boolean), `nutritional_grade` (select)\n"
+        "- NGO: `donor_ref` (text), `project_code` (text)\n"
+        "- Manufacturer: `warranty_terms` (textarea), `compliance_standard` (select)"
+    ),
+)
+async def create_org_custom_field(
+    body: OrgCustomFieldDefIn,
+    db: DbDep,
+    kafka: KafkaDep,
+    claims: ManagerDep,
+) -> OrgCustomFieldDefOut:
+    from datetime import datetime
+    from models.product import OrgProductCustomFieldDef
+    from sqlalchemy import select
+    org_id = UUID(claims.org_id)
+    existing = (await db.execute(
+        select(OrgProductCustomFieldDef).where(
+            OrgProductCustomFieldDef.org_id == org_id,
+            OrgProductCustomFieldDef.field_name == body.field_name,
+        )
+    )).scalar_one_or_none()
+    if existing:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=409, detail={"error": "FIELD_NAME_EXISTS",
+            "detail": f"A field named '{body.field_name}' already exists for this organisation."})
+    field = OrgProductCustomFieldDef(org_id=org_id, created_by=claims.sub, **body.model_dump())
+    db.add(field)
+    await db.commit()
+    await db.refresh(field)
+    return OrgCustomFieldDefOut.model_validate(field)
+
+
+@router.patch(
+    "/org-custom-fields/{field_id}",
+    response_model=OrgCustomFieldDefOut,
+    summary="Update a custom field definition",
+)
+async def update_org_custom_field(
+    field_id: UUID,
+    body: dict,
+    db: DbDep,
+    kafka: KafkaDep,
+    claims: ManagerDep,
+) -> OrgCustomFieldDefOut:
+    from datetime import datetime
+    from models.product import OrgProductCustomFieldDef
+    org_id = UUID(claims.org_id)
+    field = await db.get(OrgProductCustomFieldDef, field_id)
+    if not field or field.org_id != org_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail={"error": "CUSTOM_FIELD_NOT_FOUND"})
+    immutable = {"id", "org_id", "created_by", "created_at", "field_name"}
+    for k, v in body.items():
+        if hasattr(field, k) and k not in immutable:
+            setattr(field, k, v)
+    field.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(field)
+    return OrgCustomFieldDefOut.model_validate(field)
+
+
+@router.delete(
+    "/org-custom-fields/{field_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Deactivate a custom field definition",
+)
+async def deactivate_org_custom_field(
+    field_id: UUID,
+    db: DbDep,
+    kafka: KafkaDep,
+    claims: ManagerDep,
+) -> None:
+    from models.product import OrgProductCustomFieldDef
+    org_id = UUID(claims.org_id)
+    field = await db.get(OrgProductCustomFieldDef, field_id)
+    if not field or field.org_id != org_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail={"error": "CUSTOM_FIELD_NOT_FOUND"})
+    field.is_active = False
+    await db.commit()
 
 
 # ── Detail ────────────────────────────────────────────────────────────────────
@@ -273,11 +401,124 @@ async def list_variants(product_id: UUID, db: DbDep, kafka: KafkaDep, claims: St
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
-def _to_response(product, bullets, images, attrs) -> ProductResponse:
-    from schemas.product import BulletPointOut, ProductAttributeOut, ProductImageOut
+def _to_response(product, bullets, images, attrs, docs=None) -> ProductResponse:
+    from schemas.product import BulletPointOut, ProductAttributeOut, ProductDocumentOut, ProductImageOut
     return ProductResponse(
         **product.model_dump(),
         bullet_points=[BulletPointOut(**b.model_dump()) for b in bullets],
         images=[ProductImageOut(**i.model_dump()) for i in images],
         attributes=[ProductAttributeOut(**a.model_dump()) for a in attrs],
+        documents=[ProductDocumentOut(**d.model_dump()) for d in (docs or [])],
     )
+
+
+# ── Product Documents ─────────────────────────────────────────────────────────
+
+@router.get(
+    "/{product_id}/documents",
+    response_model=List[ProductDocumentOut],
+    summary="List documents attached to a product",
+    description=(
+        "Returns all documents (PDFs, Markdown guides, manuals) attached to a product or service listing. "
+        "Public documents are visible to anyone who can view the product (including scanners). "
+        "Private documents require org staff access."
+    ),
+)
+async def list_documents(
+    product_id: UUID,
+    db: DbDep,
+    kafka: KafkaDep,
+    claims: StaffDep,
+    public_only: bool = Query(default=False),
+) -> List[ProductDocumentOut]:
+    from models.product import ProductDocument
+    from sqlalchemy import select
+    q = select(ProductDocument).where(ProductDocument.product_id == product_id)
+    if public_only:
+        q = q.where(ProductDocument.is_public == True)
+    q = q.order_by(ProductDocument.document_type, ProductDocument.created_at)
+    result = await db.execute(q)
+    return [ProductDocumentOut.model_validate(d) for d in result.scalars().all()]
+
+
+@router.post(
+    "/{product_id}/documents",
+    response_model=ProductDocumentOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Attach a document to a product",
+    description=(
+        "Attach a manual, installation guide, datasheet, safety sheet, or any other document "
+        "to a product or service listing.\n\n"
+        "**Supported document types:** MANUAL | INSTALLATION | DATASHEET | SAFETY_SHEET | "
+        "CERTIFICATE | WARRANTY | TERMS | API_REFERENCE | TRAINING_GUIDE | QUICK_START | BROCHURE | OTHER\n\n"
+        "**Supported formats:** PDF | MD | DOCX | TXT | HTML\n\n"
+        "Upload the file to MinIO first, then provide the URL here. "
+        "For Markdown documents, you can also pass `content_md` to render the guide inline on the product page."
+    ),
+)
+async def add_document(
+    product_id: UUID,
+    body: ProductDocumentIn,
+    db: DbDep,
+    kafka: KafkaDep,
+    claims: ManagerDep,
+) -> ProductDocumentOut:
+    from datetime import datetime
+    from models.product import ProductDocument
+    doc = ProductDocument(
+        product_id=product_id,
+        uploaded_by=claims.sub,
+        **body.model_dump(),
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+    return ProductDocumentOut.model_validate(doc)
+
+
+@router.patch(
+    "/{product_id}/documents/{doc_id}",
+    response_model=ProductDocumentOut,
+    summary="Update document metadata or replace file URL",
+)
+async def update_document(
+    product_id: UUID,
+    doc_id: UUID,
+    body: ProductDocumentUpdate,
+    db: DbDep,
+    kafka: KafkaDep,
+    claims: ManagerDep,
+) -> ProductDocumentOut:
+    from datetime import datetime
+    from models.product import ProductDocument
+    doc = await db.get(ProductDocument, doc_id)
+    if not doc or doc.product_id != product_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail={"error": "DOCUMENT_NOT_FOUND"})
+    for k, v in body.model_dump(exclude_none=True).items():
+        setattr(doc, k, v)
+    doc.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(doc)
+    return ProductDocumentOut.model_validate(doc)
+
+
+@router.delete(
+    "/{product_id}/documents/{doc_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a document from a product",
+)
+async def delete_document(
+    product_id: UUID,
+    doc_id: UUID,
+    db: DbDep,
+    kafka: KafkaDep,
+    claims: ManagerDep,
+) -> None:
+    from models.product import ProductDocument
+    doc = await db.get(ProductDocument, doc_id)
+    if not doc or doc.product_id != product_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail={"error": "DOCUMENT_NOT_FOUND"})
+    await db.delete(doc)
+    await db.commit()

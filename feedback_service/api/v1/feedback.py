@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Query, Request, UploadFile, status
 from core.dependencies import DbDep, KafkaDep, StaffDep, GRMOfficerDep, GRMCoordinatorDep, OptTokenDep
 from schemas.feedback import BulkUploadResult, StaffSubmitFeedback
 from schemas.lifecycle import (
-    AcknowledgeFeedback, AssignFeedback, EscalateFeedback,
+    AcknowledgeFeedback, ActionSuggestion, AssignFeedback, EscalateFeedback,
     ResolveFeedback, AppealFeedback, CloseFeedback, DismissFeedback, LogAction,
 )
 from services.feedback_service import FeedbackService
@@ -177,6 +177,30 @@ async def close_feedback(feedback_id: uuid.UUID, body: CloseFeedback, db: DbDep,
     from core.dependencies import _is_platform_admin
     org_id = None if _is_platform_admin(token) else token.org_id
     return feedback_out(await _svc(db, kafka).close(feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id))
+
+@router.post(
+    "/{feedback_id}/action-suggestion",
+    status_code=status.HTTP_200_OK,
+    summary="Mark suggestion as implemented (ACTIONED) [manager+]",
+    description=(
+        "Transitions a SUGGESTION from any open status to **ACTIONED** and sets `implemented_at`. "
+        "This is what drives the **suggestion implementation rate** in analytics. "
+        "Requires `implementation_summary` — a description of what was actually done."
+    ),
+)
+async def action_suggestion(
+    feedback_id: uuid.UUID,
+    body: ActionSuggestion,
+    db: DbDep,
+    kafka: KafkaDep,
+    token: GRMOfficerDep,
+) -> dict:
+    from core.dependencies import _is_platform_admin
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return feedback_out(await _svc(db, kafka).action_suggestion(
+        feedback_id, body.model_dump(exclude_none=True), by=token.sub, org_id=org_id
+    ))
+
 
 @router.patch("/{feedback_id}/dismiss", summary="Dismiss feedback [admin/owner only]")
 async def dismiss_feedback(feedback_id: uuid.UUID, body: DismissFeedback, db: DbDep, kafka: KafkaDep, token: GRMCoordinatorDep) -> dict:

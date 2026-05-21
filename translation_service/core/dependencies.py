@@ -5,7 +5,7 @@
 """core/dependencies.py — FastAPI dependency providers."""
 from __future__ import annotations
 
-from typing import Annotated, AsyncGenerator
+from typing import Annotated, AsyncGenerator, Optional
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession

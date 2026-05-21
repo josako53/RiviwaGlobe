@@ -125,6 +125,23 @@ class NotificationTypes:
     PAYMENT_FAILED             = "payment.failed"
     PAYMENT_REFUNDED           = "payment.refunded"
 
+    # ── Subscriptions ─────────────────────────────────────────────────────────
+    # Lifecycle events (fired immediately when event occurs)
+    SUBSCRIPTION_TRIAL_STARTED     = "subscription.trial_started"
+    SUBSCRIPTION_SUBSCRIBED        = "subscription.subscribed"
+    SUBSCRIPTION_PAYMENT_RECEIPT   = "subscription.payment_receipt"
+    SUBSCRIPTION_RENEWED           = "subscription.renewed"
+    SUBSCRIPTION_UPGRADED          = "subscription.upgraded"
+    SUBSCRIPTION_DOWNGRADED        = "subscription.downgraded"
+    SUBSCRIPTION_CANCELLED         = "subscription.cancelled"
+    SUBSCRIPTION_PAUSED            = "subscription.paused"
+    SUBSCRIPTION_RESUMED           = "subscription.resumed"
+    SUBSCRIPTION_PAYMENT_FAILED    = "subscription.payment_failed"
+    SUBSCRIPTION_PAST_DUE          = "subscription.past_due"
+    # Reminder events (fired by APScheduler jobs in subscription_service)
+    SUBSCRIPTION_TRIAL_ENDING      = "subscription.trial_ending_soon"   # 7d, 3d before trial_end
+    SUBSCRIPTION_RENEWAL_REMINDER  = "subscription.renewal_reminder"    # 7d, 3d, 1d before period_end
+
     # ── Organisations ─────────────────────────────────────────────────────────
     ORG_INVITE_RECEIVED        = "org.invite.received"
     ORG_INVITE_ACCEPTED        = "org.invite.accepted"

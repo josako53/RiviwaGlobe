@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     AIRTEL_CLIENT_SECRET: str  = Field(default="")
     AIRTEL_SANDBOX:       bool = Field(default=True)
 
+    # Disbursements — platform admin only (B2B/B2C payouts to Airtel wallets)
+    # AIRTEL_DISBURSEMENT_PIN: 4-digit merchant PIN from Airtel partner portal
+    # AIRTEL_PUBLIC_KEY: RSA public key (base64 DER) from Airtel partner portal, used to encrypt PIN
+    AIRTEL_DISBURSEMENT_PIN: str = Field(default="", description="4-digit merchant disbursement PIN from Airtel portal")
+    AIRTEL_PUBLIC_KEY:       str = Field(default="", description="Base64-encoded RSA DER public key for PIN encryption")
+
     # ── Yas Money Tanzania (formerly Tigo Pesa) ───────────────────────────────
     # Get from: https://developer.yasmoney.co.tz (partner portal)
     YAS_CLIENT_ID:     str  = Field(default="")

@@ -28,6 +28,7 @@ class ConversationStatus(str, Enum):
     ABANDONED  = "abandoned"
     TIMED_OUT  = "timed_out"
     FAILED     = "failed"
+    ARCHIVED   = "archived"    # admin-archived; excluded from normal queries
 
 
 class ConversationStage(str, Enum):

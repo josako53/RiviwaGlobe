@@ -755,6 +755,51 @@ class FeedbackService:
         await self.db.commit()
         return f
 
+    async def action_suggestion(
+        self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
+    ) -> Feedback:
+        """
+        Mark a suggestion as ACTIONED (implemented).
+        Only valid for SUGGESTION feedback in SUBMITTED / ACKNOWLEDGED / IN_REVIEW status.
+        Sets status → ACTIONED and populates implemented_at.
+        """
+        f = await self.get_or_404(feedback_id, org_id=org_id)
+        if f.feedback_type.value.upper() != "SUGGESTION":
+            raise ValidationError(message="Only SUGGESTION feedback can be actioned.")
+        if f.status in (FeedbackStatus.CLOSED, FeedbackStatus.DISMISSED, FeedbackStatus.ACTIONED):
+            raise ValidationError(
+                message=f"Cannot action feedback with status '{f.status.value}'. "
+                        "Only SUBMITTED, ACKNOWLEDGED, or IN_REVIEW suggestions can be actioned."
+            )
+        summary  = data.get("implementation_summary", "").strip()
+        if not summary:
+            raise ValidationError(message="implementation_summary is required.")
+
+        f.status = FeedbackStatus.ACTIONED
+        if not f.implemented_at:
+            from datetime import datetime as dt_cls, timezone as tz_cls
+            override = data.get("implemented_at")
+            f.implemented_at = (
+                dt_cls.fromisoformat(str(override))
+                if override else dt_cls.now(tz_cls.utc)
+            )
+        await self.repo.save(f)
+        await self.repo.create_action(FeedbackAction(
+            feedback_id=f.id,
+            action_type=ActionType.RESPONSE,
+            description=f"Suggestion implemented: {summary}",
+            is_internal=False,
+            performed_by_user_id=by,
+        ))
+        await self.db.commit()
+        await self.producer.feedback_resolved(
+            f.id, f.project_id,
+            branch_id=f.branch_id, department_id=f.department_id,
+            service_id=f.service_id, product_id=f.product_id,
+            category_def_id=f.category_def_id,
+        )
+        return f
+
     async def dismiss(
         self, feedback_id: uuid.UUID, data: dict, by: uuid.UUID, org_id: Optional[uuid.UUID] = None
     ) -> Feedback:

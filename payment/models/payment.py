@@ -32,7 +32,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Index, Text, text
+from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -77,6 +77,20 @@ class Currency(str, Enum):
     TZS = "TZS"
     USD = "USD"
     KES = "KES"
+
+
+class DisbursementStatus(str, Enum):
+    PENDING    = "pending"    # created, not yet sent to Airtel
+    PROCESSING = "processing" # sent to Airtel, awaiting confirmation
+    SUCCESS    = "success"    # TS — Airtel confirmed funds delivered
+    FAILED     = "failed"     # TF — Airtel rejected or failed
+    AMBIGUOUS  = "ambiguous"  # TA — unclear state; re-enquire after 1 min
+    CANCELLED  = "cancelled"  # cancelled before sending
+
+
+class DisbursementType(str, Enum):
+    B2B = "B2B"  # business-to-business (internal staff payments, default)
+    B2C = "B2C"  # business-to-consumer (direct consumer payouts)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -249,3 +263,86 @@ class WebhookLog(SQLModel, table=True):
     received_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Disbursement(SQLModel, table=True):
+    """
+    Outbound Airtel Money disbursement — platform admin / org owner only.
+
+    Used to pay internal staff, agents, or approved recipients directly to
+    their Airtel Money wallet. Restricted to B2B by default; B2C requires
+    explicit type override.
+
+    Airtel V2 Disbursements API:
+      POST /standard/v2/disbursements/          — send funds
+      GET  /standard/v2/disbursements/{txn_id}  — enquiry (poll after ≥1 min)
+
+    Status lifecycle: PENDING → PROCESSING → SUCCESS | FAILED | AMBIGUOUS
+      AMBIGUOUS means Airtel returned TA — re-enquire to get final status.
+    """
+    __tablename__ = "disbursements"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, nullable=False)
+
+    # ── Recipient ─────────────────────────────────────────────────────────────
+    payee_msisdn: str = Field(
+        max_length=15, nullable=False,
+        description="Airtel phone number WITHOUT country code, e.g. '756789012'",
+    )
+    payee_name: Optional[str] = Field(default=None, max_length=200, nullable=True)
+
+    # ── Transfer details ──────────────────────────────────────────────────────
+    amount:           float  = Field(nullable=False)
+    currency:         str    = Field(default="TZS", max_length=5, nullable=False)
+    reference:        str    = Field(max_length=255, nullable=False,
+                                    description="Reference sent to Airtel — shown on recipient's receipt")
+    description:      Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    transaction_type: str    = Field(default="B2B", max_length=5, nullable=False,
+                                    description="B2B (internal staff) or B2C (consumer payout)")
+
+    # ── Context ───────────────────────────────────────────────────────────────
+    org_id:     Optional[uuid.UUID] = Field(default=None, nullable=True, index=True)
+    notes:      Optional[str]       = Field(default=None, sa_column=Column(Text, nullable=True),
+                                           description="Internal admin notes — not sent to Airtel")
+
+    # ── Status ────────────────────────────────────────────────────────────────
+    status: str = Field(
+        default=DisbursementStatus.PENDING.value,
+        sa_column=Column(String(20), nullable=False, index=True),
+    )
+
+    # ── Airtel transaction identifiers ────────────────────────────────────────
+    our_transaction_id:  str            = Field(
+        max_length=64, nullable=False, index=True,
+        description="UUID we generate and send as transaction.id — used for enquiry",
+    )
+    airtel_money_id:     Optional[str]  = Field(default=None, max_length=255, nullable=True,
+                                                description="Airtel-generated airtel_money_id from disbursement response")
+    airtel_reference_id: Optional[str]  = Field(default=None, max_length=255, nullable=True,
+                                                description="Airtel-generated reference_id from disbursement response")
+    failure_reason:      Optional[str]  = Field(default=None, sa_column=Column(Text, nullable=True))
+    raw_response:        Optional[Dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSONB, nullable=True),
+        description="Full Airtel API response — stored for audit and replay",
+    )
+
+    # ── Audit ─────────────────────────────────────────────────────────────────
+    initiated_by: uuid.UUID = Field(
+        nullable=False, index=True,
+        description="auth_service User.id of the admin who created this disbursement",
+    )
+    created_at:   datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )
+    updated_at:   datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"),
+                         onupdate=text("now()"), nullable=False)
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+
+    def __repr__(self):
+        return f"<Disbursement {self.amount} TZS → {self.payee_msisdn} [{self.status}]>"

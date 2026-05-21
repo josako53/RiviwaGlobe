@@ -52,6 +52,9 @@ google-cloud-translate==3.19.0
 # ── Redis — translation cache ─────────────────────────────────────────────────
 redis==5.2.1
 
+# ── JWT verification (same library used by all other Riviwa services) ────────
+python-jose[cryptography]==3.3.0
+
 # ── Observability ─────────────────────────────────────────────────────────────
 structlog==24.4.0
 

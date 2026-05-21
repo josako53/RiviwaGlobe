@@ -104,10 +104,18 @@ async def initiate_payment(payment_id: uuid.UUID, body: Dict[str, Any], db: DbDe
     provider = PaymentProvider(body.get("provider", "azampay"))
     producer = await get_producer()
     txn      = await _svc(db, producer).initiate(payment_id, provider)
+    resp = txn.provider_response or {}
+    # PayPal stores checkout URL inside links[rel=payer-action]; other providers may return it directly
+    checkout_url = resp.get("checkout_url") or next(
+        (l["href"] for l in resp.get("links", []) if l.get("rel") == "payer-action"), None
+    )
     return {
         **_t(txn),
-        "checkout_url": (txn.provider_response or {}).get("checkout_url"),
-        "message": "Payment request sent. Customer will receive a USSD prompt.",
+        "checkout_url": checkout_url,
+        "message": (
+            f"Redirect to PayPal: {checkout_url}" if checkout_url
+            else "Payment request sent. Customer will receive a USSD prompt."
+        ),
     }
 
 

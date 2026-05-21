@@ -1,9 +1,11 @@
 """api/v1/admin.py — Staff-only AI management endpoints."""
 from __future__ import annotations
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from core.dependencies import DbDep, StaffDep
+from models.conversation import ConversationStatus
 from repositories.conversation_repo import ConversationRepository
 
 router = APIRouter(prefix="/ai/admin", tags=["AI Admin"])
@@ -153,3 +155,91 @@ async def index_vault(_: StaffDep) -> dict:
     from services.obsidian_rag_service import get_obsidian_rag
     chunks = get_obsidian_rag().index_vault()
     return {"chunks_indexed": chunks}
+
+
+@router.patch(
+    "/conversations/{conversation_id}",
+    summary="Update conversation metadata (staff only)",
+    status_code=status.HTTP_200_OK,
+)
+async def update_conversation(
+    conversation_id: uuid.UUID,
+    body: dict,
+    db: DbDep,
+    _: StaffDep,
+) -> dict:
+    """
+    Update mutable metadata on a conversation.
+
+    Patchable fields:
+      is_urgent       — bool
+      incharge_name   — str (person to escalate to)
+      incharge_phone  — str
+      status          — active | abandoned | archived
+      language        — override detected language (e.g. "en" → "sw")
+    """
+    repo = ConversationRepository(db)
+    conv = await repo.get_or_404(conversation_id)
+
+    allowed = {"is_urgent", "incharge_name", "incharge_phone", "language"}
+    for field in allowed:
+        if field in body:
+            setattr(conv, field, body[field])
+
+    if "status" in body:
+        try:
+            new_status = ConversationStatus(body["status"])
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid status '{body['status']}'. Valid values: {[s.value for s in ConversationStatus]}",
+            )
+        conv.status = new_status
+
+    conv.last_active_at = datetime.now(timezone.utc)
+    await repo.save(conv)
+
+    return {
+        "conversation_id": str(conv.id),
+        "status":          conv.status.value,
+        "language":        conv.language,
+        "is_urgent":       conv.is_urgent,
+        "incharge_name":   conv.incharge_name,
+        "incharge_phone":  conv.incharge_phone,
+        "updated_at":      conv.last_active_at.isoformat(),
+    }
+
+
+@router.delete(
+    "/conversations/{conversation_id}",
+    summary="Archive a conversation (staff only)",
+    status_code=status.HTTP_200_OK,
+)
+async def archive_conversation(
+    conversation_id: uuid.UUID,
+    db: DbDep,
+    _: StaffDep,
+) -> dict:
+    """
+    Soft-deletes a conversation by setting status to ARCHIVED.
+    Archived conversations are excluded from Consumer-facing GET endpoints
+    but remain in the database for audit purposes.
+
+    To permanently delete, use the database directly (no API exists intentionally).
+    """
+    repo = ConversationRepository(db)
+    conv = await repo.get_or_404(conversation_id)
+
+    if conv.status == ConversationStatus.ARCHIVED:
+        return {"message": "Conversation already archived.", "conversation_id": str(conv.id)}
+
+    conv.status         = ConversationStatus.ARCHIVED
+    conv.completed_at   = conv.completed_at or datetime.now(timezone.utc)
+    conv.last_active_at = datetime.now(timezone.utc)
+    await repo.save(conv)
+
+    return {
+        "message":         "Conversation archived.",
+        "conversation_id": str(conv.id),
+        "archived_at":     conv.last_active_at.isoformat(),
+    }

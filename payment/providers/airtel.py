@@ -1,4 +1,4 @@
-"""providers/airtel.py — Airtel Money Tanzania (Collection + Refund + Enquiry).
+"""providers/airtel.py — Airtel Money Tanzania (Collection + Refund + Enquiry + Disbursement).
 
 Docs: https://openapi.airtel.co.tz (production)
       https://openapiuat.airtel.co.tz (staging)
@@ -234,5 +234,163 @@ class AirtelMoneyProvider(BasePaymentProvider):
         log.info("airtel.refund", airtel_money_id=airtel_money_id, ok=ok)
         return {
             "status":            "success" if ok else "failed",
+            "provider_response": data,
+        }
+
+    # ── Disbursements (V2) ────────────────────────────────────────────────────
+
+    def _encrypt_pin(self, pin: str) -> str:
+        """
+        RSA-encrypt the 4-digit disbursement PIN using Airtel's public key.
+        Key format: base64-encoded DER (SubjectPublicKeyInfo / PKCS#8).
+        Returns base64-encoded ciphertext.
+        """
+        if not settings.AIRTEL_PUBLIC_KEY:
+            raise PaymentProviderError(
+                "airtel",
+                "AIRTEL_PUBLIC_KEY not configured. Set it in .env to enable disbursements."
+            )
+        try:
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+            from cryptography.hazmat.primitives import hashes
+
+            key_bytes = base64.b64decode(settings.AIRTEL_PUBLIC_KEY)
+            pub_key   = serialization.load_der_public_key(key_bytes)
+            encrypted = pub_key.encrypt(
+                pin.encode(),
+                asym_padding.OAEP(
+                    mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None,
+                ),
+            )
+            return base64.b64encode(encrypted).decode()
+        except Exception as exc:
+            raise PaymentProviderError("airtel", f"PIN encryption failed: {exc}")
+
+    async def disburse(
+        self,
+        transaction_id:   str,
+        payee_msisdn:     str,
+        payee_name:       Optional[str],
+        amount:           int,
+        reference:        str,
+        transaction_type: str = "B2B",
+    ) -> Dict[str, Any]:
+        """
+        POST /standard/v2/disbursements/ — send funds to an Airtel wallet.
+
+        transaction_id: unique ID we generate (used for status enquiry).
+        payee_msisdn:   phone WITHOUT country code, e.g. '756789012'.
+        transaction_type: 'B2B' for internal staff, 'B2C' for consumer payouts.
+
+        Response statuses: TS=success TF=failed TA=ambiguous TIP=in-progress
+        """
+        if not settings.AIRTEL_DISBURSEMENT_PIN:
+            raise PaymentProviderError(
+                "airtel",
+                "AIRTEL_DISBURSEMENT_PIN not configured. Set the 4-digit merchant PIN in .env."
+            )
+
+        token      = await self._get_token()
+        msisdn     = self._strip_country_code(payee_msisdn)
+        enc_pin    = self._encrypt_pin(settings.AIRTEL_DISBURSEMENT_PIN)
+
+        body = {
+            "payee": {
+                "currency": "TZS",
+                "msisdn":   msisdn,
+                "name":     payee_name or "",
+            },
+            "reference": reference,
+            "pin":        enc_pin,
+            "transaction": {
+                "amount": amount,
+                "id":     transaction_id,
+                "type":   transaction_type,
+            },
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{self._base_url()}/standard/v2/disbursements/",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type":  "application/json",
+                    "Accept":        "*/*",
+                    "X-Country":     "TZ",
+                    "X-Currency":    "TZS",
+                },
+                json=body,
+            )
+
+        data         = r.json()
+        status_block = data.get("status", {})
+        resp_code    = status_block.get("response_code", "")
+        success      = status_block.get("success", False)
+
+        # DP00900001001 = Success, DP00900001006 = Processing (both OK for initiation)
+        if not success and resp_code not in ("DP00900001001", "DP00900001006",
+                                             "DP00900001000"):  # ambiguous = still processing
+            raise PaymentProviderError(
+                "airtel",
+                f"{status_block.get('message', 'Disbursement failed')} [{resp_code}]"
+            )
+
+        txn_data         = data.get("data", {}).get("transaction", {})
+        airtel_money_id  = txn_data.get("airtel_money_id")
+        airtel_ref_id    = txn_data.get("reference_id")
+        raw_status       = txn_data.get("status", "")
+        mapped_status    = _AIRTEL_STATUS_MAP.get(raw_status, "processing")
+
+        log.info(
+            "airtel.disburse",
+            transaction_id=transaction_id,
+            msisdn=msisdn[:3] + "****",
+            amount=amount,
+            resp_code=resp_code,
+            raw_status=raw_status,
+        )
+        return {
+            "status":            mapped_status,
+            "our_transaction_id": transaction_id,
+            "airtel_money_id":   airtel_money_id,
+            "airtel_reference_id": airtel_ref_id,
+            "resp_code":         resp_code,
+            "provider_response": data,
+        }
+
+    async def enquiry_disbursement(self, transaction_id: str) -> Dict[str, Any]:
+        """
+        GET /standard/v2/disbursements/{id} — poll transaction status.
+        Call at least 1 minute after disburse() to allow Airtel time to process.
+        """
+        token = await self._get_token()
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                f"{self._base_url()}/standard/v2/disbursements/{transaction_id}",
+                params={"transactionType": "B2B"},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept":        "*/*",
+                    "X-Country":     "TZ",
+                    "X-Currency":    "TZS",
+                },
+            )
+
+        data       = r.json()
+        txn_data   = data.get("data", {}).get("transaction", {})
+        raw_status = txn_data.get("status", "")
+        status     = _AIRTEL_STATUS_MAP.get(raw_status, "processing")
+        message    = txn_data.get("message", "")
+
+        log.info("airtel.enquiry_disbursement",
+                 transaction_id=transaction_id, raw_status=raw_status)
+        return {
+            "status":            status,
+            "raw_status":        raw_status,
+            "message":           message,
             "provider_response": data,
         }
