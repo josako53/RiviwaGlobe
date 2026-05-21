@@ -18,6 +18,13 @@ options:
 timeout: 3600s  # 1 hour max
 
 steps:
+  # ── Authenticate Docker to Artifact Registry (must run before any push) ────
+  - id: auth-registry
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args: ['auth', 'configure-docker', 'me-west1-docker.pkg.dev', '--quiet']
+    waitFor: ['-']
+
   # ── Build all images in parallel (waitFor: ['-'] = start immediately) ──────
 
   - id: build-auth
@@ -100,77 +107,77 @@ steps:
   - id: push-auth
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-auth:$COMMIT_SHA"]
-    waitFor: [build-auth]
+    waitFor: [build-auth, auth-registry]
 
   - id: push-payment
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-payment:$COMMIT_SHA"]
-    waitFor: [build-payment]
+    waitFor: [build-payment, auth-registry]
 
   - id: push-notification
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-notification:$COMMIT_SHA"]
-    waitFor: [build-notification]
+    waitFor: [build-notification, auth-registry]
 
   - id: push-stakeholder
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-stakeholder:$COMMIT_SHA"]
-    waitFor: [build-stakeholder]
+    waitFor: [build-stakeholder, auth-registry]
 
   - id: push-feedback
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-feedback:$COMMIT_SHA"]
-    waitFor: [build-feedback]
+    waitFor: [build-feedback, auth-registry]
 
   - id: push-recommendation
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-recommendation:$COMMIT_SHA"]
-    waitFor: [build-recommendation]
+    waitFor: [build-recommendation, auth-registry]
 
   - id: push-ai
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-ai:$COMMIT_SHA"]
-    waitFor: [build-ai]
+    waitFor: [build-ai, auth-registry]
 
   - id: push-analytics
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-analytics:$COMMIT_SHA"]
-    waitFor: [build-analytics]
+    waitFor: [build-analytics, auth-registry]
 
   - id: push-integration
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-integration:$COMMIT_SHA"]
-    waitFor: [build-integration]
+    waitFor: [build-integration, auth-registry]
 
   - id: push-product
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-product:$COMMIT_SHA"]
-    waitFor: [build-product]
+    waitFor: [build-product, auth-registry]
 
   - id: push-qr
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-qr:$COMMIT_SHA"]
-    waitFor: [build-qr]
+    waitFor: [build-qr, auth-registry]
 
   - id: push-verification
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-verification:$COMMIT_SHA"]
-    waitFor: [build-verification]
+    waitFor: [build-verification, auth-registry]
 
   - id: push-waiting
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-waiting:$COMMIT_SHA"]
-    waitFor: [build-waiting]
+    waitFor: [build-waiting, auth-registry]
 
   - id: push-staff
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-staff:$COMMIT_SHA"]
-    waitFor: [build-staff]
+    waitFor: [build-staff, auth-registry]
 
   - id: push-subscription
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-subscription:$COMMIT_SHA"]
-    waitFor: [build-subscription]
+    waitFor: [build-subscription, auth-registry]
 
   # ── Deploy to Cloud Run (wait for push, run in parallel) ──────────────────
 
