@@ -385,7 +385,7 @@ async def list_members(
     Requires at least `MEMBER` role in the org.
     Pass `?active_only=true` to exclude suspended/removed members.
     """
-    members = await svc.repo.list_active_members(org_id) if active_only else await svc.repo.list_members(org_id)
+    members = await svc.org_repo.list_active_members(org_id) if active_only else await svc.org_repo.list_members(org_id)
     return [MemberResponse.model_validate(m) for m in members]
 
 
