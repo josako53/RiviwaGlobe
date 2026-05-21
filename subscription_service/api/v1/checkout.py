@@ -101,6 +101,7 @@ async def checkout(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) ->
         return {
             "subscription_id": str(sub.id),
             "status": sub.status,
+            "invoice_id": str(invoice.id),
             "invoice": _invoice_out(invoice),
             "payment": {
                 "provider": "bank_transfer",
@@ -144,6 +145,7 @@ async def checkout(body: dict, db: DbDep, claims: TokenDep, org_id: OrgIdDep) ->
             "subscription_id":  str(sub.id),
             "status":           sub.status,
             "payment_id":       payment_id,
+            "invoice_id":       str(invoice.id),
             "invoice":          _invoice_out(invoice),
             "checkout_url":     checkout_url,
             "payment": {
