@@ -1,0 +1,233 @@
+# =============================================================================
+# Riviwa Infrastructure VM — Docker Compose
+# Runs on riviwa-infra-vm (10.10.0.100, me-west1-b)
+# Services: Kafka (4 KRaft nodes), Qdrant, Ollama, Translation, Spark
+# =============================================================================
+
+x-kafka-common: &kafka-common
+  image: apache/kafka:4.1.1
+  restart: unless-stopped
+  networks: [infra-net]
+  environment: &kafka-env-common
+    KAFKA_PROCESS_ROLES: "controller,broker"
+    KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093,4@kafka-4:9093"
+    KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+    KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+    CLUSTER_ID: "5L6g3nShT-eMCtK--X86sw"
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+    KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+    KAFKA_MIN_INSYNC_REPLICAS: 2
+    KAFKA_NUM_PARTITIONS: 4
+    KAFKA_LOG_DIRS: /var/lib/kafka/data
+
+services:
+  # ── Kafka broker 1 (Cloud Run services connect via 10.10.0.100:9092) ────────
+  kafka-1:
+    <<: *kafka-common
+    container_name: riviwa-kafka-1
+    ports:
+      - "9092:9092"    # External (VPC) listener for Cloud Run services
+    environment:
+      <<: *kafka-env-common
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9096"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-1:9092,EXTERNAL://${KAFKA_EXTERNAL_IP}:9092"
+    volumes: [kafka_1:/var/lib/kafka/data]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 15s
+      retries: 30
+      start_period: 120s
+
+  kafka-2:
+    <<: *kafka-common
+    container_name: riviwa-kafka-2
+    ports:
+      - "9093:9092"
+    environment:
+      <<: *kafka-env-common
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9096"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-2:9092,EXTERNAL://${KAFKA_EXTERNAL_IP}:9093"
+    volumes: [kafka_2:/var/lib/kafka/data]
+
+  kafka-3:
+    <<: *kafka-common
+    container_name: riviwa-kafka-3
+    ports:
+      - "9094:9092"
+    environment:
+      <<: *kafka-env-common
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9096"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-3:9092,EXTERNAL://${KAFKA_EXTERNAL_IP}:9094"
+    volumes: [kafka_3:/var/lib/kafka/data]
+
+  kafka-4:
+    <<: *kafka-common
+    container_name: riviwa-kafka-4
+    ports:
+      - "9095:9092"
+    environment:
+      <<: *kafka-env-common
+      KAFKA_NODE_ID: 4
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9096"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-4:9092,EXTERNAL://${KAFKA_EXTERNAL_IP}:9095"
+    volumes: [kafka_4:/var/lib/kafka/data]
+
+  # ── Qdrant vector DB ─────────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    container_name: riviwa-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - /data/qdrant:/qdrant/storage
+    networks: [infra-net]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ── Ollama (GPU-accelerated LLM) ─────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: reviwa-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - /data/ollama:/root/.ollama
+    networks: [infra-net]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      OLLAMA_KEEP_ALIVE: "24h"
+      OLLAMA_MAX_LOADED_MODELS: "2"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ── Translation service (NLLB-200, stays on VM to avoid Cloud Run cold starts) ─
+  translation:
+    image: me-west1-docker.pkg.dev/riviwa/riviwa-services/riviwa-translation:latest
+    container_name: riviwa-translation
+    restart: unless-stopped
+    ports:
+      - "8050:8050"
+    networks: [infra-net]
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+    environment:
+      TRANSLATION_DATABASE_URL: ${TRANSLATION_DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      NLLB_ENABLED: "true"
+      NLLB_MODEL_NAME: "facebook/nllb-200-distilled-1.3B"
+      NLLB_DEVICE: "cpu"
+      NLLB_WORKERS: "2"
+      TRANSLATION_PROVIDER: "nllb"
+      DEFAULT_LANGUAGE: "sw"
+      FALLBACK_LANGUAGE: "en"
+      ENVIRONMENT: "production"
+      APP_V1_STR: "/api/v1"
+    volumes:
+      - /data/translation-models:/app/models  # cache NLLB model weights
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 3G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8050/health || exit 1"]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 180s  # NLLB takes ~2 min to load
+
+  # ── Spark master + worker + jobs ─────────────────────────────────────────────
+  spark-master:
+    image: bitnami/spark:3.5.3
+    container_name: riviwa-spark-master
+    restart: unless-stopped
+    ports:
+      - "7077:7077"
+      - "8082:8080"
+    networks: [infra-net]
+    environment:
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: spark-master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+    volumes:
+      - /data/spark:/tmp/spark-events
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  spark-worker:
+    image: bitnami/spark:3.5.3
+    container_name: riviwa-spark-worker
+    restart: unless-stopped
+    depends_on: [spark-master]
+    networks: [infra-net]
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 4G
+      SPARK_WORKER_CORES: 4
+    volumes:
+      - /data/spark:/tmp/spark-events
+    deploy:
+      resources:
+        limits:
+          memory: 5G
+
+  spark-jobs:
+    image: me-west1-docker.pkg.dev/riviwa/riviwa-services/riviwa-spark:latest
+    container_name: riviwa-spark-jobs
+    restart: unless-stopped
+    depends_on: [spark-master, kafka-1]
+    networks: [infra-net]
+    environment:
+      SPARK_MASTER_URL: spark://spark-master:7077
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092,kafka-4:9092
+      FEEDBACK_DATABASE_URL: ${FEEDBACK_DATABASE_URL:-}
+      ANALYTICS_DATABASE_URL: ${ANALYTICS_DATABASE_URL:-}
+      REDIS_URL: ${REDIS_URL}
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G
+
+networks:
+  infra-net:
+    driver: bridge
+
+volumes:
+  kafka_1:
+  kafka_2:
+  kafka_3:
+  kafka_4:
