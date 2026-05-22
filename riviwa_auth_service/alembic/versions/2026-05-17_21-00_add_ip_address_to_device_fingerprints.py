@@ -1,15 +1,15 @@
 """add ip_address to device_fingerprints
 
-Revision ID: a1b2c3d4e5f6
-Revises: 2026-05-05
+Revision ID: c7d8e9f0a1b2
+Revises: a1b2c3d4e5f6
 Create Date: 2026-05-17 21:00:00.000000
 
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = 'a1b2c3d4e5f6'
-down_revision = None   # set by alembic at runtime via branch resolution
+revision = 'c7d8e9f0a1b2'
+down_revision = 'a1b2c3d4e5f6'
 branch_labels = None
 depends_on = None
 

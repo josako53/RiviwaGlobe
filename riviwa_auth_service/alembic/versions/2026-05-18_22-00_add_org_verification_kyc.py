@@ -1,14 +1,14 @@
 """Add organisation payment/KYC verification and KYC submission tables
 
 Revision ID: b7c8d9e0f1a2
-Revises: a1b2c3d4e5f6
+Revises: c7d8e9f0a1b2
 Create Date: 2026-05-18 22:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = 'b7c8d9e0f1a2'
-down_revision = 'a1b2c3d4e5f6'
+down_revision = 'c7d8e9f0a1b2'
 branch_labels = None
 depends_on = None
 
