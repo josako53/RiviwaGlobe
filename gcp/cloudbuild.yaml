@@ -23,18 +23,22 @@ steps:
   # /workspace is shared across all Cloud Build step containers.
   # docker login writes to --config so every push step can reuse it.
   - id: configure-ar-credentials
-    name: gcr.io/cloud-builders/docker
-    entrypoint: sh
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: python3
     args:
       - '-c'
       - |
-        mkdir -p /workspace/.docker
-        TOKEN=$$(curl -sf -H "Metadata-Flavor: Google" \
-          "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
-          | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-        echo "$$TOKEN" | docker --config /workspace/.docker login \
-          -u oauth2accesstoken --password-stdin https://me-west1-docker.pkg.dev
-        echo "Login complete. Config written to /workspace/.docker/config.json"
+        import urllib.request, base64, json, os
+        req = urllib.request.Request(
+          'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
+          headers={'Metadata-Flavor': 'Google'}
+        )
+        token = json.loads(urllib.request.urlopen(req).read())['access_token']
+        auth = base64.b64encode(('oauth2accesstoken:' + token).encode()).decode()
+        cfg = json.dumps({'auths': {'me-west1-docker.pkg.dev': {'auth': auth}}})
+        os.makedirs('/workspace/.docker', exist_ok=True)
+        open('/workspace/.docker/config.json', 'w').write(cfg)
+        print('AR credentials written to /workspace/.docker/config.json')
     waitFor: ['-']
 
   # ── Build all images in parallel (waitFor: ['-'] = start immediately) ──────
