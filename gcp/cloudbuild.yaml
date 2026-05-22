@@ -29,10 +29,10 @@ steps:
       - '-c'
       - |
         mkdir -p /workspace/.docker
-        TOKEN=$(curl -sf -H "Metadata-Flavor: Google" \
+        TOKEN=$$(curl -sf -H "Metadata-Flavor: Google" \
           "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
           | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-        echo "{\"auths\":{\"me-west1-docker.pkg.dev\":{\"auth\":\"$(echo -n "oauth2accesstoken:$TOKEN" | base64 -w0)\"}}}" \
+        echo "{\"auths\":{\"me-west1-docker.pkg.dev\":{\"auth\":\"$$(echo -n "oauth2accesstoken:$$TOKEN" | base64 -w0)\"}}}" \
           > /workspace/.docker/config.json
         echo "AR credentials written to /workspace/.docker/config.json"
     waitFor: ['-']
