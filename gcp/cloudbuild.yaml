@@ -124,82 +124,98 @@ steps:
       - build-staff
       - build-subscription
 
-  # ── Push all images (wait for respective build + prune) ───────────────────
+  # ── Push images sequentially — avoids bandwidth saturation on large images ──
+  # (recommendation has torch+sentence-transformers ~2GB, must push one at a time)
 
   - id: push-auth
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-auth:$COMMIT_SHA"]
-    waitFor: [build-auth, auth-registry, prune-layers]
+    waitFor: [prune-layers, auth-registry]
+    timeout: 900s
 
   - id: push-payment
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-payment:$COMMIT_SHA"]
-    waitFor: [build-payment, auth-registry, prune-layers]
+    waitFor: [push-auth]
+    timeout: 900s
 
   - id: push-notification
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-notification:$COMMIT_SHA"]
-    waitFor: [build-notification, auth-registry, prune-layers]
+    waitFor: [push-payment]
+    timeout: 900s
 
   - id: push-stakeholder
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-stakeholder:$COMMIT_SHA"]
-    waitFor: [build-stakeholder, auth-registry, prune-layers]
+    waitFor: [push-notification]
+    timeout: 900s
 
   - id: push-feedback
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-feedback:$COMMIT_SHA"]
-    waitFor: [build-feedback, auth-registry, prune-layers]
+    waitFor: [push-stakeholder]
+    timeout: 900s
 
   - id: push-recommendation
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-recommendation:$COMMIT_SHA"]
-    waitFor: [build-recommendation, auth-registry, prune-layers]
+    waitFor: [push-feedback]
+    timeout: 1800s
 
   - id: push-ai
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-ai:$COMMIT_SHA"]
-    waitFor: [build-ai, auth-registry, prune-layers]
+    waitFor: [push-recommendation]
+    timeout: 900s
 
   - id: push-analytics
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-analytics:$COMMIT_SHA"]
-    waitFor: [build-analytics, auth-registry, prune-layers]
+    waitFor: [push-ai]
+    timeout: 900s
 
   - id: push-integration
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-integration:$COMMIT_SHA"]
-    waitFor: [build-integration, auth-registry, prune-layers]
+    waitFor: [push-analytics]
+    timeout: 900s
 
   - id: push-product
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-product:$COMMIT_SHA"]
-    waitFor: [build-product, auth-registry, prune-layers]
+    waitFor: [push-integration]
+    timeout: 900s
 
   - id: push-qr
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-qr:$COMMIT_SHA"]
-    waitFor: [build-qr, auth-registry, prune-layers]
+    waitFor: [push-product]
+    timeout: 900s
 
   - id: push-verification
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-verification:$COMMIT_SHA"]
-    waitFor: [build-verification, auth-registry, prune-layers]
+    waitFor: [push-qr]
+    timeout: 900s
 
   - id: push-waiting
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-waiting:$COMMIT_SHA"]
-    waitFor: [build-waiting, auth-registry, prune-layers]
+    waitFor: [push-verification]
+    timeout: 900s
 
   - id: push-staff
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-staff:$COMMIT_SHA"]
-    waitFor: [build-staff, auth-registry, prune-layers]
+    waitFor: [push-waiting]
+    timeout: 900s
 
   - id: push-subscription
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-subscription:$COMMIT_SHA"]
-    waitFor: [build-subscription, auth-registry, prune-layers]
+    waitFor: [push-staff]
+    timeout: 900s
 
   # ── Deploy to Cloud Run (wait for push, run in parallel) ──────────────────
 
