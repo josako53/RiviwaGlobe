@@ -123,6 +123,12 @@ steps:
     args: ['images', '--filter', 'reference=$_REGISTRY/*:$COMMIT_SHA']
     waitFor: [prune-layers]
 
+  # ── Check which identity Cloud Build is using (diagnostic) ──────────────────
+  - id: check-identity
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    args: ['gcloud', 'auth', 'list', '--format=json']
+    waitFor: [verify-images]
+
   # ── Push images sequentially — native docker args, no entrypoint override ──
   # Cloud Build auto-configures Artifact Registry auth for this SA.
   # Sequential chain prevents bandwidth saturation from recommendation (~2GB).
@@ -130,7 +136,7 @@ steps:
   - id: push-auth
     name: gcr.io/cloud-builders/docker
     args: ['push', '$_REGISTRY/riviwa-auth:$COMMIT_SHA']
-    waitFor: [verify-images]
+    waitFor: [check-identity]
     timeout: 900s
 
   - id: push-payment
