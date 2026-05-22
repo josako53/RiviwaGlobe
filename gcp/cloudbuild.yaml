@@ -106,7 +106,7 @@ steps:
   # ── Prune dangling layers after all builds complete (frees disk) ────────────
   - id: prune-layers
     name: gcr.io/cloud-builders/docker
-    args: ['system', 'prune', '-f']
+    args: ['image', 'prune', '-f']
     waitFor:
       - build-auth
       - build-payment
