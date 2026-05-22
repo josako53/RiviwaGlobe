@@ -23,7 +23,7 @@ steps:
   # /workspace is shared across all Cloud Build step containers.
   # docker login writes to --config so every push step can reuse it.
   - id: configure-ar-credentials
-    name: gcr.io/cloud-builders/curl
+    name: gcr.io/cloud-builders/docker
     entrypoint: sh
     args:
       - '-c'
@@ -31,10 +31,10 @@ steps:
         mkdir -p /workspace/.docker
         TOKEN=$$(curl -sf -H "Metadata-Flavor: Google" \
           "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
-          | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-        echo "{\"auths\":{\"me-west1-docker.pkg.dev\":{\"auth\":\"$$(echo -n "oauth2accesstoken:$$TOKEN" | base64 -w0)\"}}}" \
-          > /workspace/.docker/config.json
-        echo "AR credentials written to /workspace/.docker/config.json"
+          | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+        echo "$$TOKEN" | docker --config /workspace/.docker login \
+          -u oauth2accesstoken --password-stdin https://me-west1-docker.pkg.dev
+        echo "Login complete. Config written to /workspace/.docker/config.json"
     waitFor: ['-']
 
   # ── Build all images in parallel (waitFor: ['-'] = start immediately) ──────
@@ -140,105 +140,105 @@ steps:
   - id: push-auth
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-auth:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-auth:$COMMIT_SHA']
     waitFor: [prune-layers, configure-ar-credentials]
     timeout: 900s
 
   - id: push-payment
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-payment:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-payment:$COMMIT_SHA']
     waitFor: [push-auth]
     timeout: 900s
 
   - id: push-notification
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-notification:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-notification:$COMMIT_SHA']
     waitFor: [push-payment]
     timeout: 900s
 
   - id: push-stakeholder
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-stakeholder:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-stakeholder:$COMMIT_SHA']
     waitFor: [push-notification]
     timeout: 900s
 
   - id: push-feedback
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-feedback:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-feedback:$COMMIT_SHA']
     waitFor: [push-stakeholder]
     timeout: 900s
 
   - id: push-recommendation
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-recommendation:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-recommendation:$COMMIT_SHA']
     waitFor: [push-feedback]
     timeout: 1800s
 
   - id: push-ai
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-ai:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-ai:$COMMIT_SHA']
     waitFor: [push-recommendation]
     timeout: 900s
 
   - id: push-analytics
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-analytics:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-analytics:$COMMIT_SHA']
     waitFor: [push-ai]
     timeout: 900s
 
   - id: push-integration
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-integration:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-integration:$COMMIT_SHA']
     waitFor: [push-analytics]
     timeout: 900s
 
   - id: push-product
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-product:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-product:$COMMIT_SHA']
     waitFor: [push-integration]
     timeout: 900s
 
   - id: push-qr
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-qr:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-qr:$COMMIT_SHA']
     waitFor: [push-product]
     timeout: 900s
 
   - id: push-verification
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-verification:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-verification:$COMMIT_SHA']
     waitFor: [push-qr]
     timeout: 900s
 
   - id: push-waiting
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-waiting:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-waiting:$COMMIT_SHA']
     waitFor: [push-verification]
     timeout: 900s
 
   - id: push-staff
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-staff:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-staff:$COMMIT_SHA']
     waitFor: [push-waiting]
     timeout: 900s
 
   - id: push-subscription
     name: gcr.io/cloud-builders/docker
     entrypoint: sh
-    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-subscription:$COMMIT_SHA']
+    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-subscription:$COMMIT_SHA']
     waitFor: [push-staff]
     timeout: 900s
 
