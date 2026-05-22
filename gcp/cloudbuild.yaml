@@ -19,28 +19,6 @@ options:
 timeout: 3600s  # 1 hour max
 
 steps:
-  # ── Login to Artifact Registry — write token to /workspace/.docker ──────────
-  # /workspace is shared across all Cloud Build step containers.
-  # docker login writes to --config so every push step can reuse it.
-  - id: configure-ar-credentials
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: python3
-    args:
-      - '-c'
-      - |
-        import urllib.request, base64, json, os
-        req = urllib.request.Request(
-          'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token',
-          headers={'Metadata-Flavor': 'Google'}
-        )
-        token = json.loads(urllib.request.urlopen(req).read())['access_token']
-        auth = base64.b64encode(('oauth2accesstoken:' + token).encode()).decode()
-        cfg = json.dumps({'auths': {'me-west1-docker.pkg.dev': {'auth': auth}}})
-        os.makedirs('/workspace/.docker', exist_ok=True)
-        open('/workspace/.docker/config.json', 'w').write(cfg)
-        print('AR credentials written to /workspace/.docker/config.json')
-    waitFor: ['-']
-
   # ── Build all images in parallel (waitFor: ['-'] = start immediately) ──────
 
   - id: build-auth
@@ -139,110 +117,103 @@ steps:
       - build-staff
       - build-subscription
 
-  # ── Push images sequentially using shared /workspace/.docker credentials ────
+  # ── Verify images exist before pushing (diagnostic) ──────────────────────────
+  - id: verify-images
+    name: gcr.io/cloud-builders/docker
+    args: ['images', '--filter', 'reference=$_REGISTRY/*:$COMMIT_SHA']
+    waitFor: [prune-layers]
+
+  # ── Push images sequentially — native docker args, no entrypoint override ──
+  # Cloud Build auto-configures Artifact Registry auth for this SA.
+  # Sequential chain prevents bandwidth saturation from recommendation (~2GB).
 
   - id: push-auth
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-auth:$COMMIT_SHA']
-    waitFor: [prune-layers, configure-ar-credentials]
+    args: ['push', '$_REGISTRY/riviwa-auth:$COMMIT_SHA']
+    waitFor: [verify-images]
     timeout: 900s
 
   - id: push-payment
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-payment:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-payment:$COMMIT_SHA']
     waitFor: [push-auth]
     timeout: 900s
 
   - id: push-notification
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-notification:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-notification:$COMMIT_SHA']
     waitFor: [push-payment]
     timeout: 900s
 
   - id: push-stakeholder
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-stakeholder:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-stakeholder:$COMMIT_SHA']
     waitFor: [push-notification]
     timeout: 900s
 
   - id: push-feedback
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-feedback:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-feedback:$COMMIT_SHA']
     waitFor: [push-stakeholder]
     timeout: 900s
 
   - id: push-recommendation
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-recommendation:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-recommendation:$COMMIT_SHA']
     waitFor: [push-feedback]
     timeout: 1800s
 
   - id: push-ai
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-ai:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-ai:$COMMIT_SHA']
     waitFor: [push-recommendation]
     timeout: 900s
 
   - id: push-analytics
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-analytics:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-analytics:$COMMIT_SHA']
     waitFor: [push-ai]
     timeout: 900s
 
   - id: push-integration
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-integration:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-integration:$COMMIT_SHA']
     waitFor: [push-analytics]
     timeout: 900s
 
   - id: push-product
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-product:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-product:$COMMIT_SHA']
     waitFor: [push-integration]
     timeout: 900s
 
   - id: push-qr
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-qr:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-qr:$COMMIT_SHA']
     waitFor: [push-product]
     timeout: 900s
 
   - id: push-verification
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-verification:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-verification:$COMMIT_SHA']
     waitFor: [push-qr]
     timeout: 900s
 
   - id: push-waiting
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-waiting:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-waiting:$COMMIT_SHA']
     waitFor: [push-verification]
     timeout: 900s
 
   - id: push-staff
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-staff:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-staff:$COMMIT_SHA']
     waitFor: [push-waiting]
     timeout: 900s
 
   - id: push-subscription
     name: gcr.io/cloud-builders/docker
-    entrypoint: sh
-    args: ['-c', 'docker --config /workspace/.docker push $_REGISTRY/riviwa-subscription:$COMMIT_SHA']
+    args: ['push', '$_REGISTRY/riviwa-subscription:$COMMIT_SHA']
     waitFor: [push-staff]
     timeout: 900s
 
