@@ -11,9 +11,10 @@ substitutions:
   _CR_SA: riviwa-cloudrun@riviwa.iam.gserviceaccount.com
 
 options:
-  machineType: E2_HIGHCPU_32   # 32-core build machine for parallel builds
-  diskSizeGb: 400               # 15 Python images × ~2GB each needs headroom
-  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_32
+  diskSizeGb: 400
+  logging: GCS_ONLY
+  logsBucket: gs://riviwa_cloudbuild/logs
   substitution_option: ALLOW_LOOSE
 
 timeout: 3600s  # 1 hour max
