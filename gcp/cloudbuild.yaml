@@ -13,8 +13,7 @@ substitutions:
 options:
   machineType: E2_HIGHCPU_32
   diskSizeGb: 400
-  logging: GCS_ONLY
-  logsBucket: gs://riviwa_cloudbuild/logs
+  logging: LEGACY
   substitution_option: ALLOW_LOOSE
 
 timeout: 3600s  # 1 hour max
