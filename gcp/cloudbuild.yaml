@@ -19,6 +19,21 @@ options:
 timeout: 3600s  # 1 hour max
 
 steps:
+  # ── Configure Artifact Registry credentials in /workspace (shared dir) ─────
+  # /workspace is the ONLY directory shared across all Cloud Build step
+  # containers. Writing Docker config there makes credentials available to
+  # all push steps without repeating auth in every container.
+  - id: configure-ar-credentials
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args:
+      - '-c'
+      - |
+        mkdir -p /workspace/.docker
+        DOCKER_CONFIG=/workspace/.docker docker-credential-gcr configure-docker \
+          --registries=me-west1-docker.pkg.dev
+    waitFor: ['-']
+
   # ── Build all images in parallel (waitFor: ['-'] = start immediately) ──────
 
   - id: build-auth
@@ -117,112 +132,110 @@ steps:
       - build-staff
       - build-subscription
 
-  # ── Push images sequentially via cloud-sdk (auth+push in same container) ────
-  # Each step: configure docker credentials then push — credentials don't
-  # persist across Cloud Build step containers so must be inline.
+  # ── Push images sequentially using shared /workspace/.docker credentials ────
 
   - id: push-auth
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-auth:$COMMIT_SHA']
-    waitFor: [prune-layers]
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-auth:$COMMIT_SHA']
+    waitFor: [prune-layers, configure-ar-credentials]
     timeout: 900s
 
   - id: push-payment
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-payment:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-payment:$COMMIT_SHA']
     waitFor: [push-auth]
     timeout: 900s
 
   - id: push-notification
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-notification:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-notification:$COMMIT_SHA']
     waitFor: [push-payment]
     timeout: 900s
 
   - id: push-stakeholder
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-stakeholder:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-stakeholder:$COMMIT_SHA']
     waitFor: [push-notification]
     timeout: 900s
 
   - id: push-feedback
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-feedback:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-feedback:$COMMIT_SHA']
     waitFor: [push-stakeholder]
     timeout: 900s
 
   - id: push-recommendation
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-recommendation:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-recommendation:$COMMIT_SHA']
     waitFor: [push-feedback]
     timeout: 1800s
 
   - id: push-ai
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-ai:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-ai:$COMMIT_SHA']
     waitFor: [push-recommendation]
     timeout: 900s
 
   - id: push-analytics
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-analytics:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-analytics:$COMMIT_SHA']
     waitFor: [push-ai]
     timeout: 900s
 
   - id: push-integration
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-integration:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-integration:$COMMIT_SHA']
     waitFor: [push-analytics]
     timeout: 900s
 
   - id: push-product
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-product:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-product:$COMMIT_SHA']
     waitFor: [push-integration]
     timeout: 900s
 
   - id: push-qr
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-qr:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-qr:$COMMIT_SHA']
     waitFor: [push-product]
     timeout: 900s
 
   - id: push-verification
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-verification:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-verification:$COMMIT_SHA']
     waitFor: [push-qr]
     timeout: 900s
 
   - id: push-waiting
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-waiting:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-waiting:$COMMIT_SHA']
     waitFor: [push-verification]
     timeout: 900s
 
   - id: push-staff
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-staff:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-staff:$COMMIT_SHA']
     waitFor: [push-waiting]
     timeout: 900s
 
   - id: push-subscription
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: bash
-    args: ['-c', 'gcloud auth configure-docker me-west1-docker.pkg.dev --quiet && docker push $_REGISTRY/riviwa-subscription:$COMMIT_SHA']
+    name: gcr.io/cloud-builders/docker
+    entrypoint: sh
+    args: ['-c', 'DOCKER_CONFIG=/workspace/.docker docker push $_REGISTRY/riviwa-subscription:$COMMIT_SHA']
     waitFor: [push-staff]
     timeout: 900s
 
