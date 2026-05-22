@@ -12,6 +12,7 @@ substitutions:
 
 options:
   machineType: E2_HIGHCPU_32   # 32-core build machine for parallel builds
+  diskSizeGb: 400               # 15 Python images × ~2GB each needs headroom
   logging: CLOUD_LOGGING_ONLY
   substitution_option: ALLOW_LOOSE
 
@@ -102,82 +103,103 @@ steps:
     args: [build, -t, "$_REGISTRY/riviwa-subscription:$COMMIT_SHA", ./subscription_service]
     waitFor: ["-"]
 
-  # ── Push all images (wait for respective build) ───────────────────────────
+  # ── Prune dangling layers after all builds complete (frees disk) ────────────
+  - id: prune-layers
+    name: gcr.io/cloud-builders/docker
+    args: ['system', 'prune', '-f']
+    waitFor:
+      - build-auth
+      - build-payment
+      - build-notification
+      - build-stakeholder
+      - build-feedback
+      - build-recommendation
+      - build-ai
+      - build-analytics
+      - build-integration
+      - build-product
+      - build-qr
+      - build-verification
+      - build-waiting
+      - build-staff
+      - build-subscription
+
+  # ── Push all images (wait for respective build + prune) ───────────────────
 
   - id: push-auth
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-auth:$COMMIT_SHA"]
-    waitFor: [build-auth, auth-registry]
+    waitFor: [build-auth, auth-registry, prune-layers]
 
   - id: push-payment
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-payment:$COMMIT_SHA"]
-    waitFor: [build-payment, auth-registry]
+    waitFor: [build-payment, auth-registry, prune-layers]
 
   - id: push-notification
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-notification:$COMMIT_SHA"]
-    waitFor: [build-notification, auth-registry]
+    waitFor: [build-notification, auth-registry, prune-layers]
 
   - id: push-stakeholder
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-stakeholder:$COMMIT_SHA"]
-    waitFor: [build-stakeholder, auth-registry]
+    waitFor: [build-stakeholder, auth-registry, prune-layers]
 
   - id: push-feedback
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-feedback:$COMMIT_SHA"]
-    waitFor: [build-feedback, auth-registry]
+    waitFor: [build-feedback, auth-registry, prune-layers]
 
   - id: push-recommendation
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-recommendation:$COMMIT_SHA"]
-    waitFor: [build-recommendation, auth-registry]
+    waitFor: [build-recommendation, auth-registry, prune-layers]
 
   - id: push-ai
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-ai:$COMMIT_SHA"]
-    waitFor: [build-ai, auth-registry]
+    waitFor: [build-ai, auth-registry, prune-layers]
 
   - id: push-analytics
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-analytics:$COMMIT_SHA"]
-    waitFor: [build-analytics, auth-registry]
+    waitFor: [build-analytics, auth-registry, prune-layers]
 
   - id: push-integration
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-integration:$COMMIT_SHA"]
-    waitFor: [build-integration, auth-registry]
+    waitFor: [build-integration, auth-registry, prune-layers]
 
   - id: push-product
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-product:$COMMIT_SHA"]
-    waitFor: [build-product, auth-registry]
+    waitFor: [build-product, auth-registry, prune-layers]
 
   - id: push-qr
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-qr:$COMMIT_SHA"]
-    waitFor: [build-qr, auth-registry]
+    waitFor: [build-qr, auth-registry, prune-layers]
 
   - id: push-verification
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-verification:$COMMIT_SHA"]
-    waitFor: [build-verification, auth-registry]
+    waitFor: [build-verification, auth-registry, prune-layers]
 
   - id: push-waiting
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-waiting:$COMMIT_SHA"]
-    waitFor: [build-waiting, auth-registry]
+    waitFor: [build-waiting, auth-registry, prune-layers]
 
   - id: push-staff
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-staff:$COMMIT_SHA"]
-    waitFor: [build-staff, auth-registry]
+    waitFor: [build-staff, auth-registry, prune-layers]
 
   - id: push-subscription
     name: gcr.io/cloud-builders/docker
     args: [push, "$_REGISTRY/riviwa-subscription:$COMMIT_SHA"]
-    waitFor: [build-subscription, auth-registry]
+    waitFor: [build-subscription, auth-registry, prune-layers]
 
   # ── Deploy to Cloud Run (wait for push, run in parallel) ──────────────────
 
