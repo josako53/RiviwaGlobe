@@ -1,627 +1,628 @@
-# =============================================================================
-# Cloud Build CI/CD Pipeline
-# Triggers on push to main branch.
-# Builds all service images in parallel, then deploys to Cloud Run.
-# Env vars mirror the exact running Contabo container config; only
-# infrastructure endpoints (DB, Redis, Kafka, MinIO, Qdrant, Ollama) are
-# substituted for GCP equivalents.
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# Riviwa — Cloud Run stage deployment  (region: me-west1)
+# Source-of-truth: root@77.237.241.13  /opt/riviwa
+#
+# GCP infrastructure:
+#   Cloud SQL PostgreSQL 15  : 10.247.0.2   (16 isolated databases)
+#   Memorystore Redis 7      : 10.49.120.219
+#   Compute Engine VM        : 10.10.0.100  (Kafka :9092, Qdrant :6333,
+#                                            Ollama :11434, MinIO :9000, Spark)
+#   Artifact Registry        : me-west1-docker.pkg.dev/riviwa/riviwa-services
+#   VPC Connector            : projects/riviwa/locations/me-west1/connectors/riviwa-connector
+#
+# One-time Secret Manager setup (run ONCE before first build):
+#   printf 'eW8KEbcuo6EVMFTw7c'                           | gcloud secrets create riviwa-ADMIN_PASSWORD          --data-file=- --project=riviwa
+#   printf 'Zaburi121-3**'                                 | gcloud secrets create riviwa-SMTP_PASSWORD           --data-file=- --project=riviwa
+#   printf 'dd1893286a87d755566fa8036eceb29d'              | gcloud secrets create riviwa-TWILIO_AUTH_TOKEN        --data-file=- --project=riviwa
+#   printf '<twilio-account-sid>'                          | gcloud secrets create riviwa-TWILIO_ACCOUNT_SID       --data-file=- --project=riviwa
+#   printf '<twilio-verify-service-sid>'                   | gcloud secrets create riviwa-TWILIO_VERIFY_SERVICE_SID --data-file=- --project=riviwa
+#   printf 'dfcAFCke0rQOXmGxPak6Nccm1hc_wpuPIYkawm0Pmhc' | gcloud secrets create riviwa-KARIBU_API_KEY           --data-file=- --project=riviwa
+#   printf 'ZEJy3NmTGQVxtSUoGe0PuKFijEbvMdas'             | gcloud secrets create riviwa-MINIO_SECRET_KEY         --data-file=- --project=riviwa
+# ─────────────────────────────────────────────────────────────────────────────
+
 substitutions:
   _REGION: me-west1
-  _PROJECT_ID: riviwa
-  _REGISTRY: me-west1-docker.pkg.dev/riviwa/riviwa-services
-  _CONNECTOR: projects/riviwa/locations/me-west1/connectors/riviwa-connector
-  _CR_SA: riviwa-cloudrun@riviwa.iam.gserviceaccount.com
+  _AR: me-west1-docker.pkg.dev/riviwa/riviwa-services
   _SQL_IP: "10.247.0.2"
   _REDIS_IP: "10.49.120.219"
   _VM_IP: "10.10.0.100"
-
-options:
-  machineType: E2_HIGHCPU_32
-  diskSizeGb: 400
-  logging: LEGACY
-  substitution_option: ALLOW_LOOSE
-
-timeout: 3600s  # 1 hour max
+  _VPC: projects/riviwa/locations/me-west1/connectors/riviwa-connector
+  _SA: riviwa-cloudrun@riviwa.iam.gserviceaccount.com
 
 steps:
-  # ── Build all images in parallel ─────────────────────────────────────────
 
+# ══════════════════════════════════════════════════════════════════════════════
+# BUILD  (all 16 services in parallel)
+# ══════════════════════════════════════════════════════════════════════════════
   - id: build-auth
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-auth:$COMMIT_SHA", ./riviwa_auth_service]
-    waitFor: ["-"]
-
-  - id: build-payment
-    name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-payment:$COMMIT_SHA", ./payment]
-    waitFor: ["-"]
-
-  - id: build-notification
-    name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-notification:$COMMIT_SHA", ./notification_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-auth-service:$COMMIT_SHA", ./riviwa_auth_service]
+    waitFor: ['-']
 
   - id: build-stakeholder
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-stakeholder:$COMMIT_SHA", ./stakeholder_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-stakeholder-service:$COMMIT_SHA", ./stakeholder_service]
+    waitFor: ['-']
 
   - id: build-feedback
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-feedback:$COMMIT_SHA", ./feedback_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-feedback-service:$COMMIT_SHA", ./feedback_service]
+    waitFor: ['-']
+
+  - id: build-payment
+    name: gcr.io/cloud-builders/docker
+    args: [build, -t, "$_AR/riviwa-payment-service:$COMMIT_SHA", ./payment]
+    waitFor: ['-']
+
+  - id: build-notification
+    name: gcr.io/cloud-builders/docker
+    args: [build, -t, "$_AR/riviwa-notification-service:$COMMIT_SHA", ./notification_service]
+    waitFor: ['-']
+
+  - id: build-translation
+    name: gcr.io/cloud-builders/docker
+    args: [build, -t, "$_AR/riviwa-translation-service:$COMMIT_SHA", ./translation_service]
+    waitFor: ['-']
 
   - id: build-recommendation
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-recommendation:$COMMIT_SHA", ./recommendation_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-recommendation-service:$COMMIT_SHA", ./recommendation_service]
+    waitFor: ['-']
 
   - id: build-ai
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-ai:$COMMIT_SHA", ./ai_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-ai-service:$COMMIT_SHA", ./ai_service]
+    waitFor: ['-']
 
   - id: build-analytics
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-analytics:$COMMIT_SHA", ./analytics_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-analytics-service:$COMMIT_SHA", ./analytics_service]
+    waitFor: ['-']
 
   - id: build-integration
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-integration:$COMMIT_SHA", ./integration_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-integration-service:$COMMIT_SHA", ./integration_service]
+    waitFor: ['-']
 
   - id: build-product
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-product:$COMMIT_SHA", ./product_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-product-service:$COMMIT_SHA", ./product_service]
+    waitFor: ['-']
 
   - id: build-qr
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-qr:$COMMIT_SHA", ./qr_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-qr-service:$COMMIT_SHA", ./qr_service]
+    waitFor: ['-']
 
   - id: build-verification
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-verification:$COMMIT_SHA", ./verification_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-verification-service:$COMMIT_SHA", ./verification_service]
+    waitFor: ['-']
 
   - id: build-waiting
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-waiting:$COMMIT_SHA", ./waiting_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-waiting-service:$COMMIT_SHA", ./waiting_service]
+    waitFor: ['-']
 
   - id: build-staff
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-staff:$COMMIT_SHA", ./staff_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-staff-service:$COMMIT_SHA", ./staff_service]
+    waitFor: ['-']
 
   - id: build-subscription
     name: gcr.io/cloud-builders/docker
-    args: [build, -t, "$_REGISTRY/riviwa-subscription:$COMMIT_SHA", ./subscription_service]
-    waitFor: ["-"]
+    args: [build, -t, "$_AR/riviwa-subscription-service:$COMMIT_SHA", ./subscription_service]
+    waitFor: ['-']
 
-  # ── Prune dangling layers after all builds ────────────────────────────────
-  - id: prune-layers
-    name: gcr.io/cloud-builders/docker
-    args: ['image', 'prune', '-f']
-    waitFor:
-      - build-auth
-      - build-payment
-      - build-notification
-      - build-stakeholder
-      - build-feedback
-      - build-recommendation
-      - build-ai
-      - build-analytics
-      - build-integration
-      - build-product
-      - build-qr
-      - build-verification
-      - build-waiting
-      - build-staff
-      - build-subscription
-
-  # ── Push images sequentially ──────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# PUSH
+# ══════════════════════════════════════════════════════════════════════════════
   - id: push-auth
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-auth:$COMMIT_SHA']
-    waitFor: [prune-layers]
-    timeout: 900s
-
-  - id: push-payment
-    name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-payment:$COMMIT_SHA']
-    waitFor: [push-auth]
-    timeout: 900s
-
-  - id: push-notification
-    name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-notification:$COMMIT_SHA']
-    waitFor: [push-payment]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-auth-service:$COMMIT_SHA"]
+    waitFor: [build-auth]
 
   - id: push-stakeholder
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-stakeholder:$COMMIT_SHA']
-    waitFor: [push-notification]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-stakeholder-service:$COMMIT_SHA"]
+    waitFor: [build-stakeholder]
 
   - id: push-feedback
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-feedback:$COMMIT_SHA']
-    waitFor: [push-stakeholder]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-feedback-service:$COMMIT_SHA"]
+    waitFor: [build-feedback]
+
+  - id: push-payment
+    name: gcr.io/cloud-builders/docker
+    args: [push, "$_AR/riviwa-payment-service:$COMMIT_SHA"]
+    waitFor: [build-payment]
+
+  - id: push-notification
+    name: gcr.io/cloud-builders/docker
+    args: [push, "$_AR/riviwa-notification-service:$COMMIT_SHA"]
+    waitFor: [build-notification]
+
+  - id: push-translation
+    name: gcr.io/cloud-builders/docker
+    args: [push, "$_AR/riviwa-translation-service:$COMMIT_SHA"]
+    waitFor: [build-translation]
 
   - id: push-recommendation
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-recommendation:$COMMIT_SHA']
-    waitFor: [push-feedback]
-    timeout: 1800s
+    args: [push, "$_AR/riviwa-recommendation-service:$COMMIT_SHA"]
+    waitFor: [build-recommendation]
 
   - id: push-ai
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-ai:$COMMIT_SHA']
-    waitFor: [push-recommendation]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-ai-service:$COMMIT_SHA"]
+    waitFor: [build-ai]
 
   - id: push-analytics
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-analytics:$COMMIT_SHA']
-    waitFor: [push-ai]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-analytics-service:$COMMIT_SHA"]
+    waitFor: [build-analytics]
 
   - id: push-integration
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-integration:$COMMIT_SHA']
-    waitFor: [push-analytics]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-integration-service:$COMMIT_SHA"]
+    waitFor: [build-integration]
 
   - id: push-product
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-product:$COMMIT_SHA']
-    waitFor: [push-integration]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-product-service:$COMMIT_SHA"]
+    waitFor: [build-product]
 
   - id: push-qr
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-qr:$COMMIT_SHA']
-    waitFor: [push-product]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-qr-service:$COMMIT_SHA"]
+    waitFor: [build-qr]
 
   - id: push-verification
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-verification:$COMMIT_SHA']
-    waitFor: [push-qr]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-verification-service:$COMMIT_SHA"]
+    waitFor: [build-verification]
 
   - id: push-waiting
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-waiting:$COMMIT_SHA']
-    waitFor: [push-verification]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-waiting-service:$COMMIT_SHA"]
+    waitFor: [build-waiting]
 
   - id: push-staff
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-staff:$COMMIT_SHA']
-    waitFor: [push-waiting]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-staff-service:$COMMIT_SHA"]
+    waitFor: [build-staff]
 
   - id: push-subscription
     name: gcr.io/cloud-builders/docker
-    args: ['push', '$_REGISTRY/riviwa-subscription:$COMMIT_SHA']
-    waitFor: [push-staff]
-    timeout: 900s
+    args: [push, "$_AR/riviwa-subscription-service:$COMMIT_SHA"]
+    waitFor: [build-subscription]
 
-  # ── Deploy to Cloud Run ───────────────────────────────────────────────────
-  # Each deploy runs immediately after its image is pushed.
-  # Env vars mirror the exact Contabo running container config.
-  # Only infrastructure endpoints are replaced with GCP private IPs.
+# ══════════════════════════════════════════════════════════════════════════════
+# DEPLOY
+# --replace-env-vars / --replace-secrets fully replaces each namespace,
+# eliminating "type mismatch" errors from previous deployments.
+# ══════════════════════════════════════════════════════════════════════════════
 
+  # ── riviwa_auth_service  (port 8000) ──────────────────────────────────────
   - id: deploy-auth
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - riviwa-auth
-      - --image=$_REGISTRY/riviwa-auth:$COMMIT_SHA
+      - riviwa-auth-service
+      - --image=$_AR/riviwa-auth-service:$COMMIT_SHA
       - --region=$_REGION
       - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
+      - --vpc-connector=$_VPC
       - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8000
       - --memory=512Mi
       - --cpu=1
-      - --port=8000
-      - --concurrency=80
-      - --min-instances=1
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=SECRET_KEY=riviwa-SECRET_KEY:latest,AUTH_DB_PASSWORD=db-pass-riviwa_auth_admin:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,REDIS_URL=riviwa-REDIS_URL_AUTH:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest,TWILIO_VERIFY_SERVICE_SID=riviwa-TWILIO_VERIFY_SERVICE_SID:latest,MINIO_ACCESS_KEY=riviwa-MINIO_ACCESS_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,MINIO_ENDPOINT=riviwa-MINIO_ENDPOINT:latest,ADMIN_EMAIL=riviwa-ADMIN_EMAIL:latest,ADMIN_PASSWORD=riviwa-ADMIN_DEFAULT_PASSWORD:latest,KARIBU_API_KEY=riviwa-KARIBU_API_KEY:latest,KARIBU_APP_KEY=riviwa-KARIBU_APP_KEY:latest
-      - --set-env-vars=AUTH_DB_HOST=$_SQL_IP,AUTH_DB_USER=riviwa_auth_admin,AUTH_DB_NAME=auth_db,DB_PORT=5432,ALGORITHM=HS256,OTP_SMS_PROVIDER=karibu,KARIBU_BASE_URL=https://karibu.briq.tz,KARIBU_SENDER_ID=RIVIWA,KARIBU_OTP_TTL_MIN=10,OTP_EMAIL_PROVIDER=stub,SMTP_HOST=localhost,SMTP_PORT=587,SMTP_USE_TLS=True,ACCESS_TOKEN_EXPIRE_MINUTES=30,REFRESH_TOKEN_EXPIRE_DAYS=7,MAX_LOGIN_ATTEMPTS=5,LOCKOUT_DURATION_MINUTES=30,OTP_MAX_ATTEMPTS=5,OTP_RESEND_LIMIT=3,OTP_LOGIN_TTL_SECONDS=300,OTP_REGISTRATION_TTL_SECONDS=600,OTP_PASSWORD_RESET_TTL_SECONDS=600,OTP_STANDALONE_TTL_SECONDS=600,ENVIRONMENT=production,DEBUG=False,ADMIN_FIRST_NAME=John,ADMIN_LAST_NAME=Komba,IMAGES_BUCKET=riviwa-images
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=AUTH_DB_HOST=$_SQL_IP,DB_PORT=5432,AUTH_DB_USER=riviwa_auth_admin,AUTH_DB_NAME=auth_db,REDIS_URL=redis://$_REDIS_IP:6379/0,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ALGORITHM=HS256,ENVIRONMENT=staging,DEBUG=false,ADMIN_EMAIL=johnsabaskomba@gmail.com,OTP_SMS_PROVIDER=karibu,KARIBU_APP_KEY=briq_44o9gytxpyu510de,KARIBU_BASE_URL=https://karibu.briq.tz,KARIBU_SENDER_ID=RIVIWA,KARIBU_OTP_TTL_MIN=10,OTP_EMAIL_PROVIDER=smtp,SMTP_HOST=premium33-2.web-hosting.com,SMTP_PORT=465,SMTP_USER=noreply@riviwa.com,SMTP_USE_TLS=True,TWILIO_FROM_NUMBER=+255760696054"
+      - "--replace-secrets=AUTH_DB_PASSWORD=db-pass-riviwa_auth_admin:latest,SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ADMIN_PASSWORD=riviwa-ADMIN_PASSWORD:latest,KARIBU_API_KEY=riviwa-KARIBU_API_KEY:latest,SMTP_PASSWORD=riviwa-SMTP_PASSWORD:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_VERIFY_SERVICE_SID=riviwa-TWILIO_VERIFY_SERVICE_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest"
     waitFor: [push-auth]
 
-  - id: deploy-payment
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-payment
-      - --image=$_REGISTRY/riviwa-payment:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8040
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=DATABASE_URL=riviwa-PAYMENT_DATABASE_URL:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,AZAMPAY_CLIENT_ID=riviwa-AZAMPAY_CLIENT_ID:latest,AZAMPAY_CLIENT_SECRET=riviwa-AZAMPAY_CLIENT_SECRET:latest,SELCOM_API_KEY=riviwa-SELCOM_API_KEY:latest,SELCOM_API_SECRET=riviwa-SELCOM_API_SECRET:latest,MPESA_API_KEY=riviwa-MPESA_API_KEY:latest,STRIPE_SECRET_KEY=riviwa-STRIPE_SECRET_KEY:latest,PAYPAL_CLIENT_ID=riviwa-PAYPAL_CLIENT_ID:latest,PAYPAL_CLIENT_SECRET=riviwa-PAYPAL_CLIENT_SECRET:latest
-      - --set-env-vars=AUTH_ALGORITHM=HS256,PAYMENT_CALLBACK_BASE_URL=https://api.riviwa.com,AZAMPAY_APP_NAME=Riviwa,AZAMPAY_BASE_URL=https://authenticator.azampay.co.tz,AZAMPAY_CHECKOUT_URL=https://checkout.azampay.co.tz,SELCOM_BASE_URL=https://apigw.selcommobile.com/v1,MPESA_BASE_URL=https://openapi.m-pesa.com,PAYPAL_SANDBOX=true,AIRTEL_SANDBOX=true,YAS_SANDBOX=true,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-payment]
-
-  - id: deploy-notification
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-notification
-      - --image=$_REGISTRY/riviwa-notification:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8060
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,REDIS_URL=riviwa-REDIS_URL_NOTIFICATION:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,NOTIFICATION_DB_PASSWORD=db-pass-notification_admin:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest,SENDGRID_API_KEY=riviwa-SENDGRID_API_KEY:latest,AT_API_KEY=riviwa-AT_API_KEY:latest,WHATSAPP_ACCESS_TOKEN=riviwa-WHATSAPP_ACCESS_TOKEN:latest,FCM_SERVER_KEY=riviwa-FCM_SERVER_KEY:latest
-      - --set-env-vars=NOTIFICATION_DB_HOST=$_SQL_IP,NOTIFICATION_DB_USER=notification_admin,NOTIFICATION_DB_NAME=notification_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,TWILIO_FROM_NUMBER=+255760696054,AT_SENDER_ID=RIVIWA,AT_USERNAME=sandbox,SMTP_HOST=localhost,SMTP_PORT=587,SMTP_USE_TLS=True,MAX_RETRIES=3,RETRY_BACKOFF_FACTOR=2.0,RETRY_BASE_DELAY_SEC=60,RATE_LIMIT_MAX=5,RATE_LIMIT_WINDOW_SEC=3600,APNS_BUNDLE_ID=com.riviwa.app,APNS_USE_SANDBOX=false,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-notification]
-
+  # ── stakeholder_service  (port 8070) ──────────────────────────────────────
   - id: deploy-stakeholder
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - riviwa-stakeholder
-      - --image=$_REGISTRY/riviwa-stakeholder:$COMMIT_SHA
+      - riviwa-stakeholder-service
+      - --image=$_AR/riviwa-stakeholder-service:$COMMIT_SHA
       - --region=$_REGION
       - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
+      - --vpc-connector=$_VPC
       - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8070
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,REDIS_URL=riviwa-REDIS_URL_STAKEHOLDER:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,STAKEHOLDER_DB_PASSWORD=db-pass-stakeholder_admin:latest
-      - --set-env-vars=STAKEHOLDER_DB_HOST=$_SQL_IP,STAKEHOLDER_DB_USER=stakeholder_admin,STAKEHOLDER_DB_NAME=stakeholder_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,ENVIRONMENT=production,DEBUG=False
+      - --service-account=$_SA
       - --allow-unauthenticated
-      - --project=$_PROJECT_ID
+      - --ingress=all
+      - --port=8070
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=STAKEHOLDER_DB_HOST=$_SQL_IP,DB_PORT=5432,STAKEHOLDER_DB_USER=stakeholder_admin,STAKEHOLDER_DB_NAME=stakeholder_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/0,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=STAKEHOLDER_DB_PASSWORD=db-pass-stakeholder_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
     waitFor: [push-stakeholder]
 
+  # ── feedback_service  (port 8090) ─────────────────────────────────────────
   - id: deploy-feedback
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - riviwa-feedback
-      - --image=$_REGISTRY/riviwa-feedback:$COMMIT_SHA
+      - riviwa-feedback-service
+      - --image=$_AR/riviwa-feedback-service:$COMMIT_SHA
       - --region=$_REGION
       - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
+      - --vpc-connector=$_VPC
       - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8090
       - --memory=512Mi
       - --cpu=1
-      - --port=8090
-      - --concurrency=80
       - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,FEEDBACK_DB_PASSWORD=db-pass-feedback_admin:latest,MINIO_ACCESS_KEY=riviwa-MINIO_ACCESS_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,MINIO_ENDPOINT=riviwa-MINIO_ENDPOINT:latest,OPENAI_API_KEY=riviwa-OPENAI_API_KEY:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest
-      - --set-env-vars=FEEDBACK_DB_HOST=$_SQL_IP,FEEDBACK_DB_USER=feedback_admin,FEEDBACK_DB_NAME=feedback_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,STORAGE_PROVIDER=minio,VOICE_STORAGE_BUCKET=riviwa-voice,STT_PROVIDER_ORDER=whisper,WHISPER_MODE=api,WHISPER_MODEL_SIZE=medium,TTS_PROVIDER=google_tts,WHATSAPP_API_VERSION=v18.0,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
+      - --max-instances=5
+      - "--replace-env-vars=FEEDBACK_DB_HOST=$_SQL_IP,DB_PORT=5432,FEEDBACK_DB_USER=feedback_admin,FEEDBACK_DB_NAME=feedback_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ADMIN_EMAIL=johnsabaskomba@gmail.com,STORAGE_PROVIDER=minio,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VOICE_STORAGE_BUCKET=riviwa-voice,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=FEEDBACK_DB_PASSWORD=db-pass-feedback_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ADMIN_PASSWORD=riviwa-ADMIN_PASSWORD:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
     waitFor: [push-feedback]
 
-  - id: deploy-ai
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  # ── payment_service  (port 8040) ──────────────────────────────────────────
+  - id: deploy-payment
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - riviwa-ai
-      - --image=$_REGISTRY/riviwa-ai:$COMMIT_SHA
+      - riviwa-payment-service
+      - --image=$_AR/riviwa-payment-service:$COMMIT_SHA
       - --region=$_REGION
       - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
+      - --vpc-connector=$_VPC
       - --vpc-egress=private-ranges-only
-      - --memory=2Gi
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8040
+      - --memory=512Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,PAYMENT_CALLBACK_BASE_URL=https://api.riviwa.com,PAYPAL_SANDBOX=true,AIRTEL_SANDBOX=true,YAS_SANDBOX=true,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=DATABASE_URL=riviwa-PAYMENT_DATABASE_URL:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,PAYPAL_CLIENT_ID=riviwa-PAYPAL_CLIENT_ID:latest,PAYPAL_CLIENT_SECRET=riviwa-PAYPAL_CLIENT_SECRET:latest"
+    waitFor: [push-payment]
+
+  # ── notification_service  (port 8060) ─────────────────────────────────────
+  - id: deploy-notification
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-notification-service
+      - --image=$_AR/riviwa-notification-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8060
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=NOTIFICATION_DB_HOST=$_SQL_IP,DB_PORT=5432,NOTIFICATION_DB_USER=notification_admin,NOTIFICATION_DB_NAME=notification_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/3,TWILIO_FROM_NUMBER=+255760696054,SMTP_HOST=premium33-2.web-hosting.com,SMTP_PORT=465,SMTP_USERNAME=noreply@riviwa.com,SMTP_USE_TLS=true,EMAIL_FROM=noreply@riviwa.com,EMAIL_FROM_NAME=Riviwa Platform,APNS_USE_SANDBOX=false,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=NOTIFICATION_DB_PASSWORD=db-pass-notification_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest,SMTP_PASSWORD=riviwa-SMTP_PASSWORD:latest"
+    waitFor: [push-notification]
+
+  # ── translation_service  (port 8050) ──────────────────────────────────────
+  - id: deploy-translation
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-translation-service
+      - --image=$_AR/riviwa-translation-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8050
+      - --memory=3Gi
       - --cpu=2
-      - --port=8085
-      - --concurrency=40
       - --min-instances=0
-      - --max-instances=5
-      - --timeout=600
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,REDIS_URL=riviwa-REDIS_URL:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,AI_DB_PASSWORD=db-pass-ai_admin:latest,MINIO_ACCESS_KEY=riviwa-MINIO_ACCESS_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,MINIO_ENDPOINT=riviwa-MINIO_ENDPOINT:latest,GROQ_API_KEY=riviwa-GROQ_API_KEY:latest,WHATSAPP_ACCESS_TOKEN=riviwa-WHATSAPP_ACCESS_TOKEN:latest,OPENAI_API_KEY=riviwa-OPENAI_API_KEY:latest
-      - --set-env-vars=AI_DB_HOST=$_SQL_IP,AI_DB_USER=ai_admin,AI_DB_NAME=ai_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,OLLAMA_BASE_URL=http://$_VM_IP:11434,OLLAMA_MODEL=smollm2:135m,GROQ_BASE_URL=https://api.groq.com/openai/v1,GROQ_MODEL=llama-3.3-70b-versatile,EMBEDDING_MODEL=all-MiniLM-L6-v2,VOICE_STORAGE_BUCKET=riviwa-voice,WHATSAPP_API_VERSION=v18.0,WHATSAPP_VERIFY_TOKEN=riviwa_webhook_verify_change_me,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-ai]
+      - --max-instances=2
+      - "--replace-env-vars=TRANSLATION_DB_HOST=$_SQL_IP,DB_PORT=5432,TRANSLATION_DB_USER=trans_admin,TRANSLATION_DB_NAME=translation_db,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/4,TRANSLATION_PROVIDER=nllb,NLLB_ENABLED=true,NLLB_MODEL_NAME=facebook/nllb-200-distilled-1.3B,NLLB_MODEL_DIR=/models/nllb,NLLB_DEVICE=cpu,NLLB_WORKERS=2,NLLB_MAX_LENGTH=512,DEFAULT_LANGUAGE=sw,FALLBACK_LANGUAGE=en,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=TRANSLATION_DB_PASSWORD=db-pass-trans_admin:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
+    waitFor: [push-translation]
 
-  - id: deploy-analytics
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-analytics
-      - --image=$_REGISTRY/riviwa-analytics:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8095
-      - --concurrency=40
-      - --min-instances=0
-      - --max-instances=5
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,REDIS_URL=riviwa-REDIS_URL_ANALYTICS:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ANALYTICS_DB_PASSWORD=db-pass-analytics_admin:latest,FEEDBACK_DB_PASSWORD=db-pass-feedback_admin:latest,WAITING_DB_PASSWORD=db-pass-waiting_admin:latest,GROQ_API_KEY=riviwa-GROQ_API_KEY:latest
-      - --set-env-vars=ANALYTICS_DB_HOST=$_SQL_IP,ANALYTICS_DB_USER=analytics_admin,ANALYTICS_DB_NAME=analytics_db,ANALYTICS_DB_PORT=5432,FEEDBACK_DB_HOST=$_SQL_IP,FEEDBACK_DB_USER=feedback_admin,FEEDBACK_DB_NAME=feedback_db,FEEDBACK_DB_PORT=5432,WAITING_DB_HOST=$_SQL_IP,WAITING_DB_USER=waiting_admin,WAITING_DB_NAME=waiting_db,WAITING_DB_PORT=5432,AUTH_ALGORITHM=HS256,GROQ_BASE_URL=https://api.groq.com/openai/v1,GROQ_MODEL=llama-3.3-70b-versatile,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-analytics]
-
-  - id: deploy-integration
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-integration
-      - --image=$_REGISTRY/riviwa-integration:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8100
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,REDIS_URL=riviwa-REDIS_URL_INTEGRATION:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,INTEGRATION_DB_PASSWORD=db-pass-integration_admin:latest,ENCRYPTION_KEY=riviwa-ENCRYPTION_KEY:latest
-      - --set-env-vars=INTEGRATION_DB_HOST=$_SQL_IP,INTEGRATION_DB_USER=integration_admin,INTEGRATION_DB_NAME=integration_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,RIVIWA_WIDGET_BASE_URL=https://widget.riviwa.com,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-integration]
-
-  - id: deploy-product
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-product
-      - --image=$_REGISTRY/riviwa-product:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8110
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,REDIS_URL=riviwa-REDIS_URL_PRODUCT:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,PRODUCT_DB_PASSWORD=db-pass-product_admin:latest,MINIO_ACCESS_KEY=riviwa-MINIO_ACCESS_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,MINIO_ENDPOINT=riviwa-MINIO_ENDPOINT:latest
-      - --set-env-vars=PRODUCT_DB_HOST=$_SQL_IP,PRODUCT_DB_USER=product_admin,PRODUCT_DB_NAME=product_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,IMAGES_BUCKET=riviwa-images,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-product]
-
-  - id: deploy-qr
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-qr
-      - --image=$_REGISTRY/riviwa-qr:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8120
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,QR_DB_PASSWORD=db-pass-qr_admin:latest,MINIO_ACCESS_KEY=riviwa-MINIO_ACCESS_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,MINIO_ENDPOINT=riviwa-MINIO_ENDPOINT:latest
-      - --set-env-vars=QR_DB_HOST=$_SQL_IP,QR_DB_USER=qr_admin,QR_DB_NAME=qr_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,QR_BUCKET=riviwa-qr-codes,FEEDBACK_APP_URL=https://riviwa-4b0b9.web.app,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-qr]
-
-  - id: deploy-verification
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-verification
-      - --image=$_REGISTRY/riviwa-verification:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8125
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,VERIFICATION_DB_PASSWORD=db-pass-verification_admin:latest,MINIO_ACCESS_KEY=riviwa-MINIO_ACCESS_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,MINIO_ENDPOINT=riviwa-MINIO_ENDPOINT:latest
-      - --set-env-vars=VERIFICATION_DB_HOST=$_SQL_IP,VERIFICATION_DB_USER=verification_admin,VERIFICATION_DB_NAME=verification_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,OLLAMA_BASE_URL=http://$_VM_IP:11434,VERIFICATION_BUCKET=riviwa-verification,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-verification]
-
-  - id: deploy-waiting
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-waiting
-      - --image=$_REGISTRY/riviwa-waiting:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8130
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,REDIS_URL=riviwa-REDIS_URL_WAITING:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,WAITING_DB_PASSWORD=db-pass-waiting_admin:latest,AT_API_KEY=riviwa-AT_API_KEY:latest
-      - --set-env-vars=WAITING_DB_HOST=$_SQL_IP,WAITING_DB_USER=waiting_admin,WAITING_DB_NAME=waiting_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-waiting]
-
-  - id: deploy-staff
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-staff
-      - --image=$_REGISTRY/riviwa-staff:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8135
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,REDIS_URL=riviwa-REDIS_URL_STAFF:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,STAFF_DB_PASSWORD=db-pass-staff_admin:latest,MINIO_ACCESS_KEY=riviwa-MINIO_ACCESS_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,MINIO_ENDPOINT=riviwa-MINIO_ENDPOINT:latest
-      - --set-env-vars=STAFF_DB_HOST=$_SQL_IP,STAFF_DB_USER=staff_admin,STAFF_DB_NAME=staff_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,STAFF_BUCKET=riviwa-staff,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-staff]
-
-  - id: deploy-subscription
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - riviwa-subscription
-      - --image=$_REGISTRY/riviwa-subscription:$COMMIT_SHA
-      - --region=$_REGION
-      - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
-      - --vpc-egress=private-ranges-only
-      - --memory=512Mi
-      - --cpu=1
-      - --port=8140
-      - --concurrency=80
-      - --min-instances=0
-      - --max-instances=10
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,SUBSCRIPTION_DB_PASSWORD=db-pass-subscription_admin:latest,STRIPE_SECRET_KEY=riviwa-STRIPE_SECRET_KEY:latest,AZAMPAY_CLIENT_ID=riviwa-AZAMPAY_CLIENT_ID:latest,AZAMPAY_CLIENT_SECRET=riviwa-AZAMPAY_CLIENT_SECRET:latest,SELCOM_API_KEY=riviwa-SELCOM_API_KEY:latest,MPESA_API_KEY=riviwa-MPESA_API_KEY:latest
-      - --set-env-vars=SUBSCRIPTION_DB_HOST=$_SQL_IP,SUBSCRIPTION_DB_USER=subscription_admin,SUBSCRIPTION_DB_NAME=subscription_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,AZAMPAY_APP_NAME=Riviwa,AZAMPAY_BASE_URL=https://authenticator.azampay.co.tz,AZAMPAY_CHECKOUT_URL=https://checkout.azampay.co.tz,SELCOM_BASE_URL=https://apigw.selcommobile.com/v1,MPESA_BASE_URL=https://openapi.m-pesa.com,PAYMENT_CALLBACK_BASE_URL=https://api.riviwa.com,ENVIRONMENT=production,DEBUG=False
-      - --allow-unauthenticated
-      - --project=$_PROJECT_ID
-    waitFor: [push-subscription]
-
+  # ── recommendation_service  (port 8055) ───────────────────────────────────
   - id: deploy-recommendation
-    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
     args:
       - run
       - deploy
-      - riviwa-recommendation
-      - --image=$_REGISTRY/riviwa-recommendation:$COMMIT_SHA
+      - riviwa-recommendation-service
+      - --image=$_AR/riviwa-recommendation-service:$COMMIT_SHA
       - --region=$_REGION
       - --platform=managed
-      - --service-account=$_CR_SA
-      - --vpc-connector=$_CONNECTOR
+      - --vpc-connector=$_VPC
       - --vpc-egress=private-ranges-only
-      - --memory=1Gi
-      - --cpu=2
-      - --port=8055
-      - --concurrency=40
-      - --min-instances=0
-      - --max-instances=5
-      - --timeout=300
-      - --set-secrets=AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,KAFKA_BOOTSTRAP_SERVERS=riviwa-KAFKA_BOOTSTRAP_SERVERS:latest,REDIS_URL=riviwa-REDIS_URL_RECOMMENDATION:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,RECOMMENDATION_DB_PASSWORD=db-pass-rec_admin:latest
-      - --set-env-vars=RECOMMENDATION_DB_HOST=$_SQL_IP,RECOMMENDATION_DB_USER=rec_admin,RECOMMENDATION_DB_NAME=recommendation_db,DB_PORT=5432,AUTH_ALGORITHM=HS256,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,EMBEDDING_MODEL=all-MiniLM-L6-v2,WEIGHT_SEMANTIC=0.35,WEIGHT_TAG_OVERLAP=0.25,WEIGHT_GEO_PROXIMITY=0.25,WEIGHT_RECENCY=0.15,ENVIRONMENT=production,DEBUG=False
+      - --service-account=$_SA
       - --allow-unauthenticated
-      - --project=$_PROJECT_ID
+      - --ingress=all
+      - --port=8055
+      - --memory=1Gi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=3
+      - "--replace-env-vars=RECOMMENDATION_DB_HOST=$_SQL_IP,DB_PORT=5432,RECOMMENDATION_DB_USER=rec_admin,RECOMMENDATION_DB_NAME=recommendation_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/5,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,EMBEDDING_MODEL=all-MiniLM-L6-v2,WEIGHT_SEMANTIC=0.35,WEIGHT_TAG_OVERLAP=0.25,WEIGHT_GEO_PROXIMITY=0.25,WEIGHT_RECENCY=0.15,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=RECOMMENDATION_DB_PASSWORD=db-pass-rec_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
     waitFor: [push-recommendation]
 
+  # ── ai_service  (port 8085) ───────────────────────────────────────────────
+  - id: deploy-ai
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-ai-service
+      - --image=$_AR/riviwa-ai-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8085
+      - --memory=512Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=3
+      - "--replace-env-vars=AI_DB_HOST=$_SQL_IP,DB_PORT=5432,AI_DB_USER=ai_admin,AI_DB_NAME=ai_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,OLLAMA_BASE_URL=http://$_VM_IP:11434,OLLAMA_MODEL=smollm2:135m,EMBEDDING_MODEL=all-MiniLM-L6-v2,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VOICE_STORAGE_BUCKET=riviwa-voice,GROQ_MODEL=llama-3.3-70b-versatile,GROQ_BASE_URL=https://api.groq.com/openai/v1,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=AI_DB_PASSWORD=db-pass-ai_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,GROQ_API_KEY=riviwa-GROQ_API_KEY:latest"
+    waitFor: [push-ai]
+
+  # ── analytics_service  (port 8095) ────────────────────────────────────────
+  - id: deploy-analytics
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-analytics-service
+      - --image=$_AR/riviwa-analytics-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8095
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=ANALYTICS_DB_HOST=$_SQL_IP,ANALYTICS_DB_PORT=5432,ANALYTICS_DB_USER=analytics_admin,ANALYTICS_DB_NAME=analytics_db,FEEDBACK_DB_HOST=$_SQL_IP,FEEDBACK_DB_PORT=5432,FEEDBACK_DB_USER=feedback_admin,FEEDBACK_DB_NAME=feedback_db,WAITING_DB_HOST=$_SQL_IP,WAITING_DB_PORT=5432,WAITING_DB_USER=waiting_admin,WAITING_DB_NAME=waiting_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/6,GROQ_MODEL=llama-3.3-70b-versatile,GROQ_BASE_URL=https://api.groq.com/openai/v1,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=ANALYTICS_DB_PASSWORD=db-pass-analytics_admin:latest,FEEDBACK_DB_PASSWORD=db-pass-feedback_admin:latest,WAITING_DB_PASSWORD=db-pass-waiting_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,GROQ_API_KEY=riviwa-GROQ_API_KEY:latest"
+    waitFor: [push-analytics]
+
+  # ── integration_service  (port 8100) ──────────────────────────────────────
+  - id: deploy-integration
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-integration-service
+      - --image=$_AR/riviwa-integration-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8100
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=INTEGRATION_DB_HOST=$_SQL_IP,DB_PORT=5432,INTEGRATION_DB_USER=integration_admin,INTEGRATION_DB_NAME=integration_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/7,RIVIWA_WIDGET_BASE_URL=https://widget.riviwa.com,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=INTEGRATION_DB_PASSWORD=db-pass-integration_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ENCRYPTION_KEY=riviwa-ENCRYPTION_KEY:latest"
+    waitFor: [push-integration]
+
+  # ── product_service  (port 8110) ──────────────────────────────────────────
+  - id: deploy-product
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-product-service
+      - --image=$_AR/riviwa-product-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8110
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=PRODUCT_DB_HOST=$_SQL_IP,DB_PORT=5432,PRODUCT_DB_USER=product_admin,PRODUCT_DB_NAME=product_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/8,MINIO_ENDPOINT=$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,IMAGES_BUCKET=riviwa-images,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=PRODUCT_DB_PASSWORD=db-pass-product_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+    waitFor: [push-product]
+
+  # ── qr_service  (port 8120) ───────────────────────────────────────────────
+  - id: deploy-qr
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-qr-service
+      - --image=$_AR/riviwa-qr-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8120
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=QR_DB_HOST=$_SQL_IP,DB_PORT=5432,QR_DB_USER=qr_admin,QR_DB_NAME=qr_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,QR_BUCKET=riviwa-qr-codes,FEEDBACK_APP_URL=https://riviwa-4b0b9.web.app,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=QR_DB_PASSWORD=db-pass-qr_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+    waitFor: [push-qr]
+
+  # ── verification_service  (port 8125) ─────────────────────────────────────
+  - id: deploy-verification
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-verification-service
+      - --image=$_AR/riviwa-verification-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8125
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=VERIFICATION_DB_HOST=$_SQL_IP,DB_PORT=5432,VERIFICATION_DB_USER=verification_admin,VERIFICATION_DB_NAME=verification_db,AUTH_ALGORITHM=HS256,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VERIFICATION_BUCKET=riviwa-verification,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,OLLAMA_BASE_URL=http://$_VM_IP:11434,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=VERIFICATION_DB_PASSWORD=db-pass-verification_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+    waitFor: [push-verification]
+
+  # ── waiting_service  (port 8130) ──────────────────────────────────────────
+  - id: deploy-waiting
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-waiting-service
+      - --image=$_AR/riviwa-waiting-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8130
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=WAITING_DB_HOST=$_SQL_IP,DB_PORT=5432,WAITING_DB_USER=waiting_admin,WAITING_DB_NAME=waiting_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/9,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=WAITING_DB_PASSWORD=db-pass-waiting_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
+    waitFor: [push-waiting]
+
+  # ── staff_service  (port 8135) ────────────────────────────────────────────
+  - id: deploy-staff
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-staff-service
+      - --image=$_AR/riviwa-staff-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8135
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=STAFF_DB_HOST=$_SQL_IP,DB_PORT=5432,STAFF_DB_USER=staff_admin,STAFF_DB_NAME=staff_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/10,MINIO_ENDPOINT=$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,STAFF_BUCKET=riviwa-staff,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=STAFF_DB_PASSWORD=db-pass-staff_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+    waitFor: [push-staff]
+
+  # ── subscription_service  (port 8140) ─────────────────────────────────────
+  - id: deploy-subscription
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - riviwa-subscription-service
+      - --image=$_AR/riviwa-subscription-service:$COMMIT_SHA
+      - --region=$_REGION
+      - --platform=managed
+      - --vpc-connector=$_VPC
+      - --vpc-egress=private-ranges-only
+      - --service-account=$_SA
+      - --allow-unauthenticated
+      - --ingress=all
+      - --port=8140
+      - --memory=256Mi
+      - --cpu=1
+      - --min-instances=0
+      - --max-instances=5
+      - "--replace-env-vars=SUBSCRIPTION_DB_HOST=$_SQL_IP,SUBSCRIPTION_DB_USER=subscription_admin,SUBSCRIPTION_DB_NAME=subscription_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,AZAMPAY_APP_NAME=Riviwa,AZAMPAY_BASE_URL=https://authenticator.azampay.co.tz,AZAMPAY_CHECKOUT_URL=https://checkout.azampay.co.tz,SELCOM_BASE_URL=https://apigw.selcommobile.com/v1,MPESA_BASE_URL=https://openapi.m-pesa.com,PAYMENT_CALLBACK_BASE_URL=https://api.riviwa.com,ENVIRONMENT=staging,DEBUG=false"
+      - "--replace-secrets=SUBSCRIPTION_DB_PASSWORD=db-pass-subscription_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
+    waitFor: [push-subscription]
+
 images:
-  - "$_REGISTRY/riviwa-auth:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-payment:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-notification:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-stakeholder:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-feedback:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-recommendation:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-ai:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-analytics:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-integration:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-product:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-qr:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-verification:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-waiting:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-staff:$COMMIT_SHA"
-  - "$_REGISTRY/riviwa-subscription:$COMMIT_SHA"
+  - "$_AR/riviwa-auth-service:$COMMIT_SHA"
+  - "$_AR/riviwa-stakeholder-service:$COMMIT_SHA"
+  - "$_AR/riviwa-feedback-service:$COMMIT_SHA"
+  - "$_AR/riviwa-payment-service:$COMMIT_SHA"
+  - "$_AR/riviwa-notification-service:$COMMIT_SHA"
+  - "$_AR/riviwa-translation-service:$COMMIT_SHA"
+  - "$_AR/riviwa-recommendation-service:$COMMIT_SHA"
+  - "$_AR/riviwa-ai-service:$COMMIT_SHA"
+  - "$_AR/riviwa-analytics-service:$COMMIT_SHA"
+  - "$_AR/riviwa-integration-service:$COMMIT_SHA"
+  - "$_AR/riviwa-product-service:$COMMIT_SHA"
+  - "$_AR/riviwa-qr-service:$COMMIT_SHA"
+  - "$_AR/riviwa-verification-service:$COMMIT_SHA"
+  - "$_AR/riviwa-waiting-service:$COMMIT_SHA"
+  - "$_AR/riviwa-staff-service:$COMMIT_SHA"
+  - "$_AR/riviwa-subscription-service:$COMMIT_SHA"
+
+timeout: 7200s
+
+options:
+  machineType: E2_HIGHCPU_8
+  logging: CLOUD_LOGGING_ONLY
