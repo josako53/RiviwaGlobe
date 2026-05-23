@@ -62,17 +62,17 @@ steps:
   - id: build-translation
     name: gcr.io/cloud-builders/docker
     args: [build, -t, "$_AR/riviwa-translation-service:$COMMIT_SHA", ./translation_service]
-    waitFor: ['-']
+    waitFor: [push-auth, push-stakeholder, push-feedback, push-payment, push-notification]
 
   - id: build-recommendation
     name: gcr.io/cloud-builders/docker
     args: [build, -t, "$_AR/riviwa-recommendation-service:$COMMIT_SHA", ./recommendation_service]
-    waitFor: ['-']
+    waitFor: [push-auth, push-stakeholder, push-feedback, push-payment, push-notification]
 
   - id: build-ai
     name: gcr.io/cloud-builders/docker
     args: [build, -t, "$_AR/riviwa-ai-service:$COMMIT_SHA", ./ai_service]
-    waitFor: ['-']
+    waitFor: [push-auth, push-stakeholder, push-feedback, push-payment, push-notification]
 
   - id: build-analytics
     name: gcr.io/cloud-builders/docker
@@ -199,8 +199,8 @@ steps:
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DEPLOY
-# --replace-env-vars / --replace-secrets fully replaces each namespace,
-# eliminating "type mismatch" errors from previous deployments.
+# --set-env-vars / --set-secrets fully replaces each namespace (all existing
+# vars/secrets are removed first), eliminating type-mismatch errors.
 # ══════════════════════════════════════════════════════════════════════════════
 
   # ── riviwa_auth_service  (port 8000) ──────────────────────────────────────
@@ -224,8 +224,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=AUTH_DB_HOST=$_SQL_IP,DB_PORT=5432,AUTH_DB_USER=riviwa_auth_admin,AUTH_DB_NAME=auth_db,REDIS_URL=redis://$_REDIS_IP:6379/0,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ALGORITHM=HS256,ENVIRONMENT=staging,DEBUG=false,ADMIN_EMAIL=johnsabaskomba@gmail.com,OTP_SMS_PROVIDER=karibu,KARIBU_APP_KEY=briq_44o9gytxpyu510de,KARIBU_BASE_URL=https://karibu.briq.tz,KARIBU_SENDER_ID=RIVIWA,KARIBU_OTP_TTL_MIN=10,OTP_EMAIL_PROVIDER=smtp,SMTP_HOST=premium33-2.web-hosting.com,SMTP_PORT=465,SMTP_USER=noreply@riviwa.com,SMTP_USE_TLS=True,TWILIO_FROM_NUMBER=+255760696054"
-      - "--replace-secrets=AUTH_DB_PASSWORD=db-pass-riviwa_auth_admin:latest,SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ADMIN_PASSWORD=riviwa-ADMIN_PASSWORD:latest,KARIBU_API_KEY=riviwa-KARIBU_API_KEY:latest,SMTP_PASSWORD=riviwa-SMTP_PASSWORD:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_VERIFY_SERVICE_SID=riviwa-TWILIO_VERIFY_SERVICE_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest"
+      - "--set-env-vars=AUTH_DB_HOST=$_SQL_IP,DB_PORT=5432,AUTH_DB_USER=riviwa_auth_admin,AUTH_DB_NAME=auth_db,REDIS_URL=redis://$_REDIS_IP:6379/0,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ALGORITHM=HS256,ENVIRONMENT=staging,DEBUG=false,ADMIN_EMAIL=johnsabaskomba@gmail.com,OTP_SMS_PROVIDER=karibu,KARIBU_APP_KEY=briq_44o9gytxpyu510de,KARIBU_BASE_URL=https://karibu.briq.tz,KARIBU_SENDER_ID=RIVIWA,KARIBU_OTP_TTL_MIN=10,OTP_EMAIL_PROVIDER=smtp,SMTP_HOST=premium33-2.web-hosting.com,SMTP_PORT=465,SMTP_USER=noreply@riviwa.com,SMTP_USE_TLS=True,TWILIO_FROM_NUMBER=+255760696054"
+      - "--set-secrets=AUTH_DB_PASSWORD=db-pass-riviwa_auth_admin:latest,SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ADMIN_PASSWORD=riviwa-ADMIN_PASSWORD:latest,KARIBU_API_KEY=riviwa-KARIBU_API_KEY:latest,SMTP_PASSWORD=riviwa-SMTP_PASSWORD:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_VERIFY_SERVICE_SID=riviwa-TWILIO_VERIFY_SERVICE_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest"
     waitFor: [push-auth]
 
   # ── stakeholder_service  (port 8070) ──────────────────────────────────────
@@ -249,8 +249,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=STAKEHOLDER_DB_HOST=$_SQL_IP,DB_PORT=5432,STAKEHOLDER_DB_USER=stakeholder_admin,STAKEHOLDER_DB_NAME=stakeholder_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/0,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=STAKEHOLDER_DB_PASSWORD=db-pass-stakeholder_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
+      - "--set-env-vars=STAKEHOLDER_DB_HOST=$_SQL_IP,DB_PORT=5432,STAKEHOLDER_DB_USER=stakeholder_admin,STAKEHOLDER_DB_NAME=stakeholder_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/0,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=STAKEHOLDER_DB_PASSWORD=db-pass-stakeholder_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
     waitFor: [push-stakeholder]
 
   # ── feedback_service  (port 8090) ─────────────────────────────────────────
@@ -274,8 +274,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=FEEDBACK_DB_HOST=$_SQL_IP,DB_PORT=5432,FEEDBACK_DB_USER=feedback_admin,FEEDBACK_DB_NAME=feedback_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ADMIN_EMAIL=johnsabaskomba@gmail.com,STORAGE_PROVIDER=minio,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VOICE_STORAGE_BUCKET=riviwa-voice,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=FEEDBACK_DB_PASSWORD=db-pass-feedback_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ADMIN_PASSWORD=riviwa-ADMIN_PASSWORD:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+      - "--set-env-vars=FEEDBACK_DB_HOST=$_SQL_IP,DB_PORT=5432,FEEDBACK_DB_USER=feedback_admin,FEEDBACK_DB_NAME=feedback_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,ADMIN_EMAIL=johnsabaskomba@gmail.com,STORAGE_PROVIDER=minio,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VOICE_STORAGE_BUCKET=riviwa-voice,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=FEEDBACK_DB_PASSWORD=db-pass-feedback_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ADMIN_PASSWORD=riviwa-ADMIN_PASSWORD:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
     waitFor: [push-feedback]
 
   # ── payment_service  (port 8040) ──────────────────────────────────────────
@@ -299,8 +299,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,PAYMENT_CALLBACK_BASE_URL=https://api.riviwa.com,PAYPAL_SANDBOX=true,AIRTEL_SANDBOX=true,YAS_SANDBOX=true,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=DATABASE_URL=riviwa-PAYMENT_DATABASE_URL:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,PAYPAL_CLIENT_ID=riviwa-PAYPAL_CLIENT_ID:latest,PAYPAL_CLIENT_SECRET=riviwa-PAYPAL_CLIENT_SECRET:latest"
+      - "--set-env-vars=AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,PAYMENT_CALLBACK_BASE_URL=https://api.riviwa.com,PAYPAL_SANDBOX=true,AIRTEL_SANDBOX=true,YAS_SANDBOX=true,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=DATABASE_URL=riviwa-PAYMENT_DATABASE_URL:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,PAYPAL_CLIENT_ID=riviwa-PAYPAL_CLIENT_ID:latest,PAYPAL_CLIENT_SECRET=riviwa-PAYPAL_CLIENT_SECRET:latest"
     waitFor: [push-payment]
 
   # ── notification_service  (port 8060) ─────────────────────────────────────
@@ -324,8 +324,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=NOTIFICATION_DB_HOST=$_SQL_IP,DB_PORT=5432,NOTIFICATION_DB_USER=notification_admin,NOTIFICATION_DB_NAME=notification_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/3,TWILIO_FROM_NUMBER=+255760696054,SMTP_HOST=premium33-2.web-hosting.com,SMTP_PORT=465,SMTP_USERNAME=noreply@riviwa.com,SMTP_USE_TLS=true,EMAIL_FROM=noreply@riviwa.com,EMAIL_FROM_NAME=Riviwa Platform,APNS_USE_SANDBOX=false,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=NOTIFICATION_DB_PASSWORD=db-pass-notification_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest,SMTP_PASSWORD=riviwa-SMTP_PASSWORD:latest"
+      - "--set-env-vars=NOTIFICATION_DB_HOST=$_SQL_IP,DB_PORT=5432,NOTIFICATION_DB_USER=notification_admin,NOTIFICATION_DB_NAME=notification_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/3,TWILIO_FROM_NUMBER=+255760696054,SMTP_HOST=premium33-2.web-hosting.com,SMTP_PORT=465,SMTP_USERNAME=noreply@riviwa.com,SMTP_USE_TLS=true,EMAIL_FROM=noreply@riviwa.com,EMAIL_FROM_NAME=Riviwa Platform,APNS_USE_SANDBOX=false,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=NOTIFICATION_DB_PASSWORD=db-pass-notification_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,TWILIO_ACCOUNT_SID=riviwa-TWILIO_ACCOUNT_SID:latest,TWILIO_AUTH_TOKEN=riviwa-TWILIO_AUTH_TOKEN:latest,SMTP_PASSWORD=riviwa-SMTP_PASSWORD:latest"
     waitFor: [push-notification]
 
   # ── translation_service  (port 8050) ──────────────────────────────────────
@@ -349,8 +349,8 @@ steps:
       - --cpu=2
       - --min-instances=0
       - --max-instances=2
-      - "--replace-env-vars=TRANSLATION_DB_HOST=$_SQL_IP,DB_PORT=5432,TRANSLATION_DB_USER=trans_admin,TRANSLATION_DB_NAME=translation_db,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/4,TRANSLATION_PROVIDER=nllb,NLLB_ENABLED=true,NLLB_MODEL_NAME=facebook/nllb-200-distilled-1.3B,NLLB_MODEL_DIR=/models/nllb,NLLB_DEVICE=cpu,NLLB_WORKERS=2,NLLB_MAX_LENGTH=512,DEFAULT_LANGUAGE=sw,FALLBACK_LANGUAGE=en,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=TRANSLATION_DB_PASSWORD=db-pass-trans_admin:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
+      - "--set-env-vars=TRANSLATION_DB_HOST=$_SQL_IP,DB_PORT=5432,TRANSLATION_DB_USER=trans_admin,TRANSLATION_DB_NAME=translation_db,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/4,TRANSLATION_PROVIDER=nllb,NLLB_ENABLED=true,NLLB_MODEL_NAME=facebook/nllb-200-distilled-1.3B,NLLB_MODEL_DIR=/models/nllb,NLLB_DEVICE=cpu,NLLB_WORKERS=2,NLLB_MAX_LENGTH=512,DEFAULT_LANGUAGE=sw,FALLBACK_LANGUAGE=en,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=TRANSLATION_DB_PASSWORD=db-pass-trans_admin:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
     waitFor: [push-translation]
 
   # ── recommendation_service  (port 8055) ───────────────────────────────────
@@ -374,8 +374,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=3
-      - "--replace-env-vars=RECOMMENDATION_DB_HOST=$_SQL_IP,DB_PORT=5432,RECOMMENDATION_DB_USER=rec_admin,RECOMMENDATION_DB_NAME=recommendation_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/5,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,EMBEDDING_MODEL=all-MiniLM-L6-v2,WEIGHT_SEMANTIC=0.35,WEIGHT_TAG_OVERLAP=0.25,WEIGHT_GEO_PROXIMITY=0.25,WEIGHT_RECENCY=0.15,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=RECOMMENDATION_DB_PASSWORD=db-pass-rec_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
+      - "--set-env-vars=RECOMMENDATION_DB_HOST=$_SQL_IP,DB_PORT=5432,RECOMMENDATION_DB_USER=rec_admin,RECOMMENDATION_DB_NAME=recommendation_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/5,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,EMBEDDING_MODEL=all-MiniLM-L6-v2,WEIGHT_SEMANTIC=0.35,WEIGHT_TAG_OVERLAP=0.25,WEIGHT_GEO_PROXIMITY=0.25,WEIGHT_RECENCY=0.15,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=RECOMMENDATION_DB_PASSWORD=db-pass-rec_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
     waitFor: [push-recommendation]
 
   # ── ai_service  (port 8085) ───────────────────────────────────────────────
@@ -399,8 +399,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=3
-      - "--replace-env-vars=AI_DB_HOST=$_SQL_IP,DB_PORT=5432,AI_DB_USER=ai_admin,AI_DB_NAME=ai_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,OLLAMA_BASE_URL=http://$_VM_IP:11434,OLLAMA_MODEL=smollm2:135m,EMBEDDING_MODEL=all-MiniLM-L6-v2,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VOICE_STORAGE_BUCKET=riviwa-voice,GROQ_MODEL=llama-3.3-70b-versatile,GROQ_BASE_URL=https://api.groq.com/openai/v1,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=AI_DB_PASSWORD=db-pass-ai_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,GROQ_API_KEY=riviwa-GROQ_API_KEY:latest"
+      - "--set-env-vars=AI_DB_HOST=$_SQL_IP,DB_PORT=5432,AI_DB_USER=ai_admin,AI_DB_NAME=ai_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,OLLAMA_BASE_URL=http://$_VM_IP:11434,OLLAMA_MODEL=smollm2:135m,EMBEDDING_MODEL=all-MiniLM-L6-v2,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VOICE_STORAGE_BUCKET=riviwa-voice,GROQ_MODEL=llama-3.3-70b-versatile,GROQ_BASE_URL=https://api.groq.com/openai/v1,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=AI_DB_PASSWORD=db-pass-ai_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest,GROQ_API_KEY=riviwa-GROQ_API_KEY:latest"
     waitFor: [push-ai]
 
   # ── analytics_service  (port 8095) ────────────────────────────────────────
@@ -424,8 +424,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=ANALYTICS_DB_HOST=$_SQL_IP,ANALYTICS_DB_PORT=5432,ANALYTICS_DB_USER=analytics_admin,ANALYTICS_DB_NAME=analytics_db,FEEDBACK_DB_HOST=$_SQL_IP,FEEDBACK_DB_PORT=5432,FEEDBACK_DB_USER=feedback_admin,FEEDBACK_DB_NAME=feedback_db,WAITING_DB_HOST=$_SQL_IP,WAITING_DB_PORT=5432,WAITING_DB_USER=waiting_admin,WAITING_DB_NAME=waiting_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/6,GROQ_MODEL=llama-3.3-70b-versatile,GROQ_BASE_URL=https://api.groq.com/openai/v1,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=ANALYTICS_DB_PASSWORD=db-pass-analytics_admin:latest,FEEDBACK_DB_PASSWORD=db-pass-feedback_admin:latest,WAITING_DB_PASSWORD=db-pass-waiting_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,GROQ_API_KEY=riviwa-GROQ_API_KEY:latest"
+      - "--set-env-vars=ANALYTICS_DB_HOST=$_SQL_IP,ANALYTICS_DB_PORT=5432,ANALYTICS_DB_USER=analytics_admin,ANALYTICS_DB_NAME=analytics_db,FEEDBACK_DB_HOST=$_SQL_IP,FEEDBACK_DB_PORT=5432,FEEDBACK_DB_USER=feedback_admin,FEEDBACK_DB_NAME=feedback_db,WAITING_DB_HOST=$_SQL_IP,WAITING_DB_PORT=5432,WAITING_DB_USER=waiting_admin,WAITING_DB_NAME=waiting_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/6,GROQ_MODEL=llama-3.3-70b-versatile,GROQ_BASE_URL=https://api.groq.com/openai/v1,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=ANALYTICS_DB_PASSWORD=db-pass-analytics_admin:latest,FEEDBACK_DB_PASSWORD=db-pass-feedback_admin:latest,WAITING_DB_PASSWORD=db-pass-waiting_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,GROQ_API_KEY=riviwa-GROQ_API_KEY:latest"
     waitFor: [push-analytics]
 
   # ── integration_service  (port 8100) ──────────────────────────────────────
@@ -449,8 +449,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=INTEGRATION_DB_HOST=$_SQL_IP,DB_PORT=5432,INTEGRATION_DB_USER=integration_admin,INTEGRATION_DB_NAME=integration_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/7,RIVIWA_WIDGET_BASE_URL=https://widget.riviwa.com,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=INTEGRATION_DB_PASSWORD=db-pass-integration_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ENCRYPTION_KEY=riviwa-ENCRYPTION_KEY:latest"
+      - "--set-env-vars=INTEGRATION_DB_HOST=$_SQL_IP,DB_PORT=5432,INTEGRATION_DB_USER=integration_admin,INTEGRATION_DB_NAME=integration_db,AUTH_ALGORITHM=HS256,REDIS_URL=redis://$_REDIS_IP:6379/7,RIVIWA_WIDGET_BASE_URL=https://widget.riviwa.com,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=INTEGRATION_DB_PASSWORD=db-pass-integration_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,ENCRYPTION_KEY=riviwa-ENCRYPTION_KEY:latest"
     waitFor: [push-integration]
 
   # ── product_service  (port 8110) ──────────────────────────────────────────
@@ -474,8 +474,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=PRODUCT_DB_HOST=$_SQL_IP,DB_PORT=5432,PRODUCT_DB_USER=product_admin,PRODUCT_DB_NAME=product_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/8,MINIO_ENDPOINT=$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,IMAGES_BUCKET=riviwa-images,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=PRODUCT_DB_PASSWORD=db-pass-product_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+      - "--set-env-vars=PRODUCT_DB_HOST=$_SQL_IP,DB_PORT=5432,PRODUCT_DB_USER=product_admin,PRODUCT_DB_NAME=product_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/8,MINIO_ENDPOINT=$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,IMAGES_BUCKET=riviwa-images,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=PRODUCT_DB_PASSWORD=db-pass-product_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
     waitFor: [push-product]
 
   # ── qr_service  (port 8120) ───────────────────────────────────────────────
@@ -499,8 +499,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=QR_DB_HOST=$_SQL_IP,DB_PORT=5432,QR_DB_USER=qr_admin,QR_DB_NAME=qr_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,QR_BUCKET=riviwa-qr-codes,FEEDBACK_APP_URL=https://riviwa-4b0b9.web.app,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=QR_DB_PASSWORD=db-pass-qr_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+      - "--set-env-vars=QR_DB_HOST=$_SQL_IP,DB_PORT=5432,QR_DB_USER=qr_admin,QR_DB_NAME=qr_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,QR_BUCKET=riviwa-qr-codes,FEEDBACK_APP_URL=https://riviwa-4b0b9.web.app,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=QR_DB_PASSWORD=db-pass-qr_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
     waitFor: [push-qr]
 
   # ── verification_service  (port 8125) ─────────────────────────────────────
@@ -524,8 +524,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=VERIFICATION_DB_HOST=$_SQL_IP,DB_PORT=5432,VERIFICATION_DB_USER=verification_admin,VERIFICATION_DB_NAME=verification_db,AUTH_ALGORITHM=HS256,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VERIFICATION_BUCKET=riviwa-verification,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,OLLAMA_BASE_URL=http://$_VM_IP:11434,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=VERIFICATION_DB_PASSWORD=db-pass-verification_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+      - "--set-env-vars=VERIFICATION_DB_HOST=$_SQL_IP,DB_PORT=5432,VERIFICATION_DB_USER=verification_admin,VERIFICATION_DB_NAME=verification_db,AUTH_ALGORITHM=HS256,MINIO_ENDPOINT=http://$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,VERIFICATION_BUCKET=riviwa-verification,QDRANT_HOST=$_VM_IP,QDRANT_PORT=6333,OLLAMA_BASE_URL=http://$_VM_IP:11434,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=VERIFICATION_DB_PASSWORD=db-pass-verification_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
     waitFor: [push-verification]
 
   # ── waiting_service  (port 8130) ──────────────────────────────────────────
@@ -549,8 +549,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=WAITING_DB_HOST=$_SQL_IP,DB_PORT=5432,WAITING_DB_USER=waiting_admin,WAITING_DB_NAME=waiting_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/9,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=WAITING_DB_PASSWORD=db-pass-waiting_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
+      - "--set-env-vars=WAITING_DB_HOST=$_SQL_IP,DB_PORT=5432,WAITING_DB_USER=waiting_admin,WAITING_DB_NAME=waiting_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/9,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=WAITING_DB_PASSWORD=db-pass-waiting_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
     waitFor: [push-waiting]
 
   # ── staff_service  (port 8135) ────────────────────────────────────────────
@@ -574,8 +574,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=STAFF_DB_HOST=$_SQL_IP,DB_PORT=5432,STAFF_DB_USER=staff_admin,STAFF_DB_NAME=staff_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/10,MINIO_ENDPOINT=$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,STAFF_BUCKET=riviwa-staff,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=STAFF_DB_PASSWORD=db-pass-staff_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
+      - "--set-env-vars=STAFF_DB_HOST=$_SQL_IP,DB_PORT=5432,STAFF_DB_USER=staff_admin,STAFF_DB_NAME=staff_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,REDIS_URL=redis://$_REDIS_IP:6379/10,MINIO_ENDPOINT=$_VM_IP:9000,MINIO_ACCESS_KEY=qxTvxWJHlFC87lo8,STAFF_BUCKET=riviwa-staff,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=STAFF_DB_PASSWORD=db-pass-staff_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest,MINIO_SECRET_KEY=riviwa-MINIO_SECRET_KEY:latest"
     waitFor: [push-staff]
 
   # ── subscription_service  (port 8140) ─────────────────────────────────────
@@ -599,8 +599,8 @@ steps:
       - --cpu=1
       - --min-instances=0
       - --max-instances=5
-      - "--replace-env-vars=SUBSCRIPTION_DB_HOST=$_SQL_IP,SUBSCRIPTION_DB_USER=subscription_admin,SUBSCRIPTION_DB_NAME=subscription_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,AZAMPAY_APP_NAME=Riviwa,AZAMPAY_BASE_URL=https://authenticator.azampay.co.tz,AZAMPAY_CHECKOUT_URL=https://checkout.azampay.co.tz,SELCOM_BASE_URL=https://apigw.selcommobile.com/v1,MPESA_BASE_URL=https://openapi.m-pesa.com,PAYMENT_CALLBACK_BASE_URL=https://api.riviwa.com,ENVIRONMENT=staging,DEBUG=false"
-      - "--replace-secrets=SUBSCRIPTION_DB_PASSWORD=db-pass-subscription_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
+      - "--set-env-vars=SUBSCRIPTION_DB_HOST=$_SQL_IP,SUBSCRIPTION_DB_USER=subscription_admin,SUBSCRIPTION_DB_NAME=subscription_db,AUTH_ALGORITHM=HS256,KAFKA_BOOTSTRAP_SERVERS=$_VM_IP:9092,AZAMPAY_APP_NAME=Riviwa,AZAMPAY_BASE_URL=https://authenticator.azampay.co.tz,AZAMPAY_CHECKOUT_URL=https://checkout.azampay.co.tz,SELCOM_BASE_URL=https://apigw.selcommobile.com/v1,MPESA_BASE_URL=https://openapi.m-pesa.com,PAYMENT_CALLBACK_BASE_URL=https://api.riviwa.com,ENVIRONMENT=staging,DEBUG=false"
+      - "--set-secrets=SUBSCRIPTION_DB_PASSWORD=db-pass-subscription_admin:latest,AUTH_SECRET_KEY=riviwa-SECRET_KEY:latest,INTERNAL_SERVICE_KEY=riviwa-INTERNAL_SERVICE_KEY:latest"
     waitFor: [push-subscription]
 
 images:
