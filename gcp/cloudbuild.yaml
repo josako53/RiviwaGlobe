@@ -62,17 +62,17 @@ steps:
   - id: build-translation
     name: gcr.io/cloud-builders/docker
     args: [build, -t, "$_AR/riviwa-translation-service:$COMMIT_SHA", ./translation_service]
-    waitFor: [push-auth, push-stakeholder, push-feedback, push-payment, push-notification]
+    waitFor: ['-']
 
   - id: build-recommendation
     name: gcr.io/cloud-builders/docker
     args: [build, -t, "$_AR/riviwa-recommendation-service:$COMMIT_SHA", ./recommendation_service]
-    waitFor: [push-auth, push-stakeholder, push-feedback, push-payment, push-notification]
+    waitFor: ['-']
 
   - id: build-ai
     name: gcr.io/cloud-builders/docker
     args: [build, -t, "$_AR/riviwa-ai-service:$COMMIT_SHA", ./ai_service]
-    waitFor: [push-auth, push-stakeholder, push-feedback, push-payment, push-notification]
+    waitFor: ['-']
 
   - id: build-analytics
     name: gcr.io/cloud-builders/docker
