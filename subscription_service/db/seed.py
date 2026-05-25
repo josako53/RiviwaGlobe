@@ -79,8 +79,6 @@ _STARTER_FEATURES = dict(
     has_custom_sla=False,
     has_geo_proximity=False,
     has_waiting_queue=False,
-    has_bulk_staff_import=False,
-    has_staff_analytics=False,
 )
 
 _PROFESSIONAL_FEATURES = dict(
