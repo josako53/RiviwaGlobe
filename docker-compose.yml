@@ -4,7 +4,7 @@ services:
     image: apache/kafka:4.1.1
     container_name: kafka-1
     init: true
-    restart: unless-stopped
+    restart: always
     ports: ["9092:9092"]
     networks: [riviwa-net]
     environment:
@@ -39,7 +39,7 @@ services:
     image: apache/kafka:4.1.1
     container_name: kafka-2
     init: true
-    restart: unless-stopped
+    restart: always
     ports: ["9093:9092"]
     networks: [riviwa-net]
     environment:
@@ -74,7 +74,7 @@ services:
     image: apache/kafka:4.1.1
     container_name: kafka-3
     init: true
-    restart: unless-stopped
+    restart: always
     ports: ["9094:9092"]
     networks: [riviwa-net]
     environment:
@@ -109,7 +109,7 @@ services:
     image: apache/kafka:4.1.1
     container_name: kafka-4
     init: true
-    restart: unless-stopped
+    restart: always
     ports: ["9095:9092"]
     networks: [riviwa-net]
     environment:
@@ -152,7 +152,7 @@ services:
     image: postgres:15-alpine
     container_name: riviwa_auth_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER: ${AUTH_DB_USER}
@@ -171,7 +171,7 @@ services:
     image: postgres:15-alpine
     container_name: feedback_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER: ${FEEDBACK_DB_USER}
@@ -190,7 +190,7 @@ services:
     image: postgres:15-alpine
     container_name: stakeholder_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER: ${STAKEHOLDER_DB_USER}
@@ -209,7 +209,7 @@ services:
     image: postgres:15-alpine
     container_name: payment_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER: ${PAYMENT_DB_USER}
@@ -229,7 +229,7 @@ services:
     image: postgres:15-alpine
     container_name: notification_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER: ${NOTIFICATION_DB_USER:-notif_admin}
@@ -249,7 +249,7 @@ services:
     image: redis:7-alpine
     container_name: redis
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["6379:6379"]
     command: >
@@ -273,7 +273,7 @@ services:
       dockerfile: Dockerfile
     container_name: riviwa_auth_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8000:8000"]
     environment:
@@ -336,7 +336,7 @@ services:
       dockerfile: Dockerfile
     container_name: stakeholder_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8070:8070"]
     environment:
@@ -369,7 +369,7 @@ services:
       dockerfile: Dockerfile
     container_name: feedback_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8090:8090"]
     environment:
@@ -430,7 +430,7 @@ services:
       dockerfile: Dockerfile
     container_name: payment_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8040:8040"]
     environment:
@@ -482,7 +482,7 @@ services:
       dockerfile: Dockerfile
     container_name: notification_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8060:8060"]
     environment:
@@ -553,7 +553,7 @@ services:
     image: postgres:15-alpine
     container_name: translation_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${TRANSLATION_DB_USER:-trans_admin}
@@ -577,7 +577,7 @@ services:
       dockerfile: Dockerfile
     container_name: translation_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8050:8050"]
     volumes:
@@ -621,7 +621,7 @@ services:
     image: postgis/postgis:15-3.4-alpine
     container_name: recommendation_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${RECOMMENDATION_DB_USER:-rec_admin}
@@ -641,7 +641,7 @@ services:
     image: qdrant/qdrant:v1.12.1
     container_name: qdrant
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports:
       - "6333:6333"
@@ -661,7 +661,7 @@ services:
       dockerfile: Dockerfile
     container_name: recommendation_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8055:8055"]
     volumes:
@@ -699,7 +699,7 @@ services:
     image: postgres:15-alpine
     container_name: ai_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER: ${AI_DB_USER:-ai_admin}
@@ -717,7 +717,7 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["11434:11434"]
     volumes:
@@ -737,7 +737,7 @@ services:
       dockerfile: Dockerfile
     container_name: ai_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8085:8085"]
     volumes:
@@ -801,7 +801,7 @@ services:
     image: kafbat/kafka-ui:v1.4.2
     container_name: kafka-ui
     init: true
-    restart: unless-stopped
+    restart: always
     ports: ["8080:8080"]
     networks: [riviwa-net]
     environment:
@@ -817,7 +817,7 @@ services:
     image: alpine/minio:RELEASE.2025-10-15T17-29-55Z
     container_name: minio
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     user: "0:0"
     ports:
@@ -874,7 +874,7 @@ services:
     image: postgres:15-alpine
     container_name: analytics_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${ANALYTICS_DB_USER:-analytics_admin}
@@ -899,7 +899,7 @@ services:
       dockerfile: Dockerfile
     container_name: analytics_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8095:8095"]
     environment:
@@ -950,7 +950,7 @@ services:
     image: postgres:15-alpine
     container_name: integration_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${INTEGRATION_DB_USER:-integration_admin}
@@ -974,7 +974,7 @@ services:
       dockerfile: Dockerfile
     container_name: integration_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8100:8100"]
     environment:
@@ -1004,7 +1004,7 @@ services:
     image: postgres:15-alpine
     container_name: product_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${PRODUCT_DB_USER:-product_admin}
@@ -1028,7 +1028,7 @@ services:
       dockerfile: Dockerfile
     container_name: product_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8110:8110"]
     environment:
@@ -1063,7 +1063,7 @@ services:
     image: postgres:15-alpine
     container_name: qr_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${QR_DB_USER:-qr_admin}
@@ -1088,7 +1088,7 @@ services:
       dockerfile: Dockerfile
     container_name: qr_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8120:8120"]
     environment:
@@ -1122,7 +1122,7 @@ services:
     image: postgres:15-alpine
     container_name: verification_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${VERIFICATION_DB_USER:-verification_admin}
@@ -1147,7 +1147,7 @@ services:
       dockerfile: Dockerfile
     container_name: verification_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8125:8125"]
     environment:
@@ -1181,7 +1181,7 @@ services:
     image: nginx:1.27-alpine
     container_name: nginx
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports:
       - "80:80"
@@ -1229,7 +1229,7 @@ services:
     container_name: spark_master
     hostname: spark-master   # underscore in service name breaks Java URI; use hyphen
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
     environment:
@@ -1252,7 +1252,7 @@ services:
     image: apache/spark:3.5.3
     container_name: spark_worker
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     user: root
     command: >
@@ -1286,7 +1286,7 @@ services:
       dockerfile: Dockerfile
     container_name: spark_jobs
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       SPARK_MASTER: spark://spark-master:7077
@@ -1330,7 +1330,7 @@ services:
     image: postgres:15-alpine
     container_name: waiting_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${WAITING_DB_USER:-waiting_admin}
@@ -1351,7 +1351,7 @@ services:
       dockerfile: Dockerfile
     container_name: waiting_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8130:8130"]
     environment:
@@ -1382,7 +1382,7 @@ services:
       dockerfile: Dockerfile
     container_name: staff_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8135:8135"]
     environment:
@@ -1416,7 +1416,7 @@ services:
     image: postgres:15-alpine
     container_name: staff_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${STAFF_DB_USER:-staff_admin}
@@ -1437,7 +1437,7 @@ services:
       dockerfile: Dockerfile
     container_name: subscription_service
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     ports: ["8140:8140"]
     environment:
@@ -1477,7 +1477,7 @@ services:
     image: postgres:15-alpine
     container_name: subscription_db
     init: true
-    restart: unless-stopped
+    restart: always
     networks: [riviwa-net]
     environment:
       POSTGRES_USER:     ${SUBSCRIPTION_DB_USER:-subscription_admin}
