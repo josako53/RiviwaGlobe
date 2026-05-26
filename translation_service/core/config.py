@@ -62,10 +62,10 @@ class Settings(BaseSettings):
     # ── Groq LLM API (translation + AI chat fallback) ─────────────────────────
     GROQ_API_KEY: str = Field(
         default="",
-        description="Groq API key — enables Groq LLM translation (llama-3.3-70b-versatile)",
+        description="Groq API key — enables Groq LLM translation (qwen3-32b)",
     )
     GROQ_TRANSLATION_MODEL: str = Field(
-        default="llama-3.3-70b-versatile",
+        default="qwen3-32b",
         description="Groq model used for translation",
     )
     GROQ_BASE_URL: str = Field(

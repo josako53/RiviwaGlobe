@@ -783,7 +783,7 @@ services:
       VOICE_STORAGE_BUCKET:  ${VOICE_STORAGE_BUCKET:-riviwa-voice}
       # Groq LLM (optional — replaces local Ollama for chat if key is set)
       GROQ_API_KEY:  ${GROQ_API_KEY:-}
-      GROQ_MODEL:    ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_MODEL:    ${GROQ_MODEL:-qwen3-32b}
       GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
       # Runtime
       ENVIRONMENT: ${ENVIRONMENT}
@@ -930,7 +930,7 @@ services:
       REDIS_URL: redis://redis:6379/6
       # Groq AI Insights
       GROQ_API_KEY:  ${GROQ_API_KEY:-}
-      GROQ_MODEL:    ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      GROQ_MODEL:    ${GROQ_MODEL:-qwen3-32b}
       GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
       # Runtime
       ENVIRONMENT: ${ENVIRONMENT}

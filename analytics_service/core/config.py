@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     # ── Groq LLM (AI Insights) ────────────────────────────────────────────────
     GROQ_API_KEY:   str = Field(default="", description="Groq API key for LLM inference.")
-    GROQ_MODEL:     str = Field(default="llama-3.3-70b-versatile")
+    GROQ_MODEL:     str = Field(default="qwen3-32b")
     GROQ_BASE_URL:  str = Field(default="https://api.groq.com/openai/v1")
 
     # ── Runtime ───────────────────────────────────────────────────────────────

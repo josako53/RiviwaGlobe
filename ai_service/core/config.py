@@ -70,7 +70,7 @@ class Settings(BaseSettings):
 
     # ── Groq LLM API (optional — replaces local Ollama for chat if key is set) ──
     GROQ_API_KEY:  str = Field(default="", description="Groq API key — if set, routes chat through Groq instead of local Ollama")
-    GROQ_MODEL:    str = Field(default="llama-3.3-70b-versatile", description="Groq model name")
+    GROQ_MODEL:    str = Field(default="qwen3-32b", description="Groq model name")
     GROQ_BASE_URL: str = Field(default="https://api.groq.com/openai/v1")
 
     # ── Translation service ───────────────────────────────────────────────────
