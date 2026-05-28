@@ -175,6 +175,11 @@ class AirtelMoneyProvider(BasePaymentProvider):
         # DP00800001000 = ambiguous (still processing — treat as pending, caller should enquire)
         allowed = {"DP00800001001", "DP00800001006", "DP00800001000"}
         if not success and resp_code not in allowed:
+            log.error("airtel.initiate_rejected",
+                      resp_code=resp_code,
+                      message=status_block.get("message"),
+                      result_code=status_block.get("result_code"),
+                      raw_response=data)
             mapped_error = _COLLECTION_ERROR_MAP.get(resp_code)
             if mapped_error:
                 _, user_msg = mapped_error
@@ -285,7 +290,9 @@ class AirtelMoneyProvider(BasePaymentProvider):
     def _encrypt_pin(self, pin: str) -> str:
         """
         RSA-encrypt the 4-digit disbursement PIN using Airtel's public key.
-        Key format: base64-encoded DER (SubjectPublicKeyInfo / PKCS#8).
+
+        Airtel requires: RSA/ECB/PKCS1Padding (PKCS#1 v1.5), 1024-bit key.
+        Key format: base64-encoded PEM or DER (SubjectPublicKeyInfo).
         Returns base64-encoded ciphertext.
         """
         if not settings.AIRTEL_PUBLIC_KEY:
@@ -296,18 +303,17 @@ class AirtelMoneyProvider(BasePaymentProvider):
         try:
             from cryptography.hazmat.primitives import serialization
             from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
-            from cryptography.hazmat.primitives import hashes
 
-            key_bytes = base64.b64decode(settings.AIRTEL_PUBLIC_KEY)
-            pub_key   = serialization.load_der_public_key(key_bytes)
-            encrypted = pub_key.encrypt(
-                pin.encode(),
-                asym_padding.OAEP(
-                    mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None,
-                ),
-            )
+            raw = settings.AIRTEL_PUBLIC_KEY.strip()
+
+            # Support both PEM ("-----BEGIN PUBLIC KEY-----") and raw base64 DER
+            if raw.startswith("-----"):
+                pub_key = serialization.load_pem_public_key(raw.encode())
+            else:
+                pub_key = serialization.load_der_public_key(base64.b64decode(raw))
+
+            # Airtel: RSA/ECB/PKCS1Padding = PKCS#1 v1.5 (NOT OAEP)
+            encrypted = pub_key.encrypt(pin.encode(), asym_padding.PKCS1v15())
             return base64.b64encode(encrypted).decode()
         except Exception as exc:
             raise PaymentProviderError("airtel", f"PIN encryption failed: {exc}")
