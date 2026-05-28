@@ -136,7 +136,7 @@ class AirtelMoneyProvider(BasePaymentProvider):
         token   = await self._get_token()
         msisdn  = self._strip_country_code(phone)
         txn_id  = payment.external_ref or f"RVW-{payment.id.hex[:12].upper()}"
-        amount  = int(payment.amount)
+        amount  = payment.amount
 
         body = {
             "reference": payment.description or "Riviwa payment",
