@@ -130,12 +130,14 @@ class PaymentService:
         prov = get_provider(provider)
         try:
             result = await prov.initiate(payment, payment.payer_phone)
-        except PaymentProviderError:
-            # Record failed attempt
+        except PaymentProviderError as exc:
+            log.error("payment.provider_error", payment_id=str(payment_id),
+                      provider=provider.value, error=str(exc))
             failed_txn = PaymentTransaction(
                 payment_id     = payment_id,
                 provider       = provider,
                 status         = TransactionStatus.FAILED,
+                failure_reason = str(exc),
                 completed_at   = datetime.now(timezone.utc),
             )
             await self.repo.create_transaction(failed_txn)
@@ -221,7 +223,7 @@ class PaymentService:
         elif status == "failed":
             txn.status       = TransactionStatus.FAILED
             txn.completed_at = datetime.now(timezone.utc)
-            txn.failure_reason = result.get("reason", "Provider declined")
+            txn.failure_reason = result.get("failure_reason") or result.get("reason") or "Provider declined"
 
             payment        = await self._get_payment_or_404(txn.payment_id)
             payment.status = PaymentStatus.FAILED

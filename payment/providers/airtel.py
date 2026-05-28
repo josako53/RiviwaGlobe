@@ -124,10 +124,12 @@ class AirtelMoneyProvider(BasePaymentProvider):
         return token
 
     def _strip_country_code(self, phone: str) -> str:
-        """Remove +255 or 255 prefix — Airtel wants local format."""
-        phone = phone.lstrip("+")
+        """Normalise to 9-digit local format — Airtel wants e.g. 788230980, not 0788230980 or +255788230980."""
+        phone = phone.strip().lstrip("+")
         if phone.startswith("255"):
             phone = phone[3:]
+        if phone.startswith("0") and len(phone) == 10:
+            phone = phone[1:]
         return phone
 
     async def initiate(self, payment: Payment, phone: str) -> Dict[str, Any]:
