@@ -30,7 +30,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -174,7 +174,7 @@ class Payment(SQLModel, table=True):
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
 
-    transactions: PaymentTransaction = Relationship(back_populates="payment")
+    transactions: List["PaymentTransaction"] = Relationship(back_populates="payment")
 
     def __repr__(self):
         return f"<Payment {self.amount} {self.currency} [{self.status}]>"

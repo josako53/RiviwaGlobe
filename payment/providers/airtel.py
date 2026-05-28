@@ -361,7 +361,7 @@ class AirtelMoneyProvider(BasePaymentProvider):
             "provider_response": data,
         }
 
-    async def enquiry_disbursement(self, transaction_id: str) -> Dict[str, Any]:
+    async def enquiry_disbursement(self, transaction_id: str, transaction_type: str = "B2B") -> Dict[str, Any]:
         """
         GET /standard/v2/disbursements/{id} — poll transaction status.
         Call at least 1 minute after disburse() to allow Airtel time to process.
@@ -371,7 +371,7 @@ class AirtelMoneyProvider(BasePaymentProvider):
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(
                 f"{self._base_url()}/standard/v2/disbursements/{transaction_id}",
-                params={"transactionType": "B2B"},
+                params={"transactionType": transaction_type},
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Accept":        "*/*",

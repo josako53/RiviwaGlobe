@@ -5,7 +5,7 @@ import structlog
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import SQLModel
 from db.session import engine
-from models.payment import Payment, PaymentTransaction, WebhookLog  # noqa
+from models.payment import Disbursement, Payment, PaymentTransaction, WebhookLog  # noqa
 
 log = structlog.get_logger(__name__)
 

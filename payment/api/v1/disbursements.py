@@ -275,7 +275,7 @@ async def enquiry_disbursement(
 
     provider = AirtelMoneyProvider()
     try:
-        result     = await provider.enquiry_disbursement(d.our_transaction_id)
+        result     = await provider.enquiry_disbursement(d.our_transaction_id, d.transaction_type)
         mapped     = _DISBURSE_STATUS_MAP.get(result["status"], DisbursementStatus.PROCESSING)
         # AMBIGUOUS maps to its own status for clarity
         if result.get("raw_status") == "TA":
