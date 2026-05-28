@@ -126,9 +126,9 @@ async def create_disbursement(
         raise HTTPException(status_code=422, detail={"error": "payee_msisdn is required"})
 
     try:
-        amount = int(body["amount"])
+        amount = float(body["amount"])
     except (KeyError, ValueError, TypeError):
-        raise HTTPException(status_code=422, detail={"error": "amount must be a positive integer (TZS)"})
+        raise HTTPException(status_code=422, detail={"error": "amount must be a positive number"})
     if amount <= 0:
         raise HTTPException(status_code=422, detail={"error": "amount must be greater than 0"})
 
