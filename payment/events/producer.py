@@ -57,9 +57,9 @@ class PaymentProducer:
                 key=key,
                 value=envelope,
             )
-            log.info("payment.event.published", event=event_type, key=key)
+            log.info("payment.event.published", event_type=event_type, key=key)
         except Exception as exc:
-            log.error("payment.event.publish_failed", event=event_type, error=str(exc))
+            log.error("payment.event.publish_failed", event_type=event_type, error=str(exc))
 
     async def payment_initiated(self, payment: Payment, provider: str) -> None:
         await self._publish(
