@@ -138,6 +138,7 @@ class AirtelMoneyProvider(BasePaymentProvider):
         txn_id  = payment.external_ref or f"RVW-{payment.id.hex[:12].upper()}"
         amount  = payment.amount
 
+        amount_val = int(amount) if float(amount) == int(amount) else float(amount)
         body = {
             "reference": payment.description or "Riviwa payment",
             "subscriber": {
@@ -146,7 +147,7 @@ class AirtelMoneyProvider(BasePaymentProvider):
                 "msisdn":   msisdn,
             },
             "transaction": {
-                "amount":   amount,
+                "amount":   amount_val,
                 "country":  "TZ",
                 "currency": "TZS",
                 "id":       txn_id,
@@ -346,6 +347,7 @@ class AirtelMoneyProvider(BasePaymentProvider):
         msisdn     = self._strip_country_code(payee_msisdn)
         enc_pin    = self._encrypt_pin(settings.AIRTEL_DISBURSEMENT_PIN)
 
+        amount_val = int(amount) if float(amount) == int(amount) else float(amount)
         body = {
             "payee": {
                 "currency": "TZS",
@@ -355,7 +357,7 @@ class AirtelMoneyProvider(BasePaymentProvider):
             "reference": reference,
             "pin":        enc_pin,
             "transaction": {
-                "amount": amount,
+                "amount": amount_val,
                 "id":     transaction_id,
                 "type":   transaction_type,
             },
@@ -382,9 +384,13 @@ class AirtelMoneyProvider(BasePaymentProvider):
         # DP00900001001 = Success, DP00900001006 = Processing (both OK for initiation)
         if not success and resp_code not in ("DP00900001001", "DP00900001006",
                                              "DP00900001000"):  # ambiguous = still processing
+            log.error("airtel.disburse_rejected",
+                      resp_code=resp_code,
+                      message=status_block.get("message"),
+                      raw_response=data)
             raise PaymentProviderError(
                 "airtel",
-                f"{status_block.get('message', 'Disbursement failed')} [{resp_code}]"
+                f"{status_block.get('message', 'Disbursement failed')} [{resp_code}]",
             )
 
         txn_data         = data.get("data", {}).get("transaction", {})
