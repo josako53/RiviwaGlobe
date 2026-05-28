@@ -12,12 +12,19 @@ Status codes:
   TIP — Transaction in Progress
   TE  — Transaction Expired
 
-Response codes (key ones):
-  DP00800001001 — Success
-  DP00800001006 — In process (pending)
-  DP00800001002 — Incorrect PIN
-  DP00800001007 — Not enough balance
-  DP00800001024 — Timed out
+Collection API response codes (full):
+  DP00800001000 — Ambiguous       — still processing; do enquiry to get final status
+  DP00800001001 — Success         — transaction successful
+  DP00800001002 — Incorrect PIN   — user entered wrong PIN
+  DP00800001003 — Exceeds limit   — user exceeded wallet transaction limit
+  DP00800001004 — Invalid Amount  — amount below minimum allowed
+  DP00800001005 — Invalid Txn ID  — user did not enter PIN (session expired)
+  DP00800001006 — In process      — transaction pending; check again shortly
+  DP00800001007 — No balance      — user wallet has insufficient funds
+  DP00800001008 — Refused         — transaction refused by Airtel
+  DP00800001010 — Payee barred    — payee not registered / barred on Airtel Money
+  DP00800001024 — Timed out       — transaction timed out
+  DP00800001025 — Not found       — transaction not found (wrong ID or too early)
 """
 from __future__ import annotations
 
@@ -41,6 +48,21 @@ _AIRTEL_STATUS_MAP = {
     "TE":  "failed",    # expired
     "TA":  "pending",   # ambiguous — retry later
     "TIP": "pending",   # in progress
+}
+
+# Maps Airtel Collection API response_code → (outcome, user-facing message)
+# outcome: "pending" | "failed" | "ambiguous"
+_COLLECTION_ERROR_MAP: Dict[str, tuple[str, str]] = {
+    "DP00800001000": ("ambiguous", "Transaction is still processing. Please wait and check your status shortly."),
+    "DP00800001002": ("failed",    "Incorrect PIN entered. Please try again with the correct Airtel Money PIN."),
+    "DP00800001003": ("failed",    "Transaction limit exceeded. Your Airtel Money wallet has reached its allowed limit."),
+    "DP00800001004": ("failed",    "Invalid amount. The amount is below the minimum allowed by Airtel Money."),
+    "DP00800001005": ("failed",    "PIN not entered. The USSD session expired before you entered your PIN. Please try again."),
+    "DP00800001007": ("failed",    "Insufficient balance. Your Airtel Money wallet does not have enough funds."),
+    "DP00800001008": ("failed",    "Transaction refused by Airtel Money. Please contact Airtel support."),
+    "DP00800001010": ("failed",    "Payment not permitted. Your Airtel Money account may be barred or not registered."),
+    "DP00800001024": ("failed",    "Transaction timed out. Please try again."),
+    "DP00800001025": ("failed",    "Transaction not found. Please verify the reference and try again."),
 }
 
 # Module-level token cache
@@ -147,23 +169,31 @@ class AirtelMoneyProvider(BasePaymentProvider):
         success      = status_block.get("success", False)
         resp_code    = status_block.get("response_code", "")
 
-        # DP00800001006 = "In process" (pending) — treat as success of initiation
-        if not success and resp_code not in ("DP00800001006", "DP00800001001"):
+        # DP00800001001 = success, DP00800001006 = in process (both OK for initiation)
+        # DP00800001000 = ambiguous (still processing — treat as pending, caller should enquire)
+        allowed = {"DP00800001001", "DP00800001006", "DP00800001000"}
+        if not success and resp_code not in allowed:
+            mapped_error = _COLLECTION_ERROR_MAP.get(resp_code)
+            if mapped_error:
+                _, user_msg = mapped_error
+                raise PaymentProviderError("airtel", f"{user_msg} [{resp_code}]")
             raise PaymentProviderError(
                 "airtel",
-                f"{status_block.get('message', 'Unknown error')} "
-                f"[{resp_code}]"
+                f"{status_block.get('message', 'Unknown error')} [{resp_code}]"
             )
 
         txn_data    = data.get("data", {}).get("transaction", {})
         airtel_txn  = txn_data.get("id", txn_id)
+        # Ambiguous on initiation — mark as pending so enquiry can resolve it
+        init_status = "ambiguous" if resp_code == "DP00800001000" else "pending"
 
         log.info("airtel.initiated", txn_id=txn_id, msisdn=msisdn[:4] + "****",
                  resp_code=resp_code)
         return {
             "provider_ref":      txn_id,        # our ID — used for enquiry
             "provider_order_id": airtel_txn,     # Airtel's ID
-            "status":            "pending",
+            "status":            init_status,
+            "resp_code":         resp_code,
             "provider_response": data,
         }
 
@@ -183,15 +213,26 @@ class AirtelMoneyProvider(BasePaymentProvider):
             )
 
         data       = r.json()
+        status_block = data.get("status", {})
+        resp_code    = status_block.get("response_code", "")
         txn_data   = data.get("data", {}).get("transaction", {})
         raw_status = txn_data.get("status", "")
         status     = _AIRTEL_STATUS_MAP.get(raw_status, "pending")
         receipt    = txn_data.get("airtel_money_id")
 
-        log.info("airtel.verify", provider_ref=provider_ref, raw_status=raw_status, status=status)
+        # Enrich failure reason from error map when status is failed
+        failure_reason = None
+        if status == "failed":
+            mapped_error = _COLLECTION_ERROR_MAP.get(resp_code)
+            failure_reason = mapped_error[1] if mapped_error else status_block.get("message")
+
+        log.info("airtel.verify", provider_ref=provider_ref, raw_status=raw_status,
+                 resp_code=resp_code, status=status)
         return {
             "status":            status,
             "receipt":           receipt,
+            "resp_code":         resp_code,
+            "failure_reason":    failure_reason,
             "provider_response": data,
         }
 
