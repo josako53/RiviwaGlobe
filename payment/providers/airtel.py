@@ -391,7 +391,11 @@ class AirtelMoneyProvider(BasePaymentProvider):
         airtel_money_id  = txn_data.get("airtel_money_id")
         airtel_ref_id    = txn_data.get("reference_id")
         raw_status       = txn_data.get("status", "")
-        mapped_status    = _AIRTEL_STATUS_MAP.get(raw_status, "processing")
+        # DP00900001001 + success=True means the transfer completed immediately (no TS in txn_data)
+        if success and resp_code == "DP00900001001":
+            mapped_status = "success"
+        else:
+            mapped_status = _AIRTEL_STATUS_MAP.get(raw_status, "processing")
 
         log.info(
             "airtel.disburse",
