@@ -121,6 +121,8 @@ class IntegrationClient(SQLModel, table=True):
     webhook_url:          Optional[str] = Field(default=None, max_length=2048)
     webhook_secret_hash:  Optional[str] = Field(default=None, max_length=256,
                                                   description="bcrypt hash of HMAC signing secret")
+    webhook_signing_key:  Optional[str] = Field(default=None, sa_column=Column(Text),
+                                                   description="AES-256-GCM encrypted raw signing secret for HMAC-SHA256")
     webhook_events: List[str] = Field(
         default_factory=list,
         sa_column=Column(JSONB, nullable=False, server_default="[]"),
@@ -385,4 +387,44 @@ class IntegrationAuditLog(SQLModel, table=True):
     __table_args__ = (
         Index("ix_audit_logs_timestamp", "timestamp"),
         Index("ix_audit_logs_client_timestamp", "client_id", "timestamp"),
+    )
+
+
+# -- ReceiptTransaction --
+
+class ReceiptTransaction(SQLModel, table=True):
+    __tablename__ = "receipt_transactions"
+
+    id:              uuid.UUID      = Field(default_factory=uuid.uuid4, primary_key=True)
+    client_id:       uuid.UUID      = Field(foreign_key="integration_clients.id", index=True)
+    organisation_id: Optional[uuid.UUID] = Field(default=None, index=True)
+
+    consumer_phone:  Optional[str]  = Field(default=None, max_length=50)
+    consumer_name:   Optional[str]  = Field(default=None, max_length=200)
+    consumer_email:  Optional[str]  = Field(default=None, max_length=320)
+    service_name:    Optional[str]  = Field(default=None, max_length=200)
+    department:      Optional[str]  = Field(default=None, max_length=200)
+    attendant_name:  Optional[str]  = Field(default=None, max_length=200)
+    location:        Optional[str]  = Field(default=None, max_length=500)
+
+    transaction_datetime: datetime  = Field(default_factory=lambda: datetime.utcnow())
+    receipt_number:  Optional[str]  = Field(default=None, max_length=100, index=True)
+    amount:          Optional[float] = Field(default=None)
+    currency:        Optional[str]  = Field(default=None, max_length=10)
+    custom_attributes: dict         = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False, server_default="{}"))
+
+    session_token_hash: str         = Field(max_length=256, unique=True, index=True)
+    expires_at:      datetime
+
+    short_code:      Optional[str]  = Field(default=None, max_length=50)
+    sms_code:        Optional[str]  = Field(default=None, max_length=50)
+    qr_image_url:    Optional[str]  = Field(default=None, max_length=1000)
+    qr_receipt_id:   Optional[uuid.UUID] = Field(default=None)
+
+    created_at:      datetime       = Field(default_factory=lambda: datetime.utcnow(), index=True)
+
+    client: Optional[IntegrationClient] = Relationship()
+
+    __table_args__ = (
+        Index("ix_receipt_txn_client_created", "client_id", "created_at"),
     )

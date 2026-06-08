@@ -131,13 +131,11 @@ class StaffProfileRepository:
     async def feedback_stats(self, staff_id: UUID) -> Dict[str, Any]:
         from models.staff_feedback import StaffFeedback
         result = await self.db.execute(
-            select(
-                func.count(StaffFeedback.id).label("count"),
-                func.avg(StaffFeedback.rating).label("avg_rating"),
-            ).where(StaffFeedback.staff_id == staff_id)
+            select(func.count(StaffFeedback.id).label("count"))
+            .where(StaffFeedback.staff_id == staff_id)
         )
         row = result.one()
         return {
             "feedback_count": row.count or 0,
-            "avg_rating": float(row.avg_rating) if row.avg_rating else None,
+            "avg_rating": None,
         }

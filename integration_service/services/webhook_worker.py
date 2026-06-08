@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from core.security import sign_webhook_payload
+from core.security import sign_webhook_payload, decrypt_field
 from db.session import AsyncSessionLocal
 from models.integration import DeliveryStatus, IntegrationClient, WebhookDelivery
 
@@ -48,10 +48,14 @@ async def deliver_webhook(db: AsyncSession, delivery: WebhookDelivery) -> bool:
 
     payload_bytes = json.dumps(delivery.payload).encode()
 
-    # Sign with stored secret hash — we use the hash as the HMAC key directly.
-    # Partners rotate secrets via POST /integration/webhooks/rotate-secret which
-    # gives them the raw secret to verify with.
-    sign_key = client.webhook_secret_hash or client.client_id
+    # Sign with the encrypted raw secret (decrypt at delivery time).
+    # webhook_signing_key stores AES-256-GCM encrypted raw secret;
+    # partners verify with the raw secret given to them at client creation.
+    sign_key = (
+        decrypt_field(client.webhook_signing_key)
+        if client.webhook_signing_key
+        else client.client_id
+    )
     signature, timestamp = sign_webhook_payload(payload_bytes, sign_key)
 
     headers = {

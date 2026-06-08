@@ -325,7 +325,10 @@ class RegistrationService:
             geo                             = geo,
             fingerprint                     = fingerprint_payload,  # full signals when available
             behavioral                      = behavioral_summary,
-            email_normalized_exists         = False,
+            email_normalized_exists         = (
+                await self.user_repo.email_normalized_exists(email_normalized)
+                if email_normalized else False
+            ),
             ip_user_count                   = len(ip_users),
             fingerprint_user_count          = len(fp_users),
             declared_country                = data.country_code,

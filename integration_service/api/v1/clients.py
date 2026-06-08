@@ -20,6 +20,7 @@ from core.config import settings
 from core.security import (
     generate_api_key, generate_client_credentials,
     generate_webhook_signing_secret,
+    encrypt_field,
 )
 from db.session import get_async_session
 from models.integration import ApiKey, IntegrationClient, ClientType, ClientEnvironment
@@ -82,6 +83,7 @@ async def register_client(
         redirect_uris       = body.get("redirect_uris", []),
         webhook_url         = body.get("webhook_url"),
         webhook_secret_hash = webhook_hash,
+            webhook_signing_key = encrypt_field(webhook_raw),
         webhook_events      = body.get("webhook_events", []),
         data_endpoint_url   = body.get("data_endpoint_url"),
         require_mtls        = body.get("require_mtls", False),

@@ -82,13 +82,13 @@ async def get_product_internal(product_id: UUID, db: DbDep, kafka: KafkaDep) -> 
         # All additional images (gallery)
         "images": [
             {
-                "image_id":  str(img.image_id),
+                "image_id":  str(img.id),
                 "url":       img.url,
                 "role":      img.role,
-                "sort_order": img.sort_order,
+                "sort_order": img.position,
                 "alt_text":  img.alt_text,
             }
-            for img in sorted(images, key=lambda x: x.sort_order)
+            for img in sorted(images, key=lambda x: x.position)
         ],
 
         # Key features (bullet points)

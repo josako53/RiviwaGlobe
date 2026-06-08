@@ -237,7 +237,7 @@ class RecommendationOrchestrator:
     ) -> NearbyResponse:
         """Geo-based discovery."""
 
-        from services.geo_service import haversine_km
+        from services.geo_service import haversine_km, compute_geo_score
 
         entities = await self.repo.get_nearby(
             lat=latitude, lon=longitude,
@@ -251,9 +251,10 @@ class RecommendationOrchestrator:
         for e in entities:
             if e.status != "active":
                 continue
-            dist = None
-            if e.latitude is not None and e.longitude is not None:
-                dist = haversine_km(latitude, longitude, e.latitude, e.longitude)
+            geo_score, dist = compute_geo_score(
+                latitude, longitude, e.latitude, e.longitude,
+                city2=e.city, region2=e.region, country2=e.country_code,
+            )
 
             results.append(RecommendedEntity(
                 entity_id=e.id,
@@ -270,8 +271,8 @@ class RecommendationOrchestrator:
                 city=e.city,
                 region=e.region,
                 country_code=e.country_code,
-                distance_km=round(dist, 1) if dist else None,
-                score=1.0 / (1.0 + (dist or 1000)),
+                distance_km=round(dist, 1) if dist is not None else None,
+                score=geo_score,
                 interactions=InteractionSummary(
                     feedback_count=e.feedback_count,
                     grievance_count=e.grievance_count,
