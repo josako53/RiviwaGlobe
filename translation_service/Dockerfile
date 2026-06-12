@@ -46,7 +46,7 @@ RUN uv pip install --no-cache -r requirements.txt
 # ── Stage 2: runtime image ────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-RUN groupadd -r josako && useradd -r -g josako josako
+RUN groupadd -r josako && useradd -r -g josako josako && mkdir -p /home/josako && chown josako:josako /home/josako
 
 # psycopg (used in entrypoint DB check) needs libpq
 RUN apt-get update && apt-get install -y --no-install-recommends \
