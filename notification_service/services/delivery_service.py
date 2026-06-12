@@ -396,48 +396,103 @@ class DeliveryService:
 
     async def retry_failed_deliveries(self) -> int:
         """
-        Re-attempt failed deliveries that are past their next_retry_at time
-        and have not exceeded max retries.  Called periodically by APScheduler.
-        Returns count of retried deliveries.
+        Re-attempt failed deliveries that are due for retry.
+
+        Industry-standard pattern:
+          · In-place update — never creates new rows (fixes the exponential
+            row-explosion bug where each retry spawned a child delivery record).
+          · Exponential backoff with full jitter: uniform(0, base * factor^n).
+            Jitter spreads retries across time to avoid thundering herd.
+          · Dead-letter on exhaustion: sets next_retry_at=NULL so the scheduler
+            never touches the row again. No new status enum needed.
+          · Batch cap (100/run): keeps each scheduler tick fast and predictable.
         """
-        from sqlalchemy import and_
+        import random
+        from datetime import timedelta
+
         now = datetime.now(timezone.utc)
 
-        q = select(NotificationDelivery).where(
-            and_(
+        q = (
+            select(NotificationDelivery)
+            .where(
                 NotificationDelivery.status        == DeliveryStatusEnum.FAILED,
                 NotificationDelivery.retry_count   <  settings.MAX_RETRIES,
+                NotificationDelivery.next_retry_at.is_not(None),
                 NotificationDelivery.next_retry_at <= now,
             )
+            .limit(100)
         )
         deliveries = list((await self.db.execute(q)).scalars().all())
         retried = 0
 
         for delivery in deliveries:
-            # Re-load the parent notification for context
             notification = await self.db.get(Notification, delivery.notification_id)
             if not notification:
+                delivery.retry_count   = settings.MAX_RETRIES
+                delivery.next_retry_at = None
+                delivery.failure_reason = "Dead-lettered: parent notification missing"
+                self.db.add(delivery)
                 continue
 
-            push_tokens = await self._load_push_tokens(notification.recipient_user_id) \
-                if notification.recipient_user_id else []
+            channel = _CHANNELS.get(delivery.channel.value)
+            if not channel or not channel.is_configured():
+                delivery.retry_count   = settings.MAX_RETRIES
+                delivery.next_retry_at = None
+                delivery.failure_reason = f"Dead-lettered: channel {delivery.channel.value} not configured"
+                self.db.add(delivery)
+                continue
 
-            delivery.retry_count += 1
-            new_delivery = await self._deliver_to_channel(
-                notification  = notification,
-                channel_name  = delivery.channel.value,
-                variables     = dict(notification.variables or {}),
-                push_tokens   = push_tokens,
+            push_tokens = (
+                await self._load_push_tokens(notification.recipient_user_id)
+                if notification.recipient_user_id else []
             )
-            # If still failing, schedule next retry with backoff
-            if new_delivery.status == DeliveryStatusEnum.FAILED and delivery.retry_count < settings.MAX_RETRIES:
-                from datetime import timedelta
-                delay = settings.RETRY_BASE_DELAY_SEC * (settings.RETRY_BACKOFF_FACTOR ** delivery.retry_count)
-                delivery.next_retry_at = now + timedelta(seconds=delay)
-            elif new_delivery.status == DeliveryStatusEnum.FAILED:
-                # Max retries exhausted
-                delivery.status         = DeliveryStatusEnum.FAILED
-                delivery.failure_reason = f"Max retries ({settings.MAX_RETRIES}) exhausted. Last: {delivery.failure_reason}"
+
+            payload = ChannelPayload(
+                recipient_user_id = str(notification.recipient_user_id) if notification.recipient_user_id else None,
+                recipient_phone   = notification.recipient_phone,
+                recipient_email   = notification.recipient_email,
+                push_tokens       = push_tokens,
+                rendered_title    = delivery.rendered_title,
+                rendered_subject  = delivery.rendered_subject,
+                rendered_body     = delivery.rendered_body,
+                notification_type = notification.notification_type,
+                priority          = notification.priority.value,
+                language          = notification.language,
+            )
+
+            result = await channel.send(payload)
+            delivery.retry_count += 1
+
+            if result.success:
+                delivery.status              = DeliveryStatusEnum.SENT
+                delivery.sent_at             = now
+                delivery.next_retry_at       = None
+                delivery.failure_reason      = None
+                delivery.provider_name       = delivery.channel.value
+                delivery.provider_message_id = result.provider_message_id
+                log.info("retry.succeeded",
+                         delivery_id=str(delivery.id),
+                         channel=delivery.channel.value,
+                         attempt=delivery.retry_count)
+            elif delivery.retry_count >= settings.MAX_RETRIES:
+                # Dead-letter: null out next_retry_at so this row is never
+                # picked up again. retry_count >= MAX_RETRIES also excludes it.
+                delivery.next_retry_at  = None
+                delivery.failure_reason = (
+                    f"Dead-lettered after {settings.MAX_RETRIES} attempts. "
+                    f"Last error: {result.failure_reason}"
+                )
+                log.warning("retry.dead_lettered",
+                            delivery_id=str(delivery.id),
+                            channel=delivery.channel.value,
+                            reason=result.failure_reason)
+            else:
+                # Full-jitter backoff: uniform(0, base * factor^n)
+                # Spreads retry storms across the window instead of all hitting at once.
+                ceiling             = settings.RETRY_BASE_DELAY_SEC * (settings.RETRY_BACKOFF_FACTOR ** delivery.retry_count)
+                delay               = random.uniform(0, ceiling)
+                delivery.next_retry_at  = now + timedelta(seconds=delay)
+                delivery.failure_reason = result.failure_reason
 
             self.db.add(delivery)
             retried += 1

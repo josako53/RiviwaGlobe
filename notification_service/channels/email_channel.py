@@ -115,11 +115,13 @@ class EmailChannel(BaseChannel):
             msg.attach(MIMEText(payload.rendered_body, "html", "utf-8"))
 
             def _send_sync():
-                if settings.SMTP_USE_TLS:
-                    smtp = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
-                    smtp.starttls()
-                else:
+                # Port 465 = implicit SSL (SMTP_SSL); port 587 = STARTTLS.
+                if settings.SMTP_PORT == 465:
                     smtp = smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT)
+                else:
+                    smtp = smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT)
+                    if settings.SMTP_USE_TLS:
+                        smtp.starttls()
                 if settings.SMTP_USERNAME:
                     smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
                 smtp.sendmail(settings.EMAIL_FROM, [payload.recipient_email], msg.as_string())

@@ -15,10 +15,16 @@ Jobs:
   │   → Sends notifications whose scheduled_at is due    │                  │
   ├──────────────────────────────────────────────────────┼──────────────────┤
   │ retry_failed_deliveries                              │ Every 5 minutes  │
-  │   → Re-attempts failed deliveries with backoff       │                  │
+  │   → Re-attempts failed deliveries (in-place, capped) │                  │
   ├──────────────────────────────────────────────────────┼──────────────────┤
   │ prune_stale_devices                                  │ Daily at 02:00   │
   │   → Removes push tokens inactive for 90+ days        │                  │
+  ├──────────────────────────────────────────────────────┼──────────────────┤
+  │ prune_old_notifications                              │ Daily at 03:00   │
+  │   → Deletes read in-app notifications > 90 days      │                  │
+  ├──────────────────────────────────────────────────────┼──────────────────┤
+  │ prune_dead_lettered_deliveries                       │ Daily at 04:00   │
+  │   → Deletes dead-lettered delivery rows > 30 days    │                  │
   └──────────────────────────────────────────────────────┴──────────────────┘
 
 The scheduler is started in main.py lifespan and stopped on shutdown.
@@ -83,17 +89,13 @@ async def _job_prune_stale_devices() -> None:
 
 
 async def _job_prune_old_notifications() -> None:
-    """
-    Archive read in_app notifications older than 90 days.
-    Keeps the notifications table lean.
-    """
+    """Delete read in-app notifications older than 90 days."""
     from datetime import datetime, timedelta, timezone
-    from sqlalchemy import delete, and_
-    from models.notification import NotificationDelivery, Notification, ChannelEnum, DeliveryStatusEnum
+    from sqlalchemy import delete
+    from models.notification import NotificationDelivery, ChannelEnum, DeliveryStatusEnum
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=90)
     async with AsyncSessionLocal() as db:
-        # Delete deliveries for old read in_app notifications
         result = await db.execute(
             delete(NotificationDelivery).where(
                 NotificationDelivery.channel == ChannelEnum.IN_APP,
@@ -105,6 +107,53 @@ async def _job_prune_old_notifications() -> None:
         pruned = result.rowcount
         if pruned:
             log.info("scheduler.job.prune_old_notifications", pruned=pruned)
+
+
+async def _job_prune_dead_lettered_deliveries() -> None:
+    """
+    Delete dead-lettered delivery rows older than 30 days.
+
+    Dead-lettered rows: status=FAILED, next_retry_at IS NULL,
+    retry_count >= MAX_RETRIES.  They will never be retried again so
+    there is no reason to keep them indefinitely.  Runs in batches of
+    5 000 to avoid long-running DELETE transactions.
+    """
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import delete, and_, text
+    from models.notification import NotificationDelivery, DeliveryStatusEnum
+    from core.config import settings
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    total_pruned = 0
+
+    async with AsyncSessionLocal() as db:
+        while True:
+            # Identify a batch of IDs to delete
+            batch_ids_result = await db.execute(
+                text(
+                    "SELECT id FROM notification_deliveries "
+                    "WHERE status = 'FAILED' "
+                    "  AND next_retry_at IS NULL "
+                    "  AND retry_count >= :max_retries "
+                    "  AND created_at < :cutoff "
+                    "LIMIT 5000"
+                ),
+                {"max_retries": settings.MAX_RETRIES, "cutoff": cutoff},
+            )
+            batch_ids = [row[0] for row in batch_ids_result]
+            if not batch_ids:
+                break
+
+            result = await db.execute(
+                delete(NotificationDelivery).where(
+                    NotificationDelivery.id.in_(batch_ids)
+                )
+            )
+            await db.commit()
+            total_pruned += result.rowcount
+
+    if total_pruned:
+        log.info("scheduler.job.prune_dead_lettered", pruned=total_pruned)
 
 
 # ── Scheduler lifecycle ───────────────────────────────────────────────────────
@@ -148,6 +197,15 @@ def create_scheduler() -> AsyncIOScheduler:
         trigger=CronTrigger(hour=3, minute=0, timezone="UTC"),
         id="prune_old_notifications",
         name="Prune read in-app notifications older than 90 days",
+        max_instances=1,
+    )
+
+    # Prune dead-lettered delivery rows daily at 04:00 UTC
+    _scheduler.add_job(
+        _job_prune_dead_lettered_deliveries,
+        trigger=CronTrigger(hour=4, minute=0, timezone="UTC"),
+        id="prune_dead_lettered",
+        name="Prune dead-lettered delivery rows older than 30 days",
         max_instances=1,
     )
 

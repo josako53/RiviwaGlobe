@@ -34,7 +34,8 @@ from schemas.notification import (
 
 router = APIRouter(prefix="/notifications", tags=["Notification Inbox"])
 
-_bearer = HTTPBearer(auto_error=True)
+_bearer          = HTTPBearer(auto_error=True)
+_bearer_optional = HTTPBearer(auto_error=False)
 
 
 def _user_id_from_token(
@@ -54,7 +55,25 @@ def _user_id_from_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
 
 
-UserIdDep = Annotated[uuid.UUID, Depends(_user_id_from_token)]
+def _user_id_from_token_optional(
+    creds: Annotated[Optional[HTTPAuthorizationCredentials], Depends(_bearer_optional)],
+) -> Optional[uuid.UUID]:
+    """Decode the Bearer JWT, returning None if missing or invalid (no 401)."""
+    if not creds:
+        return None
+    try:
+        payload = jwt.decode(
+            creds.credentials,
+            settings.AUTH_SECRET_KEY,
+            algorithms=[settings.AUTH_ALGORITHM],
+        )
+        return uuid.UUID(payload["sub"])
+    except (ExpiredSignatureError, JWTError, KeyError, ValueError):
+        return None
+
+
+UserIdDep         = Annotated[uuid.UUID, Depends(_user_id_from_token)]
+UserIdOptionalDep = Annotated[Optional[uuid.UUID], Depends(_user_id_from_token_optional)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -99,10 +118,13 @@ async def get_inbox(
     summary="Get unread notification count (for badge)",
     description=(
         "Lightweight endpoint for the notification bell badge. "
-        "Returns only the unread count — no item list."
+        "Returns only the unread count — no item list. "
+        "Returns 0 for unauthenticated or expired-token requests."
     ),
 )
-async def unread_count(user_id: UserIdDep, db: DbDep) -> UnreadCountResponse:
+async def unread_count(user_id: UserIdOptionalDep, db: DbDep) -> UnreadCountResponse:
+    if not user_id:
+        return UnreadCountResponse(unread_count=0)
     repo = NotificationRepository(db)
     count = await repo.unread_count(user_id)
     return UnreadCountResponse(unread_count=count)
