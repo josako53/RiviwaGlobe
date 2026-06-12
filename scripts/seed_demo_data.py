@@ -199,16 +199,31 @@ def activate_org_in_db(org_id):
 
 
 def force_org_id(old_id, new_id):
-    for sql in [
-        f"UPDATE organisations SET id='{new_id}' WHERE id='{old_id}';",
+    # FK tables must be updated BEFORE changing organisations.id (NO ACTION constraint).
+    # Order: all referencing tables first, then the PK, then the logical user reference.
+    sqls = [
         f"UPDATE organisation_members SET organisation_id='{new_id}' WHERE organisation_id='{old_id}';",
         f"UPDATE organisation_invites SET organisation_id='{new_id}' WHERE organisation_id='{old_id}';",
+        f"UPDATE org_departments   SET org_id='{new_id}'           WHERE org_id='{old_id}';",
+        f"UPDATE org_projects      SET organisation_id='{new_id}'  WHERE organisation_id='{old_id}';",
+        f"UPDATE org_services      SET organisation_id='{new_id}'  WHERE organisation_id='{old_id}';",
+        f"UPDATE org_locations     SET organisation_id='{new_id}'  WHERE organisation_id='{old_id}';",
+        f"UPDATE org_branches      SET organisation_id='{new_id}'  WHERE organisation_id='{old_id}';",
+        f"UPDATE org_faqs          SET org_id='{new_id}'           WHERE org_id='{old_id}';",
+        f"UPDATE org_content       SET org_id='{new_id}'           WHERE org_id='{old_id}';",
+        # PK update — all FK rows already point to new_id, so no constraint violation
+        f"UPDATE organisations SET id='{new_id}' WHERE id='{old_id}';",
+        # Logical user reference (not a FK column)
         f"UPDATE users SET active_organisation_id='{new_id}' WHERE active_organisation_id='{old_id}';",
-    ]:
-        subprocess.run(
+    ]
+    for sql in sqls:
+        res = subprocess.run(
             ["docker", "exec", "riviwa_auth_db", "psql",
              "-U", "riviwa_auth_admin", "-d", "auth_db", "-c", sql],
             capture_output=True, text=True, timeout=15)
+        if "ERROR" in res.stderr:
+            fail(f"force_org_id SQL error: {sql[:80]}", res.stderr[:200])
+            return
     ok(f"Org UUID forced: {old_id[:8]}… → {new_id[:8]}…")
 
 
