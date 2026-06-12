@@ -198,10 +198,22 @@ def activate_org_in_db(org_id):
     return False
 
 
+def _psql_auth_one(sql):
+    """Run a single SQL statement, prefixed with session_replication_role=replica to bypass FKs."""
+    full = f"SET session_replication_role = replica; {sql}"
+    return subprocess.run(
+        ["docker", "exec", "riviwa_auth_db", "psql",
+         "-U", "riviwa_auth_admin", "-d", "auth_db", "-c", full],
+        capture_output=True, text=True, timeout=15)
+
+
 def force_org_id(old_id, new_id):
-    # FK tables must be updated BEFORE changing organisations.id (NO ACTION constraint).
-    # Order: all referencing tables first, then the PK, then the logical user reference.
+    # organisations.id has NO ACTION FK constraints from 9 tables.
+    # Bypass all FK checks by using session_replication_role = replica.
+    # Each UPDATE is a SEPARATE psql call so its transaction commits independently —
+    # a later failure cannot roll back an already-committed update.
     sqls = [
+        f"UPDATE organisations SET id='{new_id}' WHERE id='{old_id}';",
         f"UPDATE organisation_members SET organisation_id='{new_id}' WHERE organisation_id='{old_id}';",
         f"UPDATE organisation_invites SET organisation_id='{new_id}' WHERE organisation_id='{old_id}';",
         f"UPDATE org_departments   SET org_id='{new_id}'           WHERE org_id='{old_id}';",
@@ -211,16 +223,11 @@ def force_org_id(old_id, new_id):
         f"UPDATE org_branches      SET organisation_id='{new_id}'  WHERE organisation_id='{old_id}';",
         f"UPDATE org_faqs          SET org_id='{new_id}'           WHERE org_id='{old_id}';",
         f"UPDATE org_content       SET org_id='{new_id}'           WHERE org_id='{old_id}';",
-        # PK update — all FK rows already point to new_id, so no constraint violation
-        f"UPDATE organisations SET id='{new_id}' WHERE id='{old_id}';",
-        # Logical user reference (not a FK column)
-        f"UPDATE users SET active_organisation_id='{new_id}' WHERE active_organisation_id='{old_id}';",
+        # users.active_org_id is a logical reference, no FK constraint
+        f"UPDATE users SET active_org_id='{new_id}' WHERE active_org_id='{old_id}';",
     ]
     for sql in sqls:
-        res = subprocess.run(
-            ["docker", "exec", "riviwa_auth_db", "psql",
-             "-U", "riviwa_auth_admin", "-d", "auth_db", "-c", sql],
-            capture_output=True, text=True, timeout=15)
+        res = _psql_auth_one(sql)
         if "ERROR" in res.stderr:
             fail(f"force_org_id SQL error: {sql[:80]}", res.stderr[:200])
             return
