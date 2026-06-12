@@ -163,3 +163,15 @@ from models.organisation_extended import (                         # noqa: F401,
     OrgServiceFAQ,
     OrgServicePolicy,
 )
+
+# ── 9. Org projects, sub-projects, stages, checklists (FK → organisations) ───
+from models.org_project import (                                   # noqa: F401, E402
+    OrgProject,
+    OrgProjectInCharge,
+    OrgProjectStage,
+    OrgProjectStageInCharge,
+    OrgSubProject,
+    OrgSubProjectInCharge,
+    ProjectProgressImage,
+    ProjectChecklistItem,
+)

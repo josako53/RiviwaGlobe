@@ -44,9 +44,41 @@ until pg_isready -h "${AUTH_DB_HOST:-riviwa_auth_db}" -p "${DB_PORT:-5432}" -U "
 done
 echo "  Database is ready."
 
-# ── Step 2: Run Alembic migrations ───────────────────────────────────────────
+# ── Step 2: Database init + migrations ───────────────────────────────────────
+# On a fresh database the initial_schema.py migration is intentionally empty
+# (the schema was originally bootstrapped via SQLModel.metadata.create_all).
+# If no alembic_version table exists we create all tables first, then stamp
+# at head so Alembic knows every migration has been accounted for.
+# On an existing database we run upgrade head normally (idempotent).
 echo "[2/3] Running database migrations..."
-alembic upgrade head
+python3 - << 'PYEOF'
+import sys, os
+APP_DIR = "/app/riviwa_auth_service"
+sys.path.insert(0, APP_DIR)
+from core.config import settings
+from sqlalchemy import create_engine, inspect
+
+engine = create_engine(settings.SYNC_DATABASE_URL)
+insp   = inspect(engine)
+
+if "alembic_version" not in insp.get_table_names():
+    from sqlmodel import SQLModel
+    import db.base  # registers all models into SQLModel.metadata
+    SQLModel.metadata.create_all(engine, checkfirst=True)
+    from alembic.config import Config
+    from alembic import command as alembic_cmd
+    cfg = Config(os.path.join(APP_DIR, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(APP_DIR, "alembic"))
+    alembic_cmd.stamp(cfg, "head")
+    print("Fresh database: all tables created, stamped at head.")
+else:
+    from alembic.config import Config
+    from alembic import command as alembic_cmd
+    cfg = Config(os.path.join(APP_DIR, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(APP_DIR, "alembic"))
+    alembic_cmd.upgrade(cfg, "head")
+    print("Existing database: migrations applied.")
+PYEOF
 echo "  Migrations complete."
 
 # ── Step 3: Start the application ────────────────────────────────────────────

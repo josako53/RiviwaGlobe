@@ -27,37 +27,49 @@ until pg_isready -h "${FEEDBACK_DB_HOST:-feedback_db}" -p "${DB_PORT:-5432}" -U 
 done
 echo "  Database is ready."
 
-# ── Step 2: Migrations ────────────────────────────────────────────────────────
+# ── Step 2: Database init + migrations ───────────────────────────────────────
+# On a fresh database the initial migration is intentionally empty.
+# If no alembic_version table exists we create all tables first, stamp at
+# head, then skip running migrations (tables already exist).
 echo "[2/3] Running database migrations..."
+python3 - << 'PYEOF'
+import sys, os
+APP_DIR = "/app/feedback_service"
+sys.path.insert(0, APP_DIR)
+from core.config import settings
+from sqlalchemy import create_engine, inspect
 
-# Check if alembic directory and versions folder exist with at least one migration
-if [ -d "alembic" ] && [ -d "alembic/versions" ] && [ "$(ls -A alembic/versions 2>/dev/null)" ]; then
-  echo "  Running: alembic upgrade head"
-  alembic upgrade head
-  echo "  Migrations complete."
-else
-  echo "  No Alembic versions found — running SQLModel create_all (dev mode)"
-  python3 - << 'PYEOF'
-import asyncio
-from sqlmodel import SQLModel
-from db.session import engine
+db_url = str(settings.DATABASE_URL).replace('+asyncpg', '+psycopg').replace('postgresql+asyncpg', 'postgresql+psycopg') \
+    if not hasattr(settings, 'SYNC_DATABASE_URL') else settings.SYNC_DATABASE_URL
+engine = create_engine(db_url)
+insp   = inspect(engine)
 
-# Import all models so SQLModel.metadata sees all tables
-from models.feedback import (                                      # noqa
-    Feedback, FeedbackAction, FeedbackEscalation, FeedbackResolution,
-    FeedbackAppeal, GrievanceCommittee, GrievanceCommitteeMember,
-    FeedbackCategoryDef, ChannelSession, EscalationRequest,
-)
-from models.project import ProjectCache, ProjectStageCache          # noqa
-
-async def create():
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    print("  Tables created via create_all.")
-
-asyncio.run(create())
+if "alembic_version" not in insp.get_table_names():
+    from sqlmodel import SQLModel
+    from models.feedback import (
+        Feedback, FeedbackAction, FeedbackEscalation, FeedbackResolution,
+        FeedbackAppeal, GrievanceCommittee, GrievanceCommitteeMember,
+        FeedbackCategoryDef, ChannelSession, EscalationRequest,
+    )
+    from models.project import ProjectCache, ProjectStageCache
+    from models.employee_feedback import EmployeeFeedback
+    from models.escalation import EscalationPath, EscalationLevel
+    SQLModel.metadata.create_all(engine, checkfirst=True)
+    from alembic.config import Config
+    from alembic import command as alembic_cmd
+    cfg = Config(os.path.join(APP_DIR, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(APP_DIR, "alembic"))
+    alembic_cmd.stamp(cfg, "head")
+    print("Fresh database: all tables created, stamped at head.")
+else:
+    from alembic.config import Config
+    from alembic import command as alembic_cmd
+    cfg = Config(os.path.join(APP_DIR, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(APP_DIR, "alembic"))
+    alembic_cmd.upgrade(cfg, "head")
+    print("Existing database: migrations applied.")
 PYEOF
-fi
+echo "  Migrations complete."
 
 # ── Step 3: Start application ─────────────────────────────────────────────────
 echo "[3/3] Starting application..."
