@@ -718,24 +718,6 @@ services:
       timeout: 5s
       retries: 10
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    init: true
-    restart: always
-    networks: [riviwa-net]
-    ports: ["11434:11434"]
-    volumes:
-      - ollama_data:/root/.ollama
-    # Pull the model on first start
-    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 10 && ollama pull ${OLLAMA_MODEL:-llama3.2:3b} && wait"]
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list || exit 1"]
-      interval: 30s
-      timeout: 15s
-      retries: 10
-      start_period: 300s
-
   ai_service:
     build:
       context: ./ai_service
@@ -765,9 +747,6 @@ services:
       FEEDBACK_SERVICE_URL:    http://feedback_service:8090
       AUTH_SERVICE_URL:        http://riviwa_auth_service:8000
       STAKEHOLDER_SERVICE_URL: http://stakeholder_service:8070
-      # Ollama LLM
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL:    ${OLLAMA_MODEL:-llama3.2:3b}
       # Qdrant vector DB
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
@@ -796,8 +775,6 @@ services:
     depends_on:
       ai_db:
         condition: service_healthy
-      ollama:
-        condition: service_started
       qdrant:
         condition: service_healthy
 
@@ -1517,7 +1494,6 @@ volumes:
   recommendation_db_data:
   qdrant_data:
   ai_db_data:
-  ollama_data:
   analytics_db_data:
   spark_master_data:
   spark_worker_data:
