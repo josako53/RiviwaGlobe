@@ -46,6 +46,9 @@ def _build_provider(name: str) -> BaseTranslationProvider:
     if n in ("libretranslate", "libre"):
         from providers.libretranslate import LibreTranslateProvider
         return LibreTranslateProvider()
+    if n in ("hf_m2m100", "hf", "m2m100"):
+        from providers.hf_m2m100 import HFM2M100Provider
+        return HFM2M100Provider()
     if n == "groq":
         from providers.groq import GroqTranslationProvider
         return GroqTranslationProvider()
@@ -54,15 +57,15 @@ def _build_provider(name: str) -> BaseTranslationProvider:
         return NLLBProvider()
     raise ProviderNotConfiguredError(
         f"Unknown translation provider: '{name}'. "
-        f"Must be: auto | google | deepl | microsoft | libretranslate | groq | nllb."
+        f"Must be: auto | hf_m2m100 | groq | google | deepl | microsoft | libretranslate | nllb."
     )
 
 
 # Ordered cascade — first configured provider wins.
-# Groq comes before LibreTranslate because LibreTranslate.is_configured() returns
-# True as long as a URL string is set, regardless of whether the container is running.
-# Groq requires an actual API key so it's a reliable liveness signal.
-_CASCADE = ["google", "deepl", "microsoft", "groq", "libretranslate", "nllb"]
+# hf_m2m100 is first: dedicated translation model, free tier, no local RAM needed.
+# groq is second: LLM fallback, already configured, zero latency for short texts.
+# libretranslate comes last because is_configured() returns True just from URL string.
+_CASCADE = ["hf_m2m100", "groq", "google", "deepl", "microsoft", "libretranslate", "nllb"]
 
 
 def _get_provider() -> BaseTranslationProvider:

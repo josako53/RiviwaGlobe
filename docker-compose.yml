@@ -612,6 +612,9 @@ services:
       NLLB_MAX_LENGTH: ${NLLB_MAX_LENGTH:-512}
       DEFAULT_LANGUAGE:  ${DEFAULT_LANGUAGE:-sw}
       FALLBACK_LANGUAGE: ${FALLBACK_LANGUAGE:-en}
+      HF_TOKEN:                  ${HF_TOKEN:-}
+      HF_M2M100_MODEL:           ${HF_M2M100_MODEL:-facebook/m2m100_418M}
+      HF_M2M100_KEEPWARM_INTERVAL: ${HF_M2M100_KEEPWARM_INTERVAL:-270}
       GROQ_API_KEY:              ${GROQ_API_KEY:-}
       GROQ_TRANSLATION_MODEL:    ${GROQ_TRANSLATION_MODEL:-llama-3.3-70b-versatile}
       GROQ_BASE_URL:             ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}

@@ -50,6 +50,7 @@ from core.exceptions import (
     TranslationFailedError,
 )
 from providers.base import BaseTranslationProvider, DetectionResult, TranslationResult
+from providers.hf_m2m100 import HF_M2M_SUPPORTED
 
 log = structlog.get_logger(__name__)
 
@@ -104,6 +105,9 @@ def _load_provider(name: str) -> Optional[BaseTranslationProvider]:
         elif name == "libretranslate":
             from providers.libretranslate import LibreTranslateProvider
             p = LibreTranslateProvider()
+        elif name in ("hf_m2m100", "hf", "m2m100"):
+            from providers.hf_m2m100 import HFM2M100Provider
+            p = HFM2M100Provider()
         elif name == "nllb":
             from providers.nllb import NLLBProvider
             p = NLLBProvider()
@@ -127,14 +131,24 @@ def _provider_chain(target_language: str) -> list[str]:
     """
     lang = target_language.lower().split("-")[0]   # "sw-TZ" → "sw"
 
+    # M2M-100 is the primary for all supported languages — dedicated translation
+    # model, free HF tier, handles African/Asian/European pairs well.
+    # Groq is the immediate fallback (already configured, handles cold-start misses).
+    if lang in HF_M2M_SUPPORTED:
+        if lang in _GOOGLE_PREFERRED:
+            return ["hf_m2m100", "groq", "google", "microsoft", "libretranslate"]
+        if lang in _DEEPL_PREFERRED:
+            return ["hf_m2m100", "groq", "deepl", "google", "microsoft", "libretranslate"]
+        return ["hf_m2m100", "groq", "google", "microsoft", "libretranslate"]
+
     if lang in _GOOGLE_PREFERRED:
-        return ["google", "microsoft", "libretranslate", "nllb"]
+        return ["groq", "google", "microsoft", "libretranslate"]
 
     if lang in _DEEPL_PREFERRED:
-        return ["deepl", "google", "microsoft", "libretranslate", "nllb"]
+        return ["groq", "deepl", "google", "microsoft", "libretranslate"]
 
-    # Default: Google → Microsoft → LibreTranslate → NLLB (local)
-    return ["google", "microsoft", "libretranslate", "nllb"]
+    # Default
+    return ["hf_m2m100", "groq", "google", "microsoft", "libretranslate"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

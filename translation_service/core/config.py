@@ -49,14 +49,32 @@ class Settings(BaseSettings):
     # ── Translation provider ─────────────────────────────────────────────────
     # Set TRANSLATION_PROVIDER to select a specific provider, or leave as "auto"
     # to use the first configured provider in the cascade:
-    #   google → deepl → microsoft → libretranslate → groq → nllb
+    #   hf_m2m100 → groq → google → deepl → microsoft → libretranslate
     TRANSLATION_PROVIDER: str = Field(
         default="auto",
         description=(
-            "Active translation provider: auto | google | deepl | "
-            "microsoft | libretranslate | groq | nllb. "
+            "Active translation provider: auto | hf_m2m100 | groq | google | deepl | "
+            "microsoft | libretranslate | nllb. "
             "'auto' selects the first configured provider in the cascade."
         ),
+    )
+
+    # ── HuggingFace Inference API (M2M-100 translation) ──────────────────────
+    HF_TOKEN: str = Field(
+        default="",
+        description="HuggingFace API token — enables M2M-100 serverless translation.",
+    )
+    HF_M2M100_MODEL: str = Field(
+        default="facebook/m2m100_418M",
+        description=(
+            "HF model ID for M2M-100. Options:\n"
+            "  facebook/m2m100_418M  — faster, free tier friendly\n"
+            "  facebook/m2m100_1.2B  — higher quality"
+        ),
+    )
+    HF_M2M100_KEEPWARM_INTERVAL: int = Field(
+        default=270,
+        description="Seconds between keep-warm pings (default 270 s — stays within HF 10-min unload window).",
     )
 
     # ── Groq LLM API (translation + AI chat fallback) ─────────────────────────

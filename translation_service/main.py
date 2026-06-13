@@ -23,6 +23,7 @@ Port: 8050
 """
 from __future__ import annotations
 
+import asyncio
 import structlog
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -52,6 +53,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         environment=settings.ENVIRONMENT,
         nllb_enabled=settings.NLLB_ENABLED,
     )
+
+    # ── HF M2M-100 keep-warm task ─────────────────────────────────────────────
+    keepwarm_task = None
+    if settings.HF_TOKEN:
+        async def _keepwarm_loop() -> None:
+            from providers.hf_m2m100 import HFM2M100Provider
+            provider = HFM2M100Provider()
+            while True:
+                await asyncio.sleep(settings.HF_M2M100_KEEPWARM_INTERVAL)
+                await provider.warm_up()
+        keepwarm_task = asyncio.create_task(_keepwarm_loop())
+        log.info("translation_service.hf_m2m100_keepwarm_started",
+                 interval_s=settings.HF_M2M100_KEEPWARM_INTERVAL,
+                 model=settings.HF_M2M100_MODEL)
 
     # ── Load NLLB model ───────────────────────────────────────────────────────
     if settings.NLLB_ENABLED:
@@ -93,6 +108,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     log.info("translation_service.shutdown")
+    if keepwarm_task:
+        keepwarm_task.cancel()
     await stop_consumer()
     await close_producer()
 
