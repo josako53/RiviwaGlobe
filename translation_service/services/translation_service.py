@@ -27,6 +27,7 @@ from core.config import settings
 from events.producer import get_producer
 from core.exceptions import ProviderNotConfiguredError, TranslationFailedError
 from providers.base import BaseTranslationProvider, TranslationResult
+from providers.router import ProviderRouter
 
 log = structlog.get_logger(__name__)
 
@@ -61,55 +62,10 @@ def _build_provider(name: str) -> BaseTranslationProvider:
     )
 
 
-# Ordered cascade — first configured provider wins.
-# hf_m2m100 is first: dedicated translation model, free tier, no local RAM needed.
-# groq is second: LLM fallback, already configured, zero latency for short texts.
-# libretranslate comes last because is_configured() returns True just from URL string.
-_CASCADE = ["hf_m2m100", "groq", "google", "deepl", "microsoft", "libretranslate", "nllb"]
-
-
-def _get_provider() -> BaseTranslationProvider:
-    """
-    Return the active translation provider.
-    TRANSLATION_PROVIDER=auto  → try each in cascade order, use first configured.
-    TRANSLATION_PROVIDER=<name> → use that provider, raise if not configured.
-    """
+def _explicit_provider_from_settings() -> str | None:
+    """Return the forced provider name from TRANSLATION_PROVIDER, or None for auto."""
     setting = settings.TRANSLATION_PROVIDER.lower()
-
-    if setting != "auto":
-        p = _build_provider(setting)
-        if not p.is_configured():
-            raise ProviderNotConfiguredError(
-                f"Translation provider '{setting}' is not configured. "
-                f"Check the required environment variables."
-            )
-        return p
-
-    # Auto-cascade
-    for name in _CASCADE:
-        try:
-            p = _build_provider(name)
-            if p.is_configured():
-                log.debug("translation.provider_selected", provider=name)
-                return p
-        except Exception:
-            continue
-
-    raise ProviderNotConfiguredError(
-        "No translation provider is configured. "
-        "Set GROQ_API_KEY (recommended) or configure Google/DeepL/Microsoft."
-    )
-
-
-def _get_named_provider(name: str) -> BaseTranslationProvider:
-    """Return a specific provider by name, falling back to auto-cascade if not configured."""
-    try:
-        p = _build_provider(name)
-        if p.is_configured():
-            return p
-    except Exception:
-        pass
-    return _get_provider()
+    return None if setting == "auto" else setting
 
 
 def _cache_key(text: str, target: str, source: Optional[str]) -> str:
@@ -155,8 +111,10 @@ class TranslationOrchestrator:
             except Exception:
                 pass  # Redis unavailable — proceed without cache
 
-        prov   = _get_named_provider(provider) if provider else _get_provider()
-        result = await prov.translate(text, target_language, source_language)
+        explicit = provider or _explicit_provider_from_settings()
+        result = await ProviderRouter().translate(
+            text, target_language, source_language, explicit_provider=explicit
+        )
 
         response = {
             "translated_text": result.translated_text,
@@ -233,9 +191,9 @@ class TranslationOrchestrator:
 
         # Translate uncached texts in one provider call
         if uncached_texts:
-            _prov          = _get_named_provider(provider) if provider else _get_provider()
-            provider_results: list[TranslationResult] = await _prov.translate_batch(
-                uncached_texts, target_language, source_language
+            explicit = provider or _explicit_provider_from_settings()
+            provider_results: list[TranslationResult] = await ProviderRouter().translate_batch(
+                uncached_texts, target_language, source_language, explicit_provider=explicit
             )
             for idx, (orig_i, pr) in enumerate(zip(uncached_indices, provider_results)):
                 response = {

@@ -26,7 +26,7 @@ from providers.base import BaseTranslationProvider, TranslationResult
 
 log = structlog.get_logger(__name__)
 
-_HF_BASE = "https://api-inference.huggingface.co/models"
+_HF_BASE = "https://router.huggingface.co/hf-inference/models"
 
 # M2M-100 supports ISO 639-1 codes. A handful of common ones need remapping
 # from BCP-47 variants that other providers accept.
