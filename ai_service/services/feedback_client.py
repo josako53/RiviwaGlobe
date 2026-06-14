@@ -23,14 +23,14 @@ class FeedbackClient:
 
     async def submit_staff(self, data: dict) -> dict:
         """
-        Submit feedback as staff (POST /api/v1/feedback).
-        Used for AI-collected feedback submitted on behalf of a Consumer.
+        Submit feedback via internal AI endpoint (POST /api/v1/feedback/ai/submit).
+        Accepts X-Service-Key — no JWT required.
         """
         payload = self._build_staff_payload(data)
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 r = await client.post(
-                    f"{settings.FEEDBACK_SERVICE_URL}/api/v1/feedback",
+                    f"{settings.FEEDBACK_SERVICE_URL}/api/v1/feedback/ai/submit",
                     json=payload,
                     headers=_INTERNAL_HEADERS,
                 )

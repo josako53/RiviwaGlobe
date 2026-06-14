@@ -489,3 +489,91 @@ async def integration_submit_feedback(request: Request, db: DbDep, kafka: KafkaD
         _log.get_logger(__name__).error("integration.submit_failed", error=str(exc))
         return JSONResponse(status_code=422,
                             content={"error": "SUBMISSION_FAILED", "message": str(exc)[:300]})
+
+
+# ── POST /api/v1/feedback/ai/submit — AI service internal submission (X-Service-Key) ──
+
+@router.post(
+    "/ai/submit",
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit feedback from AI conversation (internal ai_service only)",
+    include_in_schema=False,
+)
+async def ai_submit_feedback(request: Request, db: DbDep, kafka: KafkaDep) -> dict:
+    """
+    Internal endpoint called by ai_service after LLM conversation.
+    Accepts X-Service-Key header — no JWT required.
+    Passes through all AI-extracted fields to submit(). project_id optional.
+    """
+    from fastapi.responses import JSONResponse
+    from core.config import settings as fb_settings
+    from models.feedback import FeedbackChannel, FeedbackType
+
+    service_key = request.headers.get("X-Service-Key", "")
+    if service_key != fb_settings.INTERNAL_SERVICE_KEY:
+        return JSONResponse(status_code=403,
+                            content={"error": "FORBIDDEN", "message": "Invalid service key."})
+
+    body = await request.json()
+
+    description = (body.get("description") or "").strip()
+    if not description:
+        return JSONResponse(status_code=400,
+                            content={"error": "DESCRIPTION_REQUIRED",
+                                     "message": "description is required."})
+
+    try:
+        feedback_type_val = FeedbackType((body.get("feedback_type") or "grievance").lower()).value
+    except ValueError:
+        feedback_type_val = "grievance"
+
+    channel_raw = (body.get("channel") or "other").lower()
+    try:
+        channel_val = FeedbackChannel(channel_raw).value
+    except ValueError:
+        channel_val = FeedbackChannel.OTHER.value
+
+    data = {
+        "feedback_type":             feedback_type_val,
+        "description":               description,
+        "subject":                   (body.get("subject") or description[:100]),
+        "channel":                   channel_val,
+        "priority":                  (body.get("priority") or "medium").lower(),
+        "is_anonymous":              bool(body.get("is_anonymous", False)),
+        "project_id":                body.get("project_id"),
+        "org_id":                    body.get("org_id"),
+        "category":                  body.get("category"),
+        "category_def_id":           body.get("category_def_id"),
+        "department_id":             body.get("department_id"),
+        "branch_id":                 body.get("branch_id"),
+        "service_id":                body.get("service_id"),
+        "product_id":                body.get("product_id"),
+        "submitter_name":            body.get("submitter_name"),
+        "submitter_phone":           body.get("submitter_phone") or body.get("phone_number"),
+        "submitted_by_user_id":      body.get("user_id"),
+        "issue_location_description": body.get("issue_location_description"),
+        "issue_region":              body.get("region"),
+        "issue_lga":                 body.get("lga"),
+        "issue_ward":                body.get("ward"),
+        "issue_district":            body.get("district"),
+        "date_of_incident":          body.get("date_of_incident"),
+        "media_urls":                body.get("media_urls"),
+        "submission_method":         "ai_conversation",
+    }
+    data = {k: v for k, v in data.items() if v is not None}
+
+    try:
+        svc = _svc(db, kafka)
+        result = await svc.submit(data, token_sub=None)
+        return {
+            "id":            str(result.id),
+            "unique_ref":    result.unique_ref,
+            "status":        result.status.value,
+            "feedback_type": result.feedback_type.value,
+            "project_id":    str(result.project_id) if result.project_id else None,
+        }
+    except Exception as exc:
+        import structlog as _log
+        _log.get_logger(__name__).error("ai.submit_failed", error=str(exc))
+        return JSONResponse(status_code=422,
+                            content={"error": "SUBMISSION_FAILED", "message": str(exc)[:300]})
