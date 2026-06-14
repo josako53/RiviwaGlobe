@@ -102,6 +102,10 @@ class Settings(BaseSettings):
     DEEPL_API_KEY:     str  = Field(default="")
     DEEPL_FREE_TIER:   bool = Field(default=True)   # free tier uses api-free.deepl.com
 
+    # ── Microsoft Azure Translator ────────────────────────────────────────────
+    MICROSOFT_TRANSLATOR_KEY:    str = Field(default="")
+    MICROSOFT_TRANSLATOR_REGION: str = Field(default="eastus")
+
     # ── LibreTranslate (self-hosted fallback) ─────────────────────────────────
     LIBRE_TRANSLATE_URL:     str = Field(default="http://libretranslate:5000")
     LIBRE_TRANSLATE_API_KEY: str = Field(default="")

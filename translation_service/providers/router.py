@@ -108,6 +108,9 @@ def _load_provider(name: str) -> Optional[BaseTranslationProvider]:
         elif name in ("hf_m2m100", "hf", "m2m100"):
             from providers.hf_m2m100 import HFM2M100Provider
             p = HFM2M100Provider()
+        elif name == "groq":
+            from providers.groq import GroqTranslationProvider
+            p = GroqTranslationProvider()
         elif name == "nllb":
             from providers.nllb import NLLBProvider
             p = NLLBProvider()
