@@ -317,7 +317,8 @@ class ConversationService:
         submitted_feedback: List[dict] = []
         confidence = float(conv.get_extracted().get("confidence", 0.0))
 
-        if action in ("submit", "confirm") and confidence >= settings.AUTO_SUBMIT_CONFIDENCE:
+        # Submit when: user explicitly confirmed (action=submit) OR confidence threshold met on confirm
+        if action == "submit" or (action == "confirm" and confidence >= settings.AUTO_SUBMIT_CONFIDENCE):
             submitted, submitted_feedback = await self._submit_feedback(conv)
             if submitted:
                 ref_list = ", ".join(f["unique_ref"] for f in submitted_feedback)
@@ -480,7 +481,7 @@ class ConversationService:
         """Build project context string to inject into the system prompt."""
         projects = await self.kb_repo.list_active()
         if not projects:
-            return "No active projects."
+            return "No project-specific context (org may use departments, branches, services, or products instead)."
         data = [
             {
                 "project_id":        str(p.project_id),
