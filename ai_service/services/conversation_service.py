@@ -309,6 +309,13 @@ class ConversationService:
                 urgency_note = self._urgency_message(conv.language, incharge.name, incharge.phone)
                 reply = f"{reply}\n\n{urgency_note}"
 
+        # If conversation is in confirming stage and user explicitly says yes → force submit
+        _CONFIRM_WORDS = {"ndio", "ndiyo", "yes", "wasilisha", "submit", "tuma", "sawa", "okay", "ok", "confirm", "endelea"}
+        if conv.stage == ConversationStage.CONFIRMING and action != "submit":
+            msg_words = set(message.lower().replace(",", " ").replace(".", " ").split())
+            if msg_words & _CONFIRM_WORDS:
+                action = "submit"
+
         # Update stage
         conv.stage = self._map_action_to_stage(action)
 
