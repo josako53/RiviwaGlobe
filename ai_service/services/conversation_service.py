@@ -331,8 +331,9 @@ class ConversationService:
         submitted_feedback: List[dict] = []
         confidence = float(conv.get_extracted().get("confidence", 0.0))
 
-        # Submit when: user explicitly confirmed (action=submit) OR confidence threshold met on confirm
-        if action == "submit" or (action == "confirm" and confidence >= settings.AUTO_SUBMIT_CONFIDENCE):
+        # Submit ONLY when user has explicitly confirmed (action=submit).
+        # action=confirm means the AI wants to SHOW a summary and ask the user — do NOT submit yet.
+        if action == "submit":
             submitted, submitted_feedback = await self._submit_feedback(conv)
             if submitted:
                 ref_list = ", ".join(f["unique_ref"] for f in submitted_feedback)
@@ -577,6 +578,17 @@ class ConversationService:
     ) -> Tuple[bool, List[dict]]:
         """Submit all feedback items extracted from the conversation."""
         extracted = conv.get_extracted()
+
+        # If the LLM's extracted description is brief, enrich it with the verbatim
+        # user messages so no detail is lost (patient IDs, doctor names, dates, etc.)
+        extracted_desc = (extracted.get("description") or "").strip()
+        user_msgs = " | ".join(
+            t["content"] for t in conv.get_turns()
+            if t.get("role") == "user" and t.get("content", "").strip()
+        )
+        if user_msgs and len(extracted_desc) < len(user_msgs) * 0.5:
+            enriched = f"{extracted_desc}\n\n[Original message(s): {user_msgs}]" if extracted_desc else user_msgs
+            extracted = {**extracted, "description": enriched}
 
         common_data = {
             **extracted,
