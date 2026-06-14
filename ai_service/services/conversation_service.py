@@ -347,7 +347,7 @@ class ConversationService:
                 reply = thanks
                 conv.status = ConversationStatus.SUBMITTED
                 conv.stage  = ConversationStage.DONE
-                conv.completed_at = datetime.now(timezone.utc)
+                conv.completed_at = datetime.utcnow()
 
         conv.add_turn("assistant", reply)
         await self.conv_repo.save(conv)
