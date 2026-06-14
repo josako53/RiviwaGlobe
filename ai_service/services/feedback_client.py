@@ -129,9 +129,9 @@ class FeedbackClient:
         if data.get("district"):
             payload["issue_district"] = data["district"]
 
-        # Incident date
+        # Incident date — must be ISO YYYY-MM-DD; strip if unparseable
         if data.get("date_of_incident"):
-            payload["date_of_incident"] = data["date_of_incident"]
+            payload["date_of_incident"] = _normalize_date(data["date_of_incident"])
 
         # Media attachments (WhatsApp images as proof)
         if data.get("media_urls"):
@@ -147,6 +147,47 @@ class FeedbackClient:
             "mobile": "mobile_app",
         }
         return mapping.get(channel.lower(), "other")
+
+
+def _normalize_date(raw: str) -> Optional[str]:
+    """Return ISO YYYY-MM-DD if parseable, else None (drops unparseable LLM dates)."""
+    if not raw:
+        return None
+    raw = str(raw).strip()
+    from datetime import date as _date
+    # Already ISO?
+    try:
+        _date.fromisoformat(raw)
+        return raw
+    except ValueError:
+        pass
+    # Try common patterns: "10 Juni 2026", "June 10 2026", "10/06/2026", etc.
+    import re
+    MONTH_SW = {"januari":"01","februari":"02","machi":"03","aprili":"04","mei":"05",
+                "juni":"06","julai":"07","agosti":"08","septemba":"09","oktoba":"10",
+                "novemba":"11","desemba":"12"}
+    MONTH_EN = {"january":"01","february":"02","march":"03","april":"04","may":"05",
+                "june":"06","july":"07","august":"08","september":"09","october":"10",
+                "november":"11","december":"12"}
+    lower = raw.lower()
+    for mapping in (MONTH_SW, MONTH_EN):
+        for name, num in mapping.items():
+            if name in lower:
+                raw2 = re.sub(name, num, lower)
+                # Find digits: day month year or year month day
+                parts = re.findall(r'\d+', raw2)
+                if len(parts) >= 3:
+                    # heuristic: largest number is year
+                    nums = sorted([(int(p), p) for p in parts], reverse=True)
+                    year = nums[0][0]
+                    remaining = [p for v, p in nums[1:]]
+                    if year > 1900:
+                        try:
+                            d, m = int(remaining[0]), int(remaining[1]) if len(remaining) > 1 else int(num)
+                            return f"{year:04d}-{m:02d}-{d:02d}"
+                        except Exception:
+                            pass
+    return None  # drop unrecognised formats
 
 
 def _generate_subject(data: dict) -> str:
