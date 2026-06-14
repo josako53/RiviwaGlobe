@@ -309,10 +309,11 @@ class ConversationService:
                 urgency_note = self._urgency_message(conv.language, incharge.name, incharge.phone)
                 reply = f"{reply}\n\n{urgency_note}"
 
-        # If user explicitly confirms in collecting or confirming stage → force submit
-        # (LLM sometimes stays in confirm/continue even when user says yes)
+        # If user explicitly confirms AFTER the AI has shown a summary (stage=CONFIRMING) → force submit.
+        # Restricted to CONFIRMING stage only — "Ndiyo" during collection is a general affirmative,
+        # not a submission consent. Only fire after the AI has explicitly asked "Is this correct?"
         _CONFIRM_WORDS = {"ndio", "ndiyo", "yes", "wasilisha", "submit", "tuma", "sawa", "okay", "ok", "confirm", "endelea"}
-        if conv.stage in (ConversationStage.COLLECTING, ConversationStage.CONFIRMING) and action not in ("submit", "followup"):
+        if conv.stage == ConversationStage.CONFIRMING and action not in ("submit", "followup"):
             msg_words = set(message.lower().replace(",", " ").replace(".", " ").split())
             if msg_words & _CONFIRM_WORDS:
                 _ext = conv.get_extracted()
