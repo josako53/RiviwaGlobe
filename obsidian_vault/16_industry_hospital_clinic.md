@@ -1,347 +1,357 @@
 ---
-tags: [industry-kb, feedback-classification]
+tags: [industry-kb, feedback-classification, field-standards]
 ---
-# Hospital / Clinic / Healthcare — Industry-Specific Feedback Classification Knowledge Base
+# Hospital / Clinic — Feedback Collection Fields & Standards
 
 ## Industry Identifiers
 
-hospital, clinic, health center, dispensary, outpatient, inpatient, ward, maternity, emergency, OPD (Outpatient Department), casualty, laboratory, radiology, X-ray, ultrasound, doctor, nurse, clinical officer, pharmacist, NHIF (National Health Insurance Fund), referral hospital, mission hospital, Muhimbili, Aga Khan, Regency Medical Centre, Jakaya Kikwete Cardiac Institute, Mnazi Mmoja Hospital, blood bank, operating theatre, ICU, triage, prescription, diagnosis, treatment, discharge, admission, bed occupancy, health facility, community health worker, CHW
+hospital, clinic, health center, dispensary, outpatient, inpatient, ward, maternity, emergency, OPD, casualty, laboratory, radiology, X-ray, ultrasound, CT scan, MRI, doctor, nurse, clinical officer, medical officer, consultant, surgeon, obstetrician, pediatrician, physiotherapist, NHIF, referral hospital, mission hospital, Muhimbili, MNH, Aga Khan, Regency Medical Centre, Jakaya Kikwete Cardiac Institute, JKCI, Mnazi Mmoja, Bugando, KCMC, Ocean Road Cancer Institute, blood bank, operating theatre, ICU, NICU, triage, prescription, diagnosis, treatment, discharge, admission, zahanati, kituo cha afya, CHW, community health worker, ANC, antenatal, chanjo, immunization, daktari, muuguzi, mkunga, wodi, hospitali, kliniki, dawa, matibabu, upasuaji, kipimo, maabara, rufaa
+
+## Why Industry-Specific Fields Matter
+
+Generic feedback fields cannot capture the clinical, regulatory, and safety dimensions of healthcare complaints — a medication error requires batch number, prescriber name, and harm level data that drive mandatory reporting to TMDA and the Medical Council; without these fields, a potentially preventable death goes untracked and uncorrected. Tanzania's MOHCDGEC, JCI accreditation standards, and WHO-ICPS all mandate specific structured data that generic forms entirely miss.
+
+## Source Standards
+
+- WHO International Classification for Patient Safety (ICPS) 2009 — 10 classification classes
+- NHS National Reporting and Learning System (NRLS) — 5-level harm scale, 19 medication error sub-types
+- JCI Hospital Accreditation Standards 7th/8th Edition — PCC.3.1 (formerly PFR.3)
+- ISO 10002:2018 — Complaint Management System minimum fields
+- Tanzania MOHCDGEC National Guide for Complaint, Compliment and Suggestion Management in Health Facilities (Office of PO-PSMGG, 2012 revised)
+- Tanzania TMDA (formerly TFDA) — pharmacovigilance and adverse event reporting
+- Healthcare Complaints Analysis Tool (HCAT) — 3-domain / 7-category framework (Imperial College London, validated PMC11725527, PMC9819617)
+- Severity Assessment Code (SAC) — NZ Health Quality & Safety Commission
+- NHS Local Authority Social Services and NHS Complaints Regulations 2009
+- Medical Practitioners and Dentists Act (Tanzania) — mandatory emergency treatment provision
 
 ---
 
-## Complaint / Grievance Signals — Hospital / Clinic / Healthcare
+## GRIEVANCE / COMPLAINT — Required & Recommended Fields
 
-### Service Quality & Treatment
-- "The doctor didn't examine me properly — just wrote a prescription without checking"
-- "I waited 5 hours at OPD and was never attended to"
-- "The clinical officer misdiagnosed my condition"
-- "They sent me home and my condition got worse the next day"
-- "The nurse gave me the wrong medication"
-- "No one explained my diagnosis to me"
-- "I had to go to three different departments and nobody guided me"
-- "The doctor spent less than 2 minutes with me"
-- "They discharged me before I was fully recovered"
-- "The treatment plan was never explained — I left confused"
-- "I wasn't given a chance to ask questions during consultation"
-- "My test results were never communicated to me"
-- "The ultrasound results took 3 weeks — by then my situation had changed"
-- "They lost my medical file at the records desk"
-- "No one followed up on my condition after surgery"
+### Core Fields (collect for ALL complaints in this industry)
 
-### Staff Conduct & Attitude
-- "The nurse was rude and dismissive when I described my symptoms"
-- "The receptionist was on her phone the whole time and ignored me"
-- "I was spoken to in a condescending manner by the doctor"
-- "The ward staff were shouting at patients"
-- "The nurse rolled her eyes when I asked a question"
-- "I was told to shut up and wait by the orderly"
-- "The doctor spoke to the student nurse about my case without asking my permission"
-- "Staff members were laughing and chatting while patients were waiting in pain"
-- "I felt humiliated when the nurse announced my condition in front of other patients"
-- "The doctor was visibly annoyed when I asked for a second opinion"
-- "I was refused treatment because I didn't have exact change for the consultation fee"
-- "The guard at the gate was abusive and refused to let my family member in during visiting hours"
-- "The clinical officer seemed impatient and rushed through my consultation"
-- "Nobody introduced themselves — I didn't know who was treating me"
-- "The nurse gave the injection without warning and it was extremely painful"
+| Field | Swahili Label | Required? | Why It Enables Better Action |
+|-------|--------------|-----------|------------------------------|
+| complaint_unique_id | Nambari ya malalamiko | Yes | ISO 10002:2018 — tracking, deduplication, follow-up across all departments |
+| date_complaint_received | Tarehe malalamiko yalipokewa | Yes | Statutory timeline compliance — NHS: 3-day acknowledge / 25-day resolve; Tanzania Guide monthly Annex 6 reporting |
+| time_complaint_received | Wakati malalamiko yalipokewa | Yes | Distinguishes immediate vs. delayed reporting; SLA measurement |
+| channel_received | Njia ya kupokea | Yes | Walk-in / phone / SMS / online / written letter / proxy — multi-channel access equity reporting required by Tanzania Guide |
+| complainant_full_name | Jina kamili la mlalamikaji | Yes | Identity verification; legal compliance; JCI PCC.3.1 |
+| complainant_relationship_to_patient | Uhusiano na mgonjwa | Yes | Self / family / carer / legal representative / staff — consent verification; NHS Regulations 2009 Reg.13 |
+| complainant_phone | Simu ya mlalamikaji | Yes | Response delivery; ISO 10002 mandatory contact field |
+| complainant_email | Barua pepe ya mlalamikaji | No | Optional secondary contact for written response |
+| patient_full_name | Jina kamili la mgonjwa | Yes | Case linkage; clinical record retrieval |
+| patient_date_of_birth | Tarehe ya kuzaliwa ya mgonjwa | Yes | Identity disambiguation — multiple patients with same name |
+| patient_hospital_number | Nambari ya hospitali / kadi ya mgonjwa | Yes | Clinical record retrieval; JCI audit trail; links to medical file |
+| patient_sex | Jinsia ya mgonjwa | Yes | Demographic pattern analysis; gender-specific clinical risk |
+| consent_to_investigate | Idhini ya uchunguzi | Yes | Legal: NHS Regs 2009; JCI PCC.3.1; Tanzania data protection — verbal or signed |
+| patient_informed_complaint_lodged | Je, mgonjwa amearifiwa? | Yes | JCI PCC.3.1 Measurable Element — patient participation in resolution is accreditation requirement |
+| facility_name | Jina la kituo | Yes | Multi-facility systems; national MOHCDGEC aggregation via Annex 6 |
+| department_unit | Idara / Kitengo | Yes | Root cause analysis; staff accountability; Tanzania Guide Annex 5 field |
+| date_of_incident | Tarehe ya tukio | Yes | NRLS, WHO-ICPS — incident date is separate from complaint date; patient may complain weeks later |
+| time_of_incident | Wakati wa tukio | Yes | Time-specific investigation; shift accountability |
+| stage_of_care | Hatua ya matibabu | Yes | HCAT domain mapping; WHO-ICPS Incident Characteristics class 4 — admission / diagnosis / treatment / medication / discharge / post-discharge |
+| complaint_category | Aina ya malalamiko | Yes | HCAT 3-domain taxonomy; Tanzania Annex 6 aggregate reporting; drives resolution pathway |
+| harm_level | Kiwango cha madhara | Yes | Core to all frameworks — determines urgency, escalation, and reporting obligation |
+| is_life_threatening | Je, ni hatari ya maisha? | Yes | Triggers immediate clinical escalation; SAC Level 1 process |
+| incident_description | Maelezo ya tukio | Yes | WHO-ICPS class 2; JCI investigation record; legal narrative |
+| remedy_sought | Suluhisho anayotaka | Yes | ISO 10002:2018 Section 8.2 — patient's desired outcome guides resolution approach |
+| complaint_handler_name | Jina la afisa wa malalamiko | Yes | Accountability; ISO 10002; Tanzania Guide — Designated Complaint Officer |
+| date_acknowledged | Tarehe ya kutoa jibu la awali | Yes | NHS: 3 working days; Tanzania Guide; ISO 10002 — acknowledgment SLA |
 
-### Cleanliness & Facility Conditions
-- "The ward had a terrible smell — I don't think it's been cleaned in days"
-- "There were cockroaches in the ward"
-- "The toilet was completely blocked and unusable"
-- "The bed sheets were stained when I was admitted"
-- "There was no running water in the maternity ward"
-- "Medical waste was left unsecured near the patient beds"
-- "The floor in the operating theatre corridor was wet and slippery"
-- "The waiting area benches were broken and dirty"
-- "There was no soap or hand sanitizer at any of the handwashing stations"
-- "The blood on the floor from another patient hadn't been cleaned for hours"
-- "The bathroom was shared between 20 patients and had no privacy"
-- "The air conditioning in the ICU was not working"
-- "Dead mosquitoes were on the windowsills of the ward — risk of malaria"
-- "There was mold on the ceiling above my bed"
+### Harm Level Classification (use for harm_level field)
 
-### Medication & Laboratory
-- "The pharmacy was out of the medication prescribed to me"
-- "I was given expired drugs — I checked the date on the pack"
-- "The lab results came back with someone else's name on them"
-- "They told me the lab machine was broken and I'd have to go to a private lab"
-- "My blood sample was taken but the results were never given to me"
-- "The dosage on the prescription label was different from what the doctor said"
-- "I was given generic substitutes without being told or asked"
-- "The IV drip was set up incorrectly and my arm swelled up"
-- "The hospital pharmacy charged three times what the prescription said"
-- "I had to buy syringes from outside the hospital — they claimed to have none"
+| Code | Level | Description |
+|------|-------|-------------|
+| 0 | No Harm | Incident occurred, no patient impact |
+| 1 | Near Miss | Reached patient but harm was prevented by action or chance |
+| 2 | Low Harm | Minor temporary harm, minimal additional treatment needed |
+| 3 | Moderate Harm | Significant temporary harm, additional clinical intervention required |
+| 4 | Severe Harm | Permanent or life-altering harm; near-death event |
+| 5 | Death | Incident contributed to or caused patient death |
 
-### Billing & NHIF
-- "NHIF was supposed to cover my delivery but I was still charged full price"
-- "I don't understand the itemized bill — nobody explained these charges"
-- "I paid for a procedure that was never done"
-- "I was asked to pay a deposit before emergency treatment"
-- "The receipt doesn't match what I was charged"
-- "My NHIF card was rejected even though it's valid and up to date"
-- "I was overcharged for the admission fee compared to the public rate"
-- "They demanded cash even though my insurance should cover this"
-- "The finance department was closed when I needed to process my discharge payment"
-- "Hidden fees appeared on my final bill that were never mentioned beforehand"
+*Sources: NHS NRLS 5-level scale; SAC NZ Health Quality & Safety Commission; WHO-ICPS Patient Outcomes class*
 
-### Safety & Medical Errors
-- "I believe the wrong operation was performed on me"
-- "My surgical wound got infected after the operation — the theatre conditions were poor"
-- "A needle was left in my arm after the drip was removed and it caused swelling"
-- "The patient next to me collapsed and staff took 15 minutes to respond"
-- "I developed bedsores from lying in the same position for days without being turned"
-- "The wrong blood group was given during transfusion"
-- "I fell off the hospital bed because the rails were broken"
-- "No safety protocols were followed — staff didn't wear gloves during my procedure"
-- "I wasn't screened for allergies before being given the medication"
-- "The newborn was given to the wrong mother in the maternity ward"
+### Complaint Category Taxonomy (use for complaint_category field — HCAT framework)
 
-### Timeliness & Access
-- "The ambulance never came even after we called three times"
-- "Emergency department staff made me queue instead of treating me immediately"
-- "I waited 9 days for a specialist appointment that was supposed to happen in 2 days"
-- "My referral letter has been at the hospital for two weeks and nobody has processed it"
-- "The outpatient clinic opens at 8 but doctors don't arrive until 10"
+**Domain 1 — Clinical:**
+- `clinical_safety` — medication error, surgical error, infection, diagnosis error, equipment failure, wrong patient, wrong site
+- `clinical_quality` — clinical competence, treatment outcome, inadequate care plan, monitoring failure
 
----
+**Domain 2 — Management:**
+- `environment` — cleanliness, privacy, noise, broken facilities, infection control failures
+- `institutional_processes` — waiting times, appointment scheduling, billing, discharge planning, referral delays, records management
 
-## Suggestion / Advice Signals — Hospital / Clinic / Healthcare
+**Domain 3 — Relationship:**
+- `listening` — patient not heard, ignored, dismissed, concerns minimized
+- `communication` — information not given, poor explanation, language barrier, test results not communicated
+- `respect_and_rights` — dignity violation, discrimination, consent violation, confidentiality breach, refusal of emergency treatment
 
-### Process & Flow Improvements
-- "You should have a separate fast-track queue for elderly patients and children"
-- "The registration process needs to be digitized — paper files keep getting lost"
-- "Consider implementing an online appointment booking system to reduce OPD congestion"
-- "A triage nurse at the entrance would help prioritize serious cases faster"
-- "The pharmacy should be inside the ward for inpatients instead of on the ground floor"
-- "You should have a dedicated NHIF desk to handle insurance queries separately"
-- "Patient discharge should be planned the day before to reduce morning congestion"
-- "A patient liaison officer would improve communication between families and doctors"
-- "Lab results should be sent via SMS or a patient portal — not just paper"
-- "There should be a follow-up call within 48 hours of discharge for serious cases"
-- "Implement a bed management system to reduce patients sleeping on the floor"
-- "A mothers' waiting shelter near the maternity ward would help expectant mothers"
+### Conditional Fields (collect based on complaint type)
 
-### Staff & Training
-- "Nurses should receive regular refresher training on patient communication"
-- "Doctors should be encouraged to use plain language, not medical jargon"
-- "All staff should wear name tags so patients know who is treating them"
-- "Customer care training would improve how front desk staff handle anxious families"
-- "There should be a patient advocate available in each ward"
-- "Night shift staffing levels need to be increased — two nurses for 40 patients is not enough"
+**If complaint_category = clinical_safety AND involves medication:**
 
-### Facilities & Equipment
-- "You should install more handwashing stations near the ward entrances"
-- "The waiting area needs more seating — people are standing for hours"
-- "A children's play corner in the waiting area would reduce stress for young patients"
-- "The hospital should get a functional MRI machine to reduce referrals to private facilities"
-- "Emergency power backup for the ICU needs to be more reliable"
-- "A separate isolation ward for infectious diseases would protect other patients"
-- "Better signage throughout the hospital would reduce patients getting lost"
-- "The hospital canteen should offer affordable food for patients' family members"
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| drug_name | Jina la dawa | Yes | NRLS medication error taxonomy; links to pharmacy records |
+| drug_dosage | Kipimo cha dawa | Yes | Wrong dose is 15% of NRLS medication errors — most common error type |
+| error_sub_type | Aina ya kosa la dawa | Yes | NRLS 19-category taxonomy: omission / wrong dose / wrong drug / wrong frequency / wrong patient / wrong route / storage error / labeling error |
+| prescriber_name | Jina la daktari aliyeandika agizo | Yes | Prescribing pattern analysis; accountability |
+| prescriber_designation | Cheo cha daktari | Yes | Links to Medical Council of Tanganyika for serious errors |
+| batch_number | Nambari ya bachi ya dawa | Yes | Product recall scoping; TMDA reporting |
+| adverse_effects_description | Maelezo ya madhara | Yes | Pharmacovigilance trigger; patient outcome assessment |
+| onset_time_after_drug | Muda uliopita kabla ya madhara | Yes | Naranjo causality algorithm requires this field |
+| reported_to_tmda | Je, imeripotiwa TMDA? | Yes | Mandatory if harm_level >= 3 — TMDA 15-day serious ADR reporting rule |
 
-### Communication & Patient Rights
-- "Patients should receive a written summary of their diagnosis and treatment plan"
-- "Consent forms should be explained verbally, not just handed to patients to sign"
-- "A patient rights poster should be displayed in every ward"
-- "Provide multilingual information — not everyone understands English or formal Swahili"
-- "Regular updates to families waiting outside the operating theatre would reduce anxiety"
-- "A complaints box in every ward would make it easier for patients to give feedback"
+**If complaint_category = clinical_safety AND involves surgery/procedure:**
 
----
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| procedure_type | Aina ya upasuaji / utaratibu | Yes | Identifies the specific intervention for investigation |
+| operating_theatre_number | Nambari ya chumba cha upasuaji | No | Location specificity for infection control investigation |
+| surgical_team_members | Wanachama wa timu ya upasuaji | Yes | WHO Surgical Safety Checklist accountability |
+| consent_form_signed | Fomu ya idhini ilisainiwa? | Yes | Legal: signed consent is prerequisite for elective procedures |
+| infection_suspected | Je, maambukizi yanashukiwa? | Yes | Triggers infection control investigation; mandatory reporting under IPC protocol |
 
-## Inquiry / Question Signals — Hospital / Clinic / Healthcare
+**If complaint_category = clinical_safety AND involves diagnosis:**
 
-### Registration & Admission
-- "How do I register as a new patient at this facility?"
-- "What documents do I need to bring for admission?"
-- "Can I register my child under my NHIF card?"
-- "Is there a registration fee for the outpatient department?"
-- "What are the visiting hours for the ward?"
-- "How do I get a hospital card renewed?"
-- "Can someone else collect my medical file on my behalf?"
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| presenting_symptoms | Dalili za awali za mgonjwa | Yes | Establishes what was known at time of diagnosis |
+| diagnosis_given | Utambuzi uliotolewa | Yes | Documents the potentially erroneous diagnosis |
+| correct_diagnosis | Utambuzi uliofuata (sahihi) | No | If known — enables clinical review of diagnostic error pattern |
+| delay_duration | Muda wa kuchelewa utambuzi | Yes | Quantifies harm from delayed diagnosis |
 
-### NHIF & Insurance
-- "Does this hospital accept NHIF?"
-- "What services are covered under NHIF at this facility?"
-- "My NHIF card expired — can I still get treated while I'm renewing?"
-- "Which private insurances do you accept?"
-- "How do I claim NHIF benefits if I was treated as an emergency?"
-- "Is maternity covered under NHIF for all deliveries?"
-- "Can I use my employer's insurance for specialist consultations?"
+**If complaint_category = environment OR institutional_processes:**
 
-### Appointments & Referrals
-- "How do I book an appointment with the cardiologist?"
-- "I have a referral from a dispensary — how do I process it here?"
-- "How long is the waiting list for elective surgery?"
-- "Can I get a specialist appointment on the same day?"
-- "Where do I go with my referral letter?"
-- "How do I get a referral to Muhimbili National Hospital?"
-- "Is there a way to check my appointment status online?"
-- "My appointment was cancelled — how do I reschedule?"
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| specific_location | Eneo mahususi | Yes | Facility/ward/area — environmental issues require precise location |
+| frequency_of_issue | Mara ngapi tatizo limetokea | Yes | Distinguishes systemic from one-off; prioritization |
+| photographs_available | Je, kuna picha? | No | Evidence for environmental complaints (cleanliness, broken equipment) |
 
-### Procedures & Tests
-- "What does the blood test preparation involve — do I need to fast?"
-- "How long will I have to wait for my ultrasound results?"
-- "Is the CT scan available here or do I need to go somewhere else?"
-- "What is the procedure for getting a cervical cancer screening?"
-- "How do I get tested for HIV here — is it confidential?"
-- "Is antenatal care free at this health center?"
-- "What immunizations does my child need at this age?"
+**If complaint_category = respect_and_rights AND involves consent violation:**
 
-### Medication & Pharmacy
-- "Can I get my prescription filled at the hospital pharmacy or do I go outside?"
-- "The medication prescribed is expensive — is there a generic version available?"
-- "How long should I take this antibiotic course?"
-- "Can I get a repeat prescription without seeing the doctor again?"
-- "Does the pharmacy stock insulin here?"
-- "Is the malaria medication available for free at this dispensary?"
-- "Can I bring my own medication from home while I'm admitted?"
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| consent_type_violated | Aina ya idhini iliyovunjwa | Yes | Informed consent / treatment consent / research consent / photography consent |
+| staff_member_named | Jina la mtumishi aliyehusika | Yes | JCI PCC.3.1; Medical Council investigation |
+| witness_name | Jina la shahidi | No | Corroboration for allegations against staff |
 
-### Billing & Costs
-- "What is the consultation fee for the outpatient department?"
-- "How much does a normal delivery cost at this facility?"
-- "Is emergency treatment free for children under five?"
-- "Does the hospital offer any payment plans for patients who cannot pay upfront?"
-- "Where do I pay my bill before discharge?"
-- "Can I get a detailed breakdown of my hospital bill?"
+**If harm_level >= 3 (Moderate, Severe, or Death):**
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| contributing_factors | Sababu zinazochangia | Yes | WHO-ICPS class 5 — human / system / environmental / organizational / patient factors |
+| immediate_cause | Sababu ya haraka | Yes | Proximate cause for root cause analysis |
+| detection_method | Njia ya kugundua tukio | Yes | WHO-ICPS class 7 — patient report / staff observation / audit / near miss system |
+| mitigating_factors | Mambo yaliyozuia madhara zaidi | No | WHO-ICPS class 8 — what prevented worse outcome |
+| ameliorating_actions_taken | Hatua za haraka zilizochukuliwa | Yes | WHO-ICPS class 9; JCI investigation record |
+| attending_clinician_name | Jina la daktari aliyehudumia | Yes | Clinical record linkage; JCI audit; Medical Council |
+| clinical_notes_reference | Kumbukumbu ya rekodi ya matibabu | Yes | Evidence cross-referencing; JCI survey requirement |
+| referred_to_higher_body | Kufikishwa kwa mamlaka ya juu? | Yes | MOHCDGEC / Medical Council / Tanzania Human Rights Commission |
+| learning_action_implemented | Hatua ya kujifunza iliyotekelezwa | Yes | WHO-ICPS class 10; NRLS learning system; prevents recurrence |
+
+### Resolution Standards for This Industry
+
+- **Acknowledgment**: Within 3 working days of receiving complaint (NHS standard; Tanzania Guide)
+- **Resolution target**: Within 25 working days (NHS); Tanzania Guide specifies monthly Quality Improvement Team (QIT) review
+- **Documentation**: All complaints must be logged in Tanzania Annex 5 / Annex 5a format
+- **Monthly reporting**: Aggregate data reported via Annex 6 to Quality Improvement Team (QIT), then Hospital Management Team (HMT)
+- **Serious incidents (harm_level 4-5)**: Immediate investigation; report to Medical Council of Tanganyika within 24 hours for clinical negligence; MOHCDGEC notification
+- **Medication errors (harm_level >= 3)**: TMDA mandatory reporting within 15 working days; 7-day expedited for fatal/life-threatening
+- **Regulatory escalation path**: Complaint Officer → QIT → HMT → MOHCDGEC → Medical Council of Tanganyika → Parliamentary/National Ombudsman
+
+### Escalation Triggers (field values requiring immediate escalation)
+
+- `harm_level = 5 (Death)` → Immediate report to Medical Council of Tanganyika + MOHCDGEC; preserve all records; do not alter clinical notes
+- `harm_level = 4 (Severe Harm)` → Report to Medical Council within 24 hours; root cause analysis within 72 hours
+- `is_life_threatening = Yes` → Escalate to clinical duty officer immediately before continuing feedback collection
+- `complaint_category = clinical_safety` AND `error_sub_type = wrong_blood_transfusion` → Blood Bank emergency protocol; MOHCDGEC notification
+- `complaint_category = clinical_safety` AND `error_sub_type = wrong_patient_identity` (newborn/surgery) → Immediate identity verification audit; MOHCDGEC
+- `complaint_category = respect_and_rights` AND involves sexual assault by health worker → Criminal matter; refer to police AND Medical Council within 24 hours
+- `complaint_category = clinical_safety` AND `error_sub_type = counterfeit_drug` → TMDA emergency notification; batch recall
+- `stage_of_care = emergency` AND `remedy_sought includes refusal_of_treatment_due_to_payment` → Legal violation under Medical Practitioners Act; immediate escalation to facility Medical Superintendent
+- `complaint_category = clinical_safety` AND involves child → Mandatory reporting trigger; check for child abuse indicators
+- `reported_to_tmda = No` AND `harm_level >= 3` AND medication involved → Flag for mandatory TMDA ADR reporting; 15-day clock starts now
 
 ---
 
-## Compliment / Applause Signals — Hospital / Clinic / Healthcare
+## SUGGESTION / IMPROVEMENT — Fields
 
-### Doctor & Clinical Care
-- "Dr. Mwangi took his time to explain every step of my treatment — I felt truly cared for"
-- "The surgeon's skill was exceptional — my recovery has been smooth and fast"
-- "The doctor was very thorough and caught something three other clinics had missed"
-- "I appreciate that the consultant called to check on my progress after discharge"
-- "The clinical officer handled my child's case with great attention and patience"
-- "The obstetrician made me feel safe during a very difficult delivery"
-- "Dr. Amina was the most compassionate doctor I have ever encountered"
-- "The pediatrician explained my baby's condition in a way I could understand"
+### Core Fields
 
-### Nursing & Ward Staff
-- "Nurse Joyce was incredibly kind — she held my hand during the most painful moments"
-- "The night shift nurses were attentive even when the ward was very busy"
-- "The ward attendants kept the ward spotlessly clean during my entire stay"
-- "The nursing staff checked on me regularly and always responded quickly to the call bell"
-- "The midwife who delivered my baby was absolutely wonderful — calm and reassuring"
-- "The wound care nurse showed such skill and gentleness during my dressing changes"
-- "I am grateful to the entire ICU team for saving my husband's life"
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| date_submitted | Tarehe iliyowasilishwa | Yes | Trend analysis; ISO 10002 tracking |
+| channel | Njia ya uwasilishaji | Yes | Walk-in / online / SMS / suggestion box / staff relay — access equity monitoring; Tanzania Guide |
+| submitter_name | Jina la mwasilishaji | No | Anonymous submissions must be accepted — ISO 10002:2018; Tanzania Guide |
+| submitter_contact | Mawasiliano ya mwasilishaji | No | Optional — for follow-up if submitter wishes to be informed of outcome |
+| target_department | Idara inayolengwa | Yes | Route to correct department head; cannot implement without knowing scope |
+| specific_service_or_process | Huduma au mchakato mahususi | Yes | Actionability — "waiting times" must specify which: triage / lab results / pharmacy / discharge |
+| frequency_of_issue | Mara ngapi tatizo hili linatokea | Yes | Distinguishes systemic problems from one-off events; prioritization for QIT |
+| proposed_solution | Suluhisho linalopendekezwa | Yes | Makes suggestion actionable; PMC9327649 found 69% of healthcare suggestion box content was complaints — proposals must be separated |
+| patient_impact | Athari kwa mgonjwa | Yes | Links to quality improvement priority; justifies urgency |
+| urgency_level | Kiwango cha haraka | No | Immediate / short-term / long-term improvement |
+| has_patient_safety_implication | Je, ina athari za usalama wa mgonjwa? | Yes | Any suggestion touching medication, equipment, or clinical protocols must be flagged — may require QIT review rather than departmental manager |
+| response_provided | Je, jibu limetolewa? | Yes | ISO 10002 requires acknowledgment; Tanzania Guide |
 
-### Reception & Administrative
-- "The receptionist was welcoming and helped me navigate the registration process easily"
-- "The records department found my file quickly despite it being several years old"
-- "The billing desk staff were patient in explaining my insurance claim"
-- "The NHIF desk officer helped me sort out my card issue the same day"
+### Industry-Specific Improvement Categories
 
-### Emergency & Specialist Services
-- "The emergency team responded immediately and stabilized my mother within minutes"
-- "The laboratory staff had my critical results ready in record time"
-- "The radiology team was professional and made me feel comfortable during the MRI"
-- "The physiotherapy team's dedication helped me walk again after my accident"
-- "The counseling team provided support during my mental health crisis — truly lifesaving"
-- "The referral process was handled quickly and smoothly — I was at Muhimbili the same day"
-
-### Facility & Environment
-- "The maternity ward was clean, calm, and well-managed — excellent environment for new mothers"
-- "I was impressed by how organized the OPD was — no confusion or long waits"
-- "The food served in the ward was nutritious and actually tasted good"
-- "The facility was very clean — you could see the effort put into hygiene"
-- "Hand sanitizer stations were at every ward entrance — clearly infection control is taken seriously"
+- `process_flow` — Triage systems, appointment booking, discharge planning, referral pathways, patient navigation
+- `staff_training` — Communication skills, cultural competency, clinical updates, patient rights awareness
+- `facilities_equipment` — Infrastructure, medical equipment, cleanliness, infection control infrastructure
+- `communication_systems` — Lab results notification, discharge summaries, SMS alerts, patient portals
+- `patient_rights` — Consent processes, complaints box placement, rights charter displays, language access
+- `medication_safety` — Allergy screening protocols, dispensing double-checks, prescription error prevention
+- `nhif_insurance` — NHIF processing efficiency, dedicated insurance desks, claims transparency
+- `staffing_levels` — Nurse-to-patient ratios, night shift coverage, specialist availability
+- `infection_control` — Handwashing stations, isolation facilities, PPE availability, waste management
 
 ---
 
-## Key Entities & Roles
+## INQUIRY / QUESTION — Fields
 
-**Staff Titles:** Doctor (Daktari), Nurse (Muuguzi), Clinical Officer, Medical Officer, Specialist/Consultant, Obstetrician, Pediatrician, Surgeon, Radiologist, Pathologist, Pharmacist, Laboratory Technician, Physiotherapist, Nutritionist/Dietitian, Health Records Officer, Ward Attendant, Orderly, Community Health Worker (CHW), Hospital Administrator, Medical Superintendent
+### Core Fields
 
-**Departments:** OPD (Outpatient Department), Casualty/Emergency, Maternity Ward, Neonatal ICU (NICU), Intensive Care Unit (ICU), Surgical Ward, Medical Ward, Paediatric Ward, Laboratory, Radiology, Pharmacy, Blood Bank, Physiotherapy, Nutrition Unit, Health Records
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| inquiry_unique_id | Nambari ya swali | Yes | Tracking; prevents loss of unanswered queries |
+| date_received | Tarehe iliyopokelewa | Yes | SLA monitoring |
+| time_received | Wakati uliopokelewa | Yes | Shift accountability for response |
+| channel | Njia | Yes | Response channel matching — phone inquiry needs phone response |
+| inquirer_name | Jina la muulizaji | Yes | Identity for response delivery |
+| inquirer_relationship_to_patient | Uhusiano na mgonjwa | Yes | Consent/privacy: third-party inquiries about a patient require patient consent before information is shared |
+| patient_hospital_number | Nambari ya hospitali ya mgonjwa | No | Record retrieval for specific patient queries |
+| patient_name | Jina la mgonjwa (kama tofauti) | No | Identity disambiguation |
+| query_type | Aina ya swali | Yes | Routes to correct department; see taxonomy below |
+| specific_question | Swali mahususi | Yes | Context for response — the actual question being asked |
+| urgency_level | Kiwango cha haraka | Yes | Routine / urgent / emergency — determines SLA and escalation |
+| preferred_response_channel | Njia inayopendelewa ya kujibu | Yes | Accessibility; patient preference; NHS accessibility duty |
+| date_responded | Tarehe ya kujibu | Yes | Closure; SLA compliance |
+| responded_by | Aliyejibu | Yes | Accountability |
 
-**Processes & Documents:** Triage, Referral Letter, Prescription (Dawa), Medical File/Record, Discharge Summary, Operation Consent Form, NHIF Claim Form, Laboratory Request Form, Radiology Request, Inpatient Admission Form, Antenatal Card (ANC Card), Immunization Card (Chanjo Card), Patient Bill/Invoice
+### Common Inquiry Types & Required Data Per Type
 
-**Insurance & Coverage:** NHIF (National Health Insurance Fund), Community Health Fund (CHF), iCHF (improved CHF), Employer Insurance, Private Insurance (AAR, Jubilee, Resolution), Capitation, Fee-for-Service
+**appointment** — Scheduling / rescheduling / cancellation
+- Additional fields: `preferred_date`, `specialist_type`, `referral_letter_number` (if referred), `existing_hospital_number`
 
-**Regulations & Bodies:** Ministry of Health (MoH), Tanzania Medicines and Medical Devices Authority (TMDA), Medical Council of Tanganyika, Nursing Council of Tanzania, National AIDS Control Programme (NACP), WHO, Tanzania Food and Drugs Authority (TFDA - historical)
+**test_results** — Laboratory / radiology / pathology results
+- Additional fields: `test_type`, `test_date`, `requesting_clinician_name`
+- Note: Requires patient identity verification before releasing any result — consent check mandatory
 
-**Key Tanzanian Facilities:** Muhimbili National Hospital (MNH), Jakaya Kikwete Cardiac Institute (JKCI), Ocean Road Cancer Institute, Aga Khan Hospital, Regency Medical Centre, Mnazi Mmoja Hospital, Bugando Medical Centre, KCMC (Kilimanjaro Christian Medical Centre), dispensaries (zahanati), health centers (vituo vya afya)
+**billing_insurance** — Bill queries / NHIF / insurance claims
+- Additional fields: `invoice_number`, `nhif_card_number`, `insurance_provider`, `amount_in_dispute`
 
-**Conditions & Procedures:** Malaria, HIV/AIDS, Tuberculosis (TB), Diabetes, Hypertension, Delivery/Childbirth, Caesarean Section (C-section), Antenatal Care (ANC), Immunization (Chanjo), Blood Transfusion, Dialysis, Chemotherapy, Physiotherapy, Wound Dressing, IV Drip (Drip ya damu/maji)
+**referral_status** — Incoming or outgoing referral processing
+- Additional fields: `referring_facility`, `referral_date`, `referral_number`, `specialist_department`
 
----
+**discharge_documentation** — Discharge summaries / medical certificates / sick notes
+- Additional fields: `admission_date`, `discharge_date`, `document_type`
 
-## Kiswahili / Swahili Equivalents
+**medication_prescription** — Prescription queries / refills / dosage clarification
+- Additional fields: `drug_name`, `prescribing_doctor`, `prescription_date`
+- Note: Clinical questions about dosage must be routed to pharmacist or clinician — AI should not answer
 
-### Malalamiko (Complaints)
-- "Daktari hakunichunguza vizuri — aliandika dawa tu bila kunipima"
-- "Nilisubiri masaa matano OPD bila kupata huduma"
-- "Muuguzi alikuwa mkali na hakunisikiliza"
-- "Wodi ilikuwa chafu sana — harufu mbaya iliendelea siku nzima"
-- "Dawa walizonipa zilikuwa zimekwisha muda wake (expired)"
-- "Nilijaribu kupata matokeo ya maabara lakini hawakuwa tayari kwa wiki mbili"
-- "NHIF yangu haikukubaliwa hata kadi yangu ni halali"
-- "Waliomba pesa kabla ya kunipatia matibabu ya dharura"
-- "Mtoto wangu alipewa chanjo isiyo sahihi"
-- "Hospitali haikuwa na maji toka usiku"
-- "Wauguzi hawakujibu kengele ya wodi — nilisimama peke yangu"
-- "Walinifanya niende kwenye idara tatu bila mtu yeyote kunieleza njia"
+**treatment_information** — Procedure information / preparation instructions
+- Additional fields: `procedure_name`, `scheduled_date`
 
-### Mapendekezo (Suggestions)
-- "Kunapaswa kuwa na foleni maalum kwa wazee na watoto wachanga"
-- "Mfumo wa kuomba miadi mtandaoni ungesaidia kupunguza msongamano wa OPD"
-- "Muuguzi wa triage mlangoni angewezesha kuainisha wagonjwa wa dharura"
-- "Matokeo ya maabara yanapaswa kutumwa kwa SMS au portal ya mgonjwa"
-- "Hospitali inahitaji jenereta la uhakika kwa ICU"
-- "Wafanyakazi wote wanapaswa kuvaa beji ya jina"
-- "Sanduku la malalamiko linapaswa kuwepo kila wodi"
+**rights_complaints_process** — How to complain / patient rights / escalation paths
+- Additional fields: none — provide Tanzania Guide process information; direct to Complaint Officer
 
-### Maswali (Inquiries)
-- "Nahitaji nini ili kusajiliwa kama mgonjwa mpya?"
-- "Je, hospitali hii inakubali NHIF?"
-- "Ninaweza kuweka miadi na daktari wa moyo lini?"
-- "Gharama ya kujifungua hapa ni ngapi?"
-- "Je, huduma ya dharura kwa watoto chini ya miaka 5 ni bure?"
-- "Barua ya rufaa yangu imefika — ninafanya nini sasa?"
-- "Dawa hii lazima ninywe kwa muda gani?"
-- "Je, kuna dawa mbadala yenye bei nafuu zaidi?"
-- "Maabara yako yanafanya kipimo cha malaria?"
-- "Usajili wa ANC unafanywa siku gani?"
-
-### Shukrani / Pongezi (Compliments)
-- "Daktari Amina alikuwa mzuri sana — alieleza kila kitu kwa uwazi"
-- "Muuguzi Joyce alinifariji wakati wa maumivu makali — asante sana"
-- "Timu ya dharura iliitikia haraka sana — waliokoa maisha ya baba yangu"
-- "Wodi ilikuwa safi kabisa — nilijisikia salama"
-- "Mkunga alinihudumiia kwa upole mkubwa wakati wa kujifungua"
-- "Ninashukuru hospitali yote kwa matibabu ya hali ya juu"
-- "Timu ya upasuaji ilifanya kazi nzuri sana — ahueni yangu ni nzuri"
+**emergency_access** — Emergency treatment availability / ambulance / casualty
+- Urgency: always set to `emergency`; provide direct phone number immediately
 
 ---
 
-## Industry-Specific Escalation Triggers
+## APPLAUSE / COMPLIMENT — Fields
 
-1. "The patient collapsed/died while waiting in the queue and no one responded" — potential preventable death
-2. "Wrong blood type transfused" — immediate life-threatening medical error
-3. "Newborn given to wrong mother" — identity mix-up requiring immediate correction
-4. "Patient fell and sustained serious injury due to broken equipment" — patient safety incident
-5. "Suspected sexual harassment or assault by a health worker on a patient" — criminal/disciplinary emergency
-6. "Child administered incorrect vaccine — wrong vaccine type or wrong dosage" — child safety alert
-7. "HIV test result shared without patient consent" — privacy violation and legal breach
-8. "Surgical instrument left inside patient after operation" — critical medical negligence
-9. "Infectious disease patient placed in general ward without isolation" — infection control emergency
-10. "Patient denied emergency treatment due to inability to pay" — legal violation (Medical Practitioners Act)
-11. "Staff suspected of stealing patient medication or supplies" — criminal matter requiring investigation
-12. "Child abuse suspected — injuries inconsistent with parent's account" — mandatory reporting trigger
-13. "Drug sold at hospital pharmacy identified as counterfeit" — TMDA reportable incident
-14. "ICU or theatre power failure with patients on life support" — infrastructure emergency
-15. "Uncontrolled bleeding or post-operative complication with no attending staff" — immediate clinical emergency
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| date_submitted | Tarehe iliyowasilishwa | Yes | Trend analysis; recognition timeliness — delay reduces impact |
+| channel | Njia | Yes | Access monitoring |
+| submitter_name | Jina la mshukuriaji | No | Anonymous compliments are valid; PMC9327649: 30.5% of healthcare suggestion box submissions are compliments |
+| staff_member_praised | Jina la mtumishi anayeshukuriwa | Yes | Recognition delivery; HR record; staff morale — this is the primary purpose of the record |
+| staff_designation | Cheo / Jukumu la mtumishi | Yes | Role-specific excellence tracking — nurse / doctor / cleaner / receptionist / pharmacist |
+| department_ward | Idara / Wodi | Yes | Department-level performance trending; QIT recognition reports |
+| date_of_praised_interaction | Tarehe ya huduma iliyoshukuriwa | Yes | Links to specific encounter for corroboration and specificity |
+| specific_action_praised | Tendo mahususi linaloshukuriwa | Yes | Makes compliment meaningful and actionable — enables specific behavior reinforcement in training |
+| how_it_helped | Jinsi ilivyosaidia | Yes | Qualitative learning — "explained my diagnosis clearly" feeds communication training; "noticed my allergy" feeds safety protocols |
+| category_of_excellence | Aina ya ubora | No | Clinical skill / Communication / Compassion / Efficiency / Environment / Safety action |
+| staff_notified | Je, mtumishi amearifiwa? | Yes | Closes loop; motivation; ISO 10002 continuous improvement |
+| safety_relevant_experience | Je, kulikuwa na jambo la usalama? | No | If pharmacist caught a prescribing error, or nurse noticed incorrect dosage — positive near-miss that feeds system learning |
 
 ---
 
-## Disambiguation Notes
+## AI Conversation Guidance for This Industry
 
-- **Hospital vs. Pharmacy:** Hospital feedback often involves care processes, ward conditions, and clinical decisions. Pharmacy-specific feedback about drug dispensing errors at a hospital pharmacy should still be classified under Healthcare/Hospital if the complaint is about the facility's dispensary service.
-- **Hospital vs. Insurance (NHIF):** If the complaint is about NHIF card rejection or insurance processing at a hospital, classify under Healthcare/Hospital. If the complaint is about NHIF policy, premiums, or registration at an NHIF office, classify under Financial/Insurance Services.
-- **Hospital vs. Government Services:** Community health workers (CHW) operating at village level may generate feedback that overlaps with Government/Public Services. Classify based on whether the core complaint is about clinical care or administrative/government processes.
-- **Distinguishing complaint from inquiry:** "Why was my surgery delayed?" is often a complaint phrased as a question. Look for dissatisfaction signals (expectations not met) rather than pure information-seeking tone.
-- **Maternity feedback:** Complaints about maternity care may overlap with both Hospital and Women/Family services categories. Prioritize the clinical care aspect (hospital) unless the feedback is specifically about maternal rights or family planning policy.
+- **Start with the patient's experience, not the form.** Open with "What happened to you / your family member at the health facility?" Let the patient narrate. Extract `incident_description`, `date_of_incident`, `department_unit`, and `harm_level` from the narrative before asking structured follow-up questions. Jumping to form fields immediately feels clinical and cold — exactly the opposite of what a distressed patient needs.
+
+- **Assess urgency before collecting details.** After the first narrative response, always ask: "Is this a medical emergency happening right now, or are you reporting something that already happened?" If it is ongoing, stop data collection and provide emergency contacts (emergency number, ambulance, duty officer). The feedback system must never delay someone who needs immediate care.
+
+- **Harm level is the pivot question — ask it gently.** Ask "Was the patient physically hurt because of this?" or "Did this cause any injury, complications, or hospitalization?" Map the answer to the 0–5 harm scale internally. Do NOT use clinical language like "what was the harm severity level?" to a distressed family member.
+
+- **For medication errors, collect drug name and batch number before the patient discards packaging.** Say: "If you still have the medicine box or packaging, please keep it — the batch number on it is very important for the investigation." This single request can make or break a TMDA product recall.
+
+- **Never ask about staff members in a way that feels accusatory early in the conversation.** Collect staff names after establishing the core incident facts. Phrase as "Do you remember who was treating you or your family member at that time?" rather than "Who did this to you?"
+
+- **For clinical complaints in Swahili, avoid direct medical terminology translations that don't land.** "Tatizo la damu" is understood; "madhara ya transfusion" may not be. Use the patient's own language from their narrative back to them when asking follow-up questions.
+
+- **Compliments need the staff member's name to be useful.** If the submitter says "the nurses were wonderful," gently probe: "Do you remember any of their names? Even a first name helps us make sure they receive recognition." A compliment without a name cannot reach the person who earned it.
+
+## Swahili Key Phrases for Field Collection
+
+| Purpose | Swahili Phrase |
+|---------|---------------|
+| Opening complaint | "Tafadhali nieleze kilichotokea katika hospitali / kliniki" |
+| Date of incident | "Tukio hili lilitokea siku gani na wakati gani?" |
+| Department | "Ulikuwa katika idara gani — OPD, wodi, maabara, au mahali pengine?" |
+| Harm assessment | "Je, ulijeruhiwa au ulipata madhara ya kimwili kutokana na tukio hili?" |
+| Staff name | "Je, unakumbuka jina la daktari, muuguzi, au mtumishi aliyekuwa anakuhudumia?" |
+| Drug name and batch | "Dawa hii inaitwa nini? Kama una pakiti ya dawa, angalia nambari ya bachi iliyoandikwa nayo" |
+| Urgency check | "Je, hali hii bado inaendelea sasa hivi, au unataka kuripoti kitu kilichotokea awali?" |
+| Consent to investigate | "Je, unakubali kwamba hospitali ifanye uchunguzi kuhusu malalamiko yako?" |
+| Remedy sought | "Unataka nini kutokea baada ya kuripoti hili — msamaha, uchunguzi, fidia, au kitu kingine?" |
+| Suggestion specificity | "Unaweza kunieleza zaidi kuhusu mchakato mahususi unaotaka kuboresha?" |
+| Compliment staff name | "Je, unakumbuka jina la muuguzi / daktari huyo — hata jina la kwanza linasaidia ili wapokee pongezi" |
+| Follow-up contact | "Je, tungependa kukuwasiliana nawe tutakapokuwa tumefanya uchunguzi — unapendelea simu au barua pepe?" |
+| NHIF query | "Kadi yako ya NHIF ilikataliwa — unajua tarehe iliyokataliwa na idara iliyokukatalia?" |
+| Emergency redirect | "Hali hii ni ya dharura sasa hivi? Piga simu [nambari ya dharura] mara moja — usisimame hapa" |
+
+## Action Recommendations Based on Field Values
+
+| If Field | Equals | Recommended Action |
+|----------|--------|-------------------|
+| harm_level | 5 (Death) | Immediately escalate to facility Medical Superintendent; preserve clinical notes; notify MOHCDGEC and Medical Council of Tanganyika; do not resolve at complaint officer level |
+| harm_level | 4 (Severe Harm) | Root cause analysis within 72 hours; Medical Council notification; senior clinical review |
+| harm_level | 3 (Moderate Harm) | QIT review within 5 days; department head notified; corrective action plan required |
+| harm_level | 1 or 2 | Standard QIT resolution cycle; department head informed; patient acknowledged within 3 days |
+| is_life_threatening | Yes | Stop feedback collection; provide emergency contacts; flag for immediate clinical response |
+| complaint_category | clinical_safety — medication | TMDA ADR reporting if harm_level >= 3; pharmacy director notified; batch number preserved |
+| complaint_category | respect_and_rights — sexual_assault | Police referral + Medical Council within 24 hours; do not handle internally |
+| complaint_category | institutional_processes — refused_emergency_treatment | Legal violation under Medical Practitioners Act; Medical Superintendent + MOHCDGEC |
+| error_sub_type | wrong_blood_transfusion | Blood Bank emergency protocol; MOHCDGEC notification; immediate patient review |
+| reported_to_tmda | No, but harm_level >= 3, medication involved | Generate TMDA ADR report; 15-day mandatory deadline; 7-day if fatal/life-threatening |
+| complaint_category | clinical_safety, child involved | Check child abuse indicators; mandatory reporting to social welfare if suspected |
+| channel | SMS or online | Auto-acknowledge within 1 hour; assign complaint ID; human follow-up within 1 working day |
+| urgency_level | emergency (inquiry) | Provide direct emergency numbers immediately; do not route through standard inquiry queue |
+| staff_member_praised | named specifically | Notify staff member and line manager within 24 hours; log in HR recognition record |
+| safety_relevant_experience | Yes (compliment) | Convert positive near-miss into learning report; share at clinical governance meeting |
+| has_patient_safety_implication | Yes (suggestion) | Route to QIT directly, not just department manager; flag for next clinical governance meeting |
+| nhif_card_number | provided + rejected | Route to NHIF desk officer; check registration validity; log as NHIF process complaint |
+
+---
+
+## Key Entities & Roles (Tanzania Context)
+
+**Staff Titles:** Doctor (Daktari), Nurse (Muuguzi), Clinical Officer, Medical Officer, Specialist/Consultant, Obstetrician, Pediatrician, Surgeon, Radiologist, Pathologist, Pharmacist (Mfamasia), Laboratory Technician, Physiotherapist, Nutritionist/Dietitian, Health Records Officer, Ward Attendant, Orderly, Community Health Worker (CHW), Hospital Administrator, Medical Superintendent, Complaint Officer
+
+**Departments:** OPD, Casualty/Emergency, Maternity Ward, NICU, ICU, Surgical Ward, Medical Ward, Paediatric Ward, Laboratory, Radiology, Pharmacy, Blood Bank, Physiotherapy, Nutrition Unit, Health Records
+
+**Insurance:** NHIF, iCHF (improved Community Health Fund), Employer Insurance, AAR, Jubilee, Resolution Health
+
+**Regulatory Bodies:** MOHCDGEC, TMDA (Tanzania Medicines and Medical Devices Authority), Medical Council of Tanganyika, Nursing Council of Tanzania, NACP, WHO, Office of PO-PSMGG
+
+**Key Facilities:** Muhimbili National Hospital (MNH), JKCI, Ocean Road Cancer Institute, Aga Khan Hospital, Regency, Mnazi Mmoja, Bugando Medical Centre, KCMC, zahanati (dispensary), vituo vya afya (health centers)

@@ -1,271 +1,310 @@
 ---
-tags: [industry-kb, feedback-classification]
+tags: [industry-kb, feedback-classification, field-standards]
 ---
-# Business Consultancy / Professional Services — Industry-Specific Feedback Classification Knowledge Base
+# Business Consultancy / Professional Services — Feedback Collection Fields & Standards
 
 ## Industry Identifiers
-management consulting, business strategy, accounting firm, audit firm, tax consultant, legal advisor, HR consultant, IT consultant, marketing agency, PR firm, research firm, NBAA certified accountant, TRA compliance, BRELA registration, TIN number, due diligence, feasibility study, business valuation, internal audit, statutory audit, transfer pricing, corporate governance, board advisory, CFO advisory, ERP implementation
 
-## Complaint / Grievance Signals — Business Consultancy / Professional Services
+management consulting, business strategy, accounting firm, audit firm, tax consultant, legal advisor, HR consultant, IT consultant, marketing agency, PR firm, research firm, NBAA certified accountant, TRA compliance, BRELA registration, TIN number, due diligence, feasibility study, business valuation, internal audit, statutory audit, transfer pricing, corporate governance, board advisory, CFO advisory, ERP implementation, engagement letter, retainer, management letter, audit report, financial model, business plan, market research, NEMC environmental assessment, OSHA compliance review, forensic accounting, AML compliance, FATCA, payroll services, outsourced CFO, company secretarial, business registration
 
-### Deliverable Quality
-- The report you delivered was full of copy-paste content with no original analysis
-- Your feasibility study made assumptions that don't apply to the Tanzanian market
-- The financial model you built had formula errors we only caught after presentation
-- Your business plan was too generic — it could have been written for any company
-- The market research data you provided was outdated by at least three years
-- We paid for a strategic roadmap but received a PowerPoint with buzzwords and no clear actions
-- The audit findings missed several discrepancies that our internal team later identified
-- Your tax computation was wrong and we received a TRA penalty because of it
-- The due diligence report failed to flag a major legal liability of the target company
-- The investment memo you wrote had factual errors about the industry landscape
-- The deliverable did not match the scope agreed in the engagement letter
-- We asked for a comprehensive HR policy manual but received a template with our name pasted in
-- Your IT audit did not cover the critical systems we specified
-- The valuation report used the wrong discount rate for the Tanzanian risk environment
-- The business registration documents you prepared had errors that BRELA rejected
+## Why Industry-Specific Fields Matter
 
-### Consultant Conduct & Professionalism
-- The consultant assigned to our project was clearly junior and had no relevant industry experience
-- Your team member was dismissive when we raised concerns during the engagement
-- The lead consultant was unavailable for weeks without explanation or replacement
-- We were billed partner rates but were attended to entirely by junior associates
-- The consultant kept changing their recommendations without justification
-- Your team did not respect the confidentiality of sensitive information shared during the engagement
-- The consultant showed up to client meetings unprepared and without reading our materials
-- We were promised a senior consultant and got a fresh graduate who needed constant handholding
-- The engagement manager was rude and condescending to our finance team
-- Your representative arrived late to every single scheduled meeting
+Consultancy complaints require capture of the engagement contract terms, the specific deliverable that failed, and which professional body the consultant is registered with — because the same issue (e.g., wrong financial advice) may fall under NBAA jurisdiction if the advisor is a certified accountant, TRA enforcement if it caused a tax penalty, or general contract law if the firm has no professional licence. Without these fields, it is impossible to route the complaint to the correct regulatory body or assess the magnitude of financial harm.
 
-### Fees & Billing
-- Your invoice did not itemize work done — just a lump sum with no breakdown
-- We were billed for hours that were clearly inflated — 40 hours for a task that should take 5
-- The additional charges were not agreed in the engagement letter and should not have been invoiced
-- Your team billed us for travel expenses that were supposed to be included in the fixed fee
-- We were charged for a revised report that needed revision because of your own errors
-- The retainer fee has been deducted but we have received no services this quarter
-- Your billing cycle does not match what was agreed — you invoiced before delivery
-- We were overcharged compared to the rate card that was shared during proposal
-- The VAT was applied incorrectly and ZIMRA — sorry, TRA — will flag this
-- Hidden costs appeared on the final invoice that were never disclosed during scoping
+## Source Standards
 
-### Timeliness & Project Management
-- The report is three weeks overdue and we have a board presentation tomorrow
-- You promised delivery by end of month but have not even sent a draft
-- The project kickoff was delayed by two weeks because your team was not available
-- We have been waiting for the revised version for over two weeks with no update
-- Milestones keep slipping and there is no recovery plan being communicated
-- The engagement took twice as long as quoted and we were not informed of delays in advance
-- Our statutory audit should have been completed before the AGM deadline but is still outstanding
-- Tax returns were filed late because your team did not complete the computation on time
-- The TRA audit support we requested was not provided until after the deadline had passed
-- We escalated the delay three times and still received no timeline commitment
+- ISO 9001:2015 — Quality Management Systems (Clause 8.2 requirements for products and services; Clause 10.2 nonconformity and corrective action)
+- NBAA — National Board of Accountants and Auditors (Tanzania): Professional Standards and Disciplinary Rules
+- BRELA — Business Registrations and Licensing Agency (Tanzania): registration compliance standards
+- TRA — Tanzania Revenue Authority: tax compliance and advisory standards
+- NEMC — National Environment Management Council (Tanzania): EIA standards
+- IBA International Principles on Conduct for the Legal Profession (2011) — where legal advisory overlaps
+- ACCA / CPA / CIMA Professional Codes of Conduct — international professional standards recognised in Tanzania
 
-### Communication & Responsiveness
-- Emails go unanswered for days and we cannot get a hold of anyone at your firm
-- The engagement manager promised a status update every Friday — we have not received one
-- We had to follow up seven times before receiving the draft report
-- Your receptionist never passes on messages and calls are not returned
-- The partner only surfaces when there is an invoice to send
-- There is no clear point of contact — every time we call, we speak to a different person
-- Meeting minutes were never shared after our strategy sessions
-- We were not informed when the lead consultant left the firm and our engagement was handed over
-- Your team copied the wrong people on a confidential email — this is a serious breach
-- We received a template email response that did not address any of our specific questions
+---
 
-### Regulatory & Compliance Failures
-- Your tax advice led us to a TRA position that is now under dispute
-- The NBAA-compliant audit report you delivered was rejected by our lender
-- You advised us to structure the transaction in a way that BRELA later deemed non-compliant
-- The transfer pricing documentation you prepared does not meet TRA requirements
-- Your team missed the VAT return filing deadline and we are now accruing penalties
-- The corporate governance review did not align with the Companies Act requirements
-- We followed your legal advice and are now facing a contractual dispute
-- The EIA recommendation you gave was rejected by NEMC
+## GRIEVANCE / COMPLAINT — Required & Recommended Fields
 
-### Technology & Tools
-- The ERP implementation you led went over budget by 60% and is still not live
-- The system you configured has been crashing since go-live and your team is not responding
-- We were sold a software solution that does not integrate with our existing systems
-- The IT security assessment you performed missed obvious vulnerabilities
-- The data migration you managed corrupted records that we are still trying to recover
+### Core Fields (collect for ALL complaints in this industry)
 
-## Suggestion / Advice Signals — Business Consultancy / Professional Services
+| Field | Swahili Label | Required? | Why It Enables Better Action |
+|-------|--------------|-----------|------------------------------|
+| firm_organisation_name | Jina la kampuni ya ushauri | Yes | Identifies the responsible entity; basis for regulatory look-up (NBAA, BRELA) |
+| engagement_type | Aina ya huduma iliyotolewa | Yes | Determines which professional standards and regulatory body apply |
+| engagement_reference | Nambari ya mkataba/engagement | Optional | Engagement letter reference; aids dispute resolution on scope and billing |
+| lead_consultant_name | Jina la mshauri mkuu | Optional | Needed for conduct complaints (NBAA disciplinary rules) |
+| engagement_start_date | Tarehe ya kuanza kazi | Yes | Establishes timeline for breach assessment |
+| engagement_end_date_or_current | Tarehe ya kukamilika (au bado inaendelea) | Yes | Determines whether issue is in-progress or post-delivery |
+| fee_agreed_tzs | Ada iliyokubaliwa (TZS) | Yes (if financial) | Basis for billing dispute and financial harm assessment |
+| fee_invoiced_tzs | Ada iliyotozwa kwenye ankara | Yes (if financial) | Enables comparison against agreed amount |
+| issue_type | Aina ya tatizo | Yes | Determines routing: NBAA / TRA / BRELA / NEMC / court / internal |
+| specific_deliverable_affected | Kazi/Ripoti iliyoathirika | Yes | Ties complaint to a specific output — report, computation, filing, advice, system |
+| financial_loss_caused_tzs | Hasara ya kifedha (TZS) | Yes (if applicable) | Material for regulatory escalation and compensation claims |
+| detailed_description | Maelezo ya kina | Yes | ISO 9001 §10.2; basis for investigation |
+| desired_outcome | Matokeo yanayotarajiwa | Yes | Enables assessment of remedy options (refund, correction, damages) |
+| previous_complaint_to_firm | Je, ulishawasiliana na kampuni? | Yes | Internal resolution requirement under ISO 9001 |
+| complainant_name | Jina la mlalamikaji | Yes | Required for all correspondence |
+| complainant_contact | Mawasiliano (simu/barua pepe) | Yes | Required for follow-up |
+| supporting_documents | Nyaraka za kuthibitisha | Optional | Engagement letter, deliverable, invoice, correspondence, TRA penalty notice |
 
-### Service Delivery Improvements
-- You should assign a dedicated engagement manager who stays on the account throughout
-- Consider providing weekly progress reports without clients having to chase
-- It would help if deliverables included an executive summary that a non-technical reader can follow
-- You should benchmark your recommendations against other East African markets, not just global ones
-- Offering a post-engagement review call 30 days after delivery would add real value
-- Your proposals should clearly state who exactly will work on the engagement — not just the partner name
-- Including a glossary of technical terms in reports would help boards without finance backgrounds
-- Your firm should develop templates specific to Tanzanian regulatory requirements
+### Conditional Fields (collect based on issue type)
 
-### Pricing & Commercial Terms
-- Offering a phased payment plan tied to milestones would make engagements more accessible to SMEs
-- You should provide a clearer scope definition to avoid scope creep disputes
-- A fixed-fee option for standard deliverables like business registration would simplify budgeting
-- Providing a rate card upfront before proposals are requested saves both parties time
-- Consider offering a retainer model with defined monthly deliverables rather than open-ended billing
+**If issue_type = Deliverable Quality / Negligence:**
+- deliverable_type → audit report / feasibility study / financial model / business plan / market research / HR policy / IT audit / valuation / tax computation / due diligence report / other
+- scope_agreed_reference → what was agreed in the engagement letter vs. what was delivered
+- error_type → factual error / formula error / outdated data / scope mismatch / copied/generic content / wrong methodology
+- consequence_of_error → TRA penalty / legal dispute / investor rejection / regulatory non-compliance / business loss / lender rejection
 
-### Consultant Capability & Development
-- Your consultants should spend time on-site with clients before writing recommendations
-- Pair senior consultants with junior staff on client-facing deliverables as a minimum standard
-- Sector-specific training for consultants working in mining or agriculture would improve relevance
-- Consider recruiting consultants with operational experience, not just academic backgrounds
-- Regular upskilling on TRA regulatory changes should be mandatory for your tax team
+**If issue_type = Billing / Fee Dispute:**
+- fee_agreement_type → fixed fee / time-and-materials / retainer / contingency / milestone-based
+- invoice_itemisation_provided → whether invoice included breakdown of work (Yes/No)
+- disputed_amount_tzs → specific amount disputed
+- additional_charges_pre-agreed → whether additional charges were agreed in advance (Yes/No)
+- payment_made_tzs → amount actually paid to date
 
-### Knowledge & Methodology
-- Your reports would be stronger with primary research, not just secondary data
-- Embedding Tanzanian case studies and examples would make recommendations more credible
-- Your financial models should include sensitivity analysis for currency and inflation volatility
-- Recommendations should always include an implementation plan, not just the strategy
-- Providing a risk register alongside recommendations would help clients plan better
+**If issue_type = Regulatory / Compliance Failure:**
+- regulation_affected → TRA / BRELA / NBAA / NEMC / OSHA / Companies Act / other
+- penalty_or_action_received → fine amount (TZS) / license suspension / legal action / other
+- advisor_position_taken → what the consultant advised vs. what the regulation actually requires
+- regulator_correspondence → whether complainant has received formal notice from regulator (Yes/No + attach)
 
-## Inquiry / Question Signals — Business Consultancy / Professional Services
+**If issue_type = Confidentiality Breach:**
+- information_type_disclosed → financial records / personnel data / strategic plans / client lists / trade secrets
+- disclosure_recipient → competitor / third party / public / unknown
+- evidence_of_breach → how the breach was discovered
+- harm_caused → reputational / financial / legal / competitive
 
-### Scope & Service Questions
-- What exactly is included in your audit service and what falls outside scope?
-- Can you handle both financial and operational due diligence for an acquisition?
-- Do you have consultants who specialize in the manufacturing sector?
-- What is the difference between an internal audit and a statutory audit in Tanzania?
-- Can your firm assist with BRELA business registration and TIN registration simultaneously?
-- Do you provide forensic accounting services or only statutory audit?
-- Can you help us with transfer pricing documentation for our parent company transactions?
-- What does your HR consulting engagement typically cover — is policy drafting included?
-- Can your IT consultants integrate our system with an existing SAP environment?
-- Do you handle NEMC environmental impact assessments or only business strategy?
+**If issue_type = Consultant Conduct:**
+- conduct_type → unavailability / misrepresentation of seniority / unprofessional behaviour / undisclosed conflict of interest / unauthorized commitment
+- billing_level_vs_delivery → whether partner rates were billed but junior staff delivered (Yes/No)
+- conflict_of_interest_disclosed → whether any conflict of interest was disclosed at engagement start (Yes/No)
 
-### Cost & Commercial Questions
-- What are your hourly rates for a senior consultant versus a junior associate?
-- How do you price a feasibility study — is it a fixed fee or time-and-materials?
-- What is the estimated cost for a full statutory audit of a company with TZS 2 billion turnover?
-- Do you offer discounts for NGOs or social enterprises?
-- Is VAT included in the quoted fee or added on top?
-- What is your payment policy — do you require a deposit before starting?
-- Can we negotiate a success fee arrangement for the fundraising advisory?
-- How do you handle cost overruns — do you absorb them or pass them to the client?
+**If issue_type = Technology / ERP Implementation:**
+- system_name → ERP system / software product name
+- go_live_status → Live / Not live / Partially live
+- budget_agreed_tzs → agreed implementation budget
+- budget_actual_tzs → actual spend to date
+- data_integrity_issue → whether data migration corrupted or lost records (Yes/No)
 
-### Credentials & Qualifications
-- Are your accountants NBAA certified and in good standing?
-- Which professional body are your legal advisors registered with?
-- Do you have ISO certification for your quality management processes?
-- Can you provide references from clients in the financial services sector?
-- Are your tax consultants authorized to represent clients before TRA?
-- Does your firm have experience with World Bank or AfDB procurement guidelines?
-- Is your audit firm registered with the National Board of Auditors and Accountants?
+### Issue Type Classification
 
-### Process & Timeline Questions
-- How long does a company valuation typically take for a manufacturing business?
-- What information do we need to provide for you to start the tax computation?
-- What is your standard turnaround time for a business registration at BRELA?
-- How many rounds of revisions are included in the agreed fee?
-- Will we meet the audit team before the fieldwork begins?
-- What happens if there is a disagreement on the audit findings?
-- How do you handle confidential information shared during an engagement?
-- What is your escalation path if we are unhappy with the work?
+| Code | Issue Type | Regulatory Body | Resolution Target |
+|------|-----------|----------------|-------------------|
+| CON-GR-01 | Deliverable Quality / Negligence | NBAA / TRA / ISO 9001 | 21 working days |
+| CON-GR-02 | Billing / Fee Dispute | Engagement contract / consumer law | 14 working days |
+| CON-GR-03 | Regulatory / Compliance Failure | TRA / BRELA / NBAA / NEMC | 14 working days + regulatory referral |
+| CON-GR-04 | Timeliness / Delay | ISO 9001 / engagement terms | 14 working days |
+| CON-GR-05 | Communication / Responsiveness | ISO 9001 / engagement terms | 7 working days |
+| CON-GR-06 | Confidentiality Breach | NBAA Code / data protection / legal | Immediate escalation |
+| CON-GR-07 | Consultant Conduct | NBAA disciplinary rules / firm HR | 21 working days |
+| CON-GR-08 | ERP / Technology Implementation | Contract / ISO 9001 | 21 working days |
+| CON-GR-09 | Financial Fraud / Misappropriation | Police / NBAA / courts | Immediate escalation |
 
-### Regulatory & Compliance Questions
-- What are the current TRA requirements for transfer pricing documentation?
-- Is our company required to have a statutory audit under Tanzanian law?
-- What is the penalty for late filing of tax returns in Tanzania?
-- Can you explain the difference between a TIN and a VAT registration number?
-- What corporate governance requirements apply to private limited companies in Tanzania?
-- Do we need to comply with OSHA requirements as a professional services firm?
+### Resolution Standards for This Industry
 
-## Compliment / Applause Signals — Business Consultancy / Professional Services
+- **NBAA**: Complaints against NBAA-registered accountants and auditors are investigated by NBAA's Disciplinary Committee. If a certified accountant is found to have acted in breach of professional standards, sanctions include reprimand, fine, suspension, or deregistration.
+- **TRA**: If a tax advisor's error caused a penalty, the firm may be liable for the penalty under the engagement agreement. TRA investigations are independent — the complainant should engage TRA directly for penalty waiver applications.
+- **ISO 9001 §10.2**: Firms certified under ISO 9001 must document complaints, investigate root cause, implement corrective action, and communicate outcome in writing within their published resolution timeframe.
+- **Engagement Letter**: Most disputes are governed first by the terms of the engagement letter — scope, fee, liability cap, and dispute resolution clause. Collect this document early.
+- **BRELA**: If business registration errors caused legal or commercial harm, BRELA has a complaint mechanism for licensed registration agents.
 
-### Deliverable Quality
-- The strategic plan your team delivered was the most thorough document our board has ever reviewed
-- Your financial model was so well structured that our investors accepted it without revision
-- The due diligence report you prepared surfaced issues that saved us from a very costly acquisition
-- Your audit was clean, well-documented, and our lenders were impressed with the quality
-- The market research report had exactly the depth and local context we needed — outstanding work
-- Your business registration team had our TIN and BRELA certificate ready in record time
-- The HR policy manual you developed is now our gold standard across all departments
-- The tax advisory your team provided saved us a significant sum in penalties and restructuring costs
+### Escalation Triggers (field values that require immediate escalation)
 
-### Consultant Performance
-- The lead consultant on our project was exceptional — knowledgeable, proactive, and always available
-- Your senior partner personally guided us through the TRA audit and the outcome was far better than expected
-- The engagement manager kept us informed at every step without us having to ask once
-- Your IT consultant resolved an ERP configuration issue that three other firms had failed to fix
-- The consultant assigned to us became like a trusted member of our executive team
-- Your team treated our staff with respect and professionalism throughout the engagement
+- `issue_type = CON-GR-06` (Confidentiality Breach) → immediate notification to firm's Data Protection Officer; flag for legal review within 24 hours
+- `issue_type = CON-GR-09` (Financial Fraud / Misappropriation of client funds) → refer to Police and NBAA within 24 hours; advise complainant to freeze any ongoing payments
+- `issue_type = CON-GR-03` AND `regulation_affected = TRA` AND `penalty_amount > TZS 100,000,000` → urgent escalation; recommend specialist tax litigation advisor
+- Audit report signed off with falsified findings → immediate referral to NBAA Disciplinary Committee
+- Consultant bribed a government official on behalf of client → refer to PCCB (Prevention and Combating of Corruption Bureau) immediately
+- Due diligence failure resulted in client acquiring an entity with undisclosed liabilities now in litigation → flag for legal review
+- Misrepresentation in investment memo causing investor losses → flag for securities fraud review
 
-### Process & Experience
-- The engagement kickoff was so well organized — it gave us full confidence from day one
-- You delivered three weeks ahead of the agreed timeline and the quality was still excellent
-- The confidentiality of our sensitive information was handled with absolute professionalism
-- Every invoice was itemized and transparent — refreshing in this industry
-- Your team proactively flagged a compliance risk before we even asked — that is the kind of advisor we need
-- The post-engagement support you provided when we had implementation questions was above and beyond
-- Working with your firm has genuinely changed how we approach strategic planning
+---
+
+## SUGGESTION / IMPROVEMENT — Fields
+
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| firm_organisation_name | Jina la kampuni ya ushauri | Yes | ISO 9001 §10.3 — improvement tied to responsible firm |
+| engagement_type | Aina ya huduma | Yes | Improvement must be linked to a specific service area |
+| suggestion_category | Aina ya pendekezo | Yes | ISO 9001 §10.3 continual improvement classification |
+| suggestion_detail | Maelezo ya pendekezo | Yes | Full description of improvement idea |
+| commercial_impact | Athari ya kibiashara | Optional | Helps firm prioritise improvements with client impact evidence |
+
+### Industry-Specific Improvement Categories
+
+| Category Code | Category Name | Swahili |
+|--------------|---------------|---------|
+| CON-SG-01 | Deliverable Quality / Depth | Ubora wa kazi inayotolewa |
+| CON-SG-02 | Client Communication / Transparency | Mawasiliano na mteja |
+| CON-SG-03 | Fee Transparency / Billing Clarity | Uwazi wa ada na ankara |
+| CON-SG-04 | Timeline / Project Management | Usimamizi wa muda wa mradi |
+| CON-SG-05 | Tanzanian / East African Context | Uhalisi wa Tanzania/Afrika Mashariki |
+| CON-SG-06 | Consultant Expertise / Sector Knowledge | Uzoefu wa sekta ya mshauri |
+| CON-SG-07 | Regulatory Alignment (TRA/BRELA/NEMC) | Ufuatao wa sheria za Tanzania |
+| CON-SG-08 | Technology / Data Systems | Mifumo ya teknolojia |
+| CON-SG-09 | SME Accessibility / Pricing | Upatikanaji kwa biashara ndogo |
+| CON-SG-10 | Post-Engagement Support | Msaada baada ya kazi kukamilika |
+
+---
+
+## INQUIRY / QUESTION — Fields
+
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| firm_name | Jina la kampuni ya ushauri | Yes | Routes inquiry to correct firm or body |
+| inquiry_type | Aina ya swali | Yes | Determines information source and expected expertise |
+| full_name | Jina kamili | Yes | Required for personalised response |
+| contact_details | Mawasiliano | Yes | Required for follow-up |
+| specific_question | Swali maalum | Yes | ISO 9001 §7.4 — full question text required |
+
+### Common Inquiry Types & Required Data Per Type
+
+| Inquiry Type | Additional Fields Needed |
+|-------------|-------------------------|
+| Scope of specific service | engagement_type, company_size, industry_sector |
+| Cost / Fee estimate | service_type, scope_description, company_turnover (if audit) |
+| Consultant credentials / NBAA registration | consultant_name, service_type |
+| TRA requirements / compliance | specific_tax_issue, company_type, transaction_type |
+| BRELA registration process | entity_type, business_activity, ownership_structure |
+| NEMC / Environmental Assessment | project_type, project_location, project_scale |
+| Audit requirement (statutory vs. internal) | company_type, ownership, turnover_range |
+| Transfer pricing documentation | parent_company_country, transaction_types, annual_value |
+| ERP / IT implementation scope | current_system, target_system, staff_count, industry |
+
+---
+
+## APPLAUSE / COMPLIMENT — Fields
+
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| firm_organisation_name | Jina la kampuni ya ushauri | Yes | ISO 9001 §9.1.2 — satisfaction monitoring must be firm-linked |
+| engagement_type | Aina ya huduma | Yes | Positive feedback must be tied to a specific service for staff recognition |
+| subject_of_praise | Kinachosifiwa | Yes | Enables firm to recognise and replicate excellent practice |
+| named_consultant | Jina la mshauri (kama ipo) | Optional | Individual recognition; encourages excellence |
+| description | Maelezo ya uzoefu mzuri | Yes | ISO 9001 §9.1.2 — client satisfaction data |
+| business_outcome_achieved | Matokeo ya biashara yaliyofikiwa | Optional | Strengthens understanding of real-world impact |
+
+### Praise Subject Categories
+
+| Code | Subject | Swahili |
+|------|---------|---------|
+| CON-AP-01 | Deliverable Quality | Ubora wa kazi iliyotolewa |
+| CON-AP-02 | Consultant Expertise / Knowledge | Uzoefu na ujuzi wa mshauri |
+| CON-AP-03 | Communication / Responsiveness | Mawasiliano na ujibu wa haraka |
+| CON-AP-04 | Timeliness / Delivery Speed | Kufanya kazi kwa wakati |
+| CON-AP-05 | Integrity / Ethical Conduct | Uadilifu na maadili |
+| CON-AP-06 | Regulatory Navigation (TRA/BRELA) | Usimamizi wa masuala ya kisheria/kanuni |
+| CON-AP-07 | Value for Money | Thamani ya pesa iliyolipwa |
+
+---
+
+## AI Conversation Guidance for This Industry
+
+- **Start with the engagement type and deliverable, not the problem narrative**: Ask "Ni aina gani ya huduma ya ushauri ulipata — ukaguzi, ushauri wa kodi, ushauri wa biashara, au kitu kingine?" and "Ni kazi gani mahsusi iliyosababisha tatizo hili — ripoti, hesabu, uwakilishi mbele ya TRA, au nyingine?" This narrows the routing decision before any detailed story is collected.
+- **Distinguish financial harm amount from disputed fee early**: These are different fields — `financial_loss_caused_tzs` (harm caused by bad advice, e.g., TRA penalty) and `fee_invoiced_tzs` (overbilling dispute). Ask both but separately: "Je, ulipata hasara yoyote ya kifedha kama faini au kupoteza mkataba kwa sababu ya ushauri mbaya?" and separately "Je, kuna tatizo pia na ankara au ada iliyotozwa?"
+- **For regulatory failures, ask which body issued the penalty or rejected the filing** — this is more informative than asking "what went wrong." The complainant often does not know the professional standard was breached, but they know "TRA walikataa" or "BRELA ilirudisha nyaraka zetu."
+- **For conduct complaints about seniority misrepresentation**, ask: "Katika mkataba au mazungumzo ya awali, walitaja majina ya washauri watakaofanya kazi kwenye mradi huu?" — this establishes whether there was a representation about staffing that was subsequently breached.
+- **Do not ask for the engagement letter as the first question** — many SME clients never received a written engagement letter, and asking for it early can make them feel their complaint is invalid. Establish the facts of what was agreed verbally first, then ask about written documentation.
+
+## Swahili Key Phrases for Field Collection
+
+| Field Being Collected | Swahili Phrase to Use |
+|----------------------|----------------------|
+| firm_organisation_name | "Ni kampuni gani ya ushauri unaozungumzia?" |
+| engagement_type | "Walikusaidia na aina gani ya kazi — ukaguzi, kodi, usajili, ERP, au nyingine?" |
+| specific_deliverable_affected | "Ni ripoti au kazi gani mahsusi ambayo haikuwa ya kiwango?" |
+| financial_loss_caused_tzs | "Je, tatizo hili lilisababisha hasara ya kifedha? Ni kiasi gani?" |
+| fee_agreed_tzs | "Ada iliyokubaliwa mwanzoni ilikuwa ngapi?" |
+| fee_invoiced_tzs | "Walitoza kiasi gani kwenye ankara yao ya mwisho?" |
+| desired_outcome | "Unataka nini kifanyike — kurejesha pesa, kusahihisha makosa, au kitu kingine?" |
+| previous_complaint_to_firm | "Je, umeshazungumza na kampuni hiyo kuhusu tatizo hili? Walisema nini?" |
+| regulation_affected | "Je, mlikuwa na tatizo na TRA, BRELA, au shirika lingine la serikali kwa sababu ya ushauri huu?" |
+
+## Action Recommendations Based on Field Values
+
+| Field | Value | Recommended Action |
+|-------|-------|--------------------|
+| issue_type | CON-GR-06 (Confidentiality Breach) | Immediate escalation to human reviewer; advise complainant to seek legal counsel |
+| issue_type | CON-GR-09 (Financial Fraud) | Refer to Police and NBAA within 24 hours; advise complainant to stop further payments |
+| financial_loss_caused_tzs | > TZS 100,000,000 | Flag for urgent senior review; recommend legal representation |
+| regulation_affected | TRA AND penalty_received = Yes | Advise complainant to file penalty waiver with TRA; recommend specialist tax advisor |
+| lead_consultant_nbaa_registered | Yes | Route conduct complaint to NBAA Disciplinary Committee; provide NBAA contact |
+| lead_consultant_nbaa_registered | No / Unknown | Advise complainant to check NBAA register; if unregistered, flag as potential fraud |
+| invoice_itemisation_provided | No | Flag as potential billing malpractice; advise complainant to request full itemised invoice |
+| conflict_of_interest_disclosed | No | Flag as breach of NBAA Code / IBA Principles; escalate if material harm caused |
+| issue_type | CON-GR-03 AND regulation_affected = NEMC | Refer to NEMC for investigation; advise on EIA requirements |
+| data_integrity_issue | Yes (ERP migration) | Flag as urgent; advise immediate system freeze and data recovery assessment |
+
+---
 
 ## Key Entities & Roles
 
-**Job Titles**: Managing Partner, Senior Partner, Engagement Manager, Senior Consultant, Associate Consultant, Tax Manager, Audit Manager, Senior Associate, IT Consultant, HR Consultant, Research Analyst, Legal Advisor, CFO Advisory Specialist, Due Diligence Analyst
-**Regulatory Bodies**: TRA (Tanzania Revenue Authority), NBAA (National Board of Accountants and Auditors), BRELA (Business Registrations and Licensing Agency), NEMC (National Environment Management Council), OSHA (Occupational Safety and Health Authority), CAG (Controller and Auditor General)
-**Documents & Deliverables**: Engagement Letter, Management Letter, Audit Report, Feasibility Study, Business Plan, Financial Model, Due Diligence Report, Tax Computation, Transfer Pricing Documentation, Board Paper, Strategic Roadmap, HR Policy Manual, IT Audit Report, Business Valuation Report
-**Processes**: Statutory Audit, Internal Audit, Tax Compliance, Business Registration, Due Diligence, ERP Implementation, Business Process Re-engineering, Corporate Governance Review, Environmental Impact Assessment, Market Research
-**Certifications**: NBAA CPA, CFA, ACCA, CIMA, CISA, ISO 9001, World Bank Procurement Certification
-**Regulations**: Income Tax Act (Tanzania), Companies Act, VAT Act, Transfer Pricing Guidelines (TRA), BRELA Business Names Registration Act
+**Regulatory Bodies:** TRA (Tanzania Revenue Authority), NBAA (National Board of Accountants and Auditors), BRELA (Business Registrations and Licensing Agency), NEMC (National Environment Management Council), OSHA Tanzania, CAG (Controller and Auditor General), PCCB (Prevention and Combating of Corruption Bureau)
+**Job Titles:** Managing Partner, Senior Partner, Engagement Manager, Senior Consultant, Associate Consultant, Tax Manager, Audit Manager, IT Consultant, HR Consultant, Research Analyst, Legal Advisor, CFO Advisory Specialist, Due Diligence Analyst
+**Documents & Deliverables:** Engagement Letter, Management Letter, Audit Report, Feasibility Study, Business Plan, Financial Model, Due Diligence Report, Tax Computation, Transfer Pricing Documentation, Board Paper, Strategic Roadmap, HR Policy Manual, IT Audit Report, Business Valuation Report, EIA Report
+**Certifications:** NBAA CPA, CFA, ACCA, CIMA, CISA, ISO 9001
+
+---
 
 ## Kiswahili / Swahili Equivalents
 
 ### Malalamiko (Complaints)
-- Ripoti mliyotuletea haikuwa na ubora wa kutosha
-- Mshauri wenu hakuwa na uzoefu wa kutosha katika sekta yetu
-- Tulisubiri wiki tatu kupata ripoti iliyochelewa bila sababu
-- Ankara yenu haikuonyesha kazi zilizofanywa kwa undani
-- Mshauri aliahidi lakini hakutimiza wajibu wake
-- Kazi hiyo haikufanywa vizuri na TRA wanatutoza faini sasa
-- Tuliombwa kulipa zaidi ya bei iliyokubaliwa kwenye mkataba
-- Ripoti ya ukaguzi ilikuwa na makosa mengi ya kihesabu
-- Hatukupewa taarifa kuhusu ucheleweshaji wa mradi
-- Mshauri wenu alishiriki taarifa zetu za siri na watu wengine
+- "Ripoti mliyotuletea haikuwa na ubora wa kutosha"
+- "Mshauri wenu hakuwa na uzoefu wa kutosha katika sekta yetu"
+- "Tulisubiri wiki tatu kupata ripoti iliyochelewa bila sababu"
+- "Ankara yenu haikuonyesha kazi zilizofanywa kwa undani"
+- "Kazi hiyo haikufanywa vizuri na TRA wanatutoza faini sasa"
+- "Tuliombwa kulipa zaidi ya bei iliyokubaliwa kwenye mkataba"
+- "Mshauri wenu alishiriki taarifa zetu za siri na watu wengine"
 
 ### Mapendekezo (Suggestions)
-- Ingekuwa vizuri kupewa ripoti ya maendeleo kila wiki
-- Mnapaswa kutupatia mshauri mwenye uzoefu katika sekta ya Tanzania
-- Pendekeza bei za uwazi zaidi kabla ya kuanza kazi
-- Mnapaswa kuwa na mwongozo maalum wa mahitaji ya TRA
-- Ingekuwa bora kusoma mazingira ya Tanzania kabla ya kutoa ushauri
+- "Ingekuwa vizuri kupewa ripoti ya maendeleo kila wiki"
+- "Mnapaswa kutupatia mshauri mwenye uzoefu katika sekta ya Tanzania"
+- "Pendekeza bei za uwazi zaidi kabla ya kuanza kazi"
+- "Ingekuwa bora kusoma mazingira ya Tanzania kabla ya kutoa ushauri"
 
 ### Maswali (Inquiries)
-- Je, mshauri wenu ana usajili wa NBAA?
-- Gharama za ukaguzi wa kisheria ni ngapi kwa kampuni ndogo?
-- Je, mnaweza kusaidia na usajili wa BRELA na TIN pamoja?
-- Ukaguzi wa kisheria huchukua muda gani kukamilika?
-- Je, mnaweza kutuwakilisha mbele ya TRA?
+- "Je, mshauri wenu ana usajili wa NBAA?"
+- "Gharama za ukaguzi wa kisheria ni ngapi kwa kampuni ndogo?"
+- "Je, mnaweza kusaidia na usajili wa BRELA na TIN pamoja?"
+- "Je, mnaweza kutuwakilisha mbele ya TRA?"
 
-### Sifa (Compliments)
-- Mshauri wenu alifanya kazi bora sana — asante sana
-- Ripoti ya mkakati ilikuwa kamili na ya kina sana
-- Timu yenu ilifanya kazi kwa weledi na uaminifu mkubwa
-- Tunaishukuru sana kampuni yenu kwa ushauri mzuri uliotusaidia
-- Kazi mliyofanya imetusaidia kuepuka matatizo makubwa ya TRA
+### Pongezi (Compliments)
+- "Mshauri wenu alifanya kazi bora sana — asante sana"
+- "Ripoti ya mkakati ilikuwa kamili na ya kina sana"
+- "Timu yenu ilifanya kazi kwa weledi na uaminifu mkubwa"
+- "Kazi mliyofanya imetusaidia kuepuka matatizo makubwa ya TRA"
+
+---
 
 ## Industry-Specific Escalation Triggers
 
-1. Consultant shared confidential client financial data with a third party — privacy breach requiring immediate investigation
-2. Audit report was signed off with falsified or misrepresented findings — regulatory and criminal liability
-3. Tax advice caused a TRA penalty assessment exceeding TZS 100 million — urgent remediation required
+1. Consultant shared confidential client financial data with a third party — immediate investigation required
+2. Audit report signed off with falsified or misrepresented findings — refer to NBAA Disciplinary Committee
+3. Tax advice caused TRA penalty assessment exceeding TZS 100 million — urgent remediation
 4. Due diligence failure resulted in client acquiring a company with undisclosed liabilities now in litigation
 5. NBAA-certified accountant signed a report they did not prepare — professional ethics violation
-6. Client funds held in escrow by the firm are unaccounted for — potential financial fraud
-7. Consultant bribed a government official on behalf of the client — legal and reputational crisis
-8. A data breach exposed sensitive client financial records — requires immediate containment and notification
-9. Misrepresentation in an investment memo has caused investors to lose funds — securities fraud risk
-10. Regulatory filing (tax return, audit, annual return) was missed and client faces legal action
-11. Consultant made unauthorized commitments on behalf of the client in negotiations
-12. Conflict of interest: firm is advising both parties in an acquisition without disclosure
+6. Client funds held in escrow by the firm are unaccounted for — potential financial fraud; refer to Police
+7. Consultant bribed a government official on behalf of the client — refer to PCCB immediately
+8. Data breach exposed sensitive client financial or personnel records
+9. Misrepresentation in investment memo has caused investors to lose funds — securities fraud risk
+10. Regulatory filing missed and client faces legal action due to advisor's failure
+11. Consultant made unauthorized commitments on behalf of client in negotiations
+12. Conflict of interest: firm advising both parties in a transaction without disclosure
+
+---
 
 ## Disambiguation Notes
 
-- **Consultancy vs. Financial Services**: Both involve financial advice, but consultancy feedback focuses on deliverables, reports, and advisory quality rather than investment returns or loan products. Look for terms like "engagement," "scope," "deliverable," "strategy" to confirm consultancy context.
-- **Consultancy vs. Training**: Training feedback focuses on learning outcomes, trainers, curricula, and certifications. If feedback mentions "course," "facilitator," "exam," or "certificate," classify as Training, not Consultancy.
-- **Consultancy vs. Legal Services**: Legal advisor feedback may come through a consultancy firm — escalate signals around court cases, contracts, and litigation to the legal/compliance dimension rather than general service quality.
-- **Tax Consulting vs. General Accounting**: Tax-specific complaints reference TRA, VAT returns, transfer pricing, and penalties. General accounting complaints reference balance sheets, reconciliations, and financial reporting. Both fall under this industry but may require different routing.
-- **IT Consulting vs. Technology/SaaS**: IT consulting feedback is about advisory, implementation projects, and ERP systems delivered by consultants. Technology product feedback is about a software product a company uses directly. Distinguish by whether a "consultant" or "firm" is mentioned.
+- **Consultancy vs. Financial Services**: Both involve financial advice, but consultancy focuses on deliverables, reports, and advisory quality rather than investment returns or loan products. "Engagement," "scope," "deliverable," "strategy" → Consultancy.
+- **Consultancy vs. Training**: Training feedback focuses on learning outcomes, trainers, curricula. "Course," "facilitator," "exam," "certificate" → Training, not Consultancy.
+- **Consultancy vs. Legal Services**: Legal advisor feedback may come through a consultancy firm — escalate signals around court cases, contracts, and litigation to Legal Services.
+- **Tax Consulting vs. General Accounting**: Tax-specific complaints reference TRA, VAT returns, transfer pricing, penalties. General accounting complaints reference balance sheets, reconciliations. Both fall under this industry but require different routing.
+- **IT Consulting vs. Technology/SaaS**: IT consulting feedback is about advisory and ERP implementation by consultants. Technology product feedback is about software the company uses directly. Distinguish by whether a "consultant" or "firm" is mentioned versus a "platform" or "system."
+- **Company Secretarial vs. Legal Services**: Company registration and secretarial services belong here when provided by a non-legal business advisory firm; classify under Legal Services only when provided by an advocate or law firm.

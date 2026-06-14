@@ -1,299 +1,337 @@
 ---
-tags: [industry-kb, feedback-classification]
+tags: [industry-kb, feedback-classification, field-standards]
 ---
-# Legal Services / Law Firms — Industry-Specific Feedback Classification Knowledge Base
+# Legal Services / Law Firms — Feedback Collection Fields & Standards
 
 ## Industry Identifiers
 
-advocate, attorney, lawyer, law firm, legal aid, legal counsel, court, magistrate, High Court, Court of Appeal, land court, small claims court, mediator, arbitrator, notary, commissioner for oaths, company secretary, Tanganyika Law Society (TLS), Judiciary of Tanzania, power of attorney, affidavit, petition, pleading, case file, retainer, legal opinion, conveyancing, title deed, succession, probate, ADR, Zanzibar legal system, Kadhi court, Industrial Court
+advocate, attorney, lawyer, law firm, legal aid, legal counsel, court, magistrate, High Court, Court of Appeal, land court, small claims court, mediator, arbitrator, notary, commissioner for oaths, company secretary, Tanganyika Law Society (TLS), Judiciary of Tanzania, power of attorney, affidavit, petition, pleading, case file, retainer, legal opinion, conveyancing, title deed, succession, probate, ADR, Zanzibar legal system, Kadhi court, Industrial Court, TLS Ethics Committee, SRA, IBA, legal negligence, missed court deadline, overcharging, conflict of interest, breach of confidentiality, abandonment of case, criminal matter, civil litigation, family law, matrimonial, property transfer, immigration, employment law, legal aid bureau, paralegal
+
+## Why Industry-Specific Fields Matter
+
+Legal service complaints require capture of the lawyer's bar membership, matter type, and court references because the jurisdiction for discipline (Tanganyika Law Society Ethics Committee), service quality (Legal Ombudsman equivalent), and financial recovery depends entirely on these details. A fee dispute and a professional negligence claim that caused a court loss require different regulatory pathways, different evidence, and different timelines — and they cannot be distinguished without the engagement details, matter type, and documented financial loss amount collected at intake.
+
+## Source Standards
+
+- SRA (Solicitors Regulation Authority, UK) — Report a Solicitor form; complaint guidance (required fields confirmed)
+- IBA (International Bar Association) — Guide for Establishing and Maintaining Complaints and Discipline Procedures (2007); International Principles on Conduct for the Legal Profession (2011)
+- TLS (Tanganyika Law Society) — Ethics Committee Rules of Proceedings (2023); Tanganyika Law Society Act CAP.307 R.E. 2020
+- Legal Ombudsman (UK) — Complaint process for service quality issues (parallel model)
+- ISO 9001:2015 / ISO 13485 — Quality management complaint fields applied by analogy
 
 ---
 
-## Complaint / Grievance Signals — Legal Services / Law Firms
+## GRIEVANCE / COMPLAINT — Required & Recommended Fields
 
-### Negligence & Professional Misconduct
-- My lawyer missed the court hearing date and my case was dismissed without my knowledge
-- The advocate took my money and has not done any work on my case for six months
-- My attorney gave me wrong legal advice that caused me to lose my case
-- The lawyer failed to file my appeal within the statutory limitation period
-- I discovered my advocate was representing the opposing party at the same time — conflict of interest
-- My case file has been lost at the law firm and nobody is taking responsibility
-- The lawyer signed documents on my behalf without my authority or knowledge
-- My advocate withdrew from my case without notice and I was not informed before the hearing
-- The firm agreed to handle my case but reassigned it to an unqualified clerk
-- My advocate failed to disclose a settlement offer from the other side — I only found out later
-- The legal opinion I paid for contained factual errors that caused a major business loss
-- My land title transfer was handled negligently and the buyer is now suing me
-- The advocate promised to get an injunction but did not apply — now the property is sold
-- My advocate did not challenge inadmissible evidence and I believe it cost me the case
+### Core Fields (collect for ALL complaints in this industry)
 
-### Billing & Fee Disputes
-- The law firm charged me TZS 5,000,000 but I agreed on TZS 1,500,000 — no written fee agreement
-- I was billed for court appearances that never happened
-- The firm is holding my documents hostage until I pay additional fees not in the original agreement
-- My retainer was depleted without any work being done — no statement of account provided
-- The advocate charged me for disbursements but cannot provide receipts
-- Final bill was sent without any itemization of work done
-- I paid a contingency fee arrangement and they took 40% even though we settled very early
-- The firm raised fees midway through a case without prior notice or my agreement
-- I requested a refund after the lawyer was unable to represent me — it has been refused
-- A fee quote of TZS 800,000 was given verbally but the invoice was for TZS 3,200,000
-- The advocate charged stamp duty but did not account for the actual tax paid
+| Field | Swahili Label | Required? | Why It Enables Better Action |
+|-------|--------------|-----------|------------------------------|
+| law_firm_name | Jina la kampuni ya kisheria | Yes | SRA form — "solicitor's or firm's name" (explicitly required); routes to TLS or firm |
+| law_firm_address | Anwani ya ofisi ya kampuni | Yes | SRA form — work address required; aids TLS verification |
+| lawyer_name | Jina la wakili/mwanasheria | Yes | SRA form; IBA Guide §3 — respondent identification is mandatory |
+| bar_membership_number | Nambari ya usajili wa TLS | Optional | TLS Ethics Rules 2023; aids verification of current good standing |
+| matter_type | Aina ya kesi/jambo | Yes | IBA Guide 2007; SRA — context determines applicable professional standards |
+| case_matter_reference | Nambari ya kesi au faili | Optional | SRA "case reference number"; IBA Guide §3 — aids record retrieval |
+| engagement_start_date | Tarehe ya kuanza kushirikiana | Yes | SRA form — "date(s) when the event(s) took place" is required |
+| issue_type | Aina ya tatizo | Yes | SRA; IBA Guide §2; TLS Ethics Rules 2023 — classification determines TLS vs. courts vs. internal |
+| financial_loss_caused_tzs | Hasara ya kifedha (TZS) | Yes (if applicable) | SRA; Legal Ombudsman — "evidence of financial loss" required for compensation claims |
+| detailed_description | Maelezo ya kina ya matukio | Yes | SRA form — "detailed description" (required); IBA Guide §3 |
+| desired_outcome | Matokeo yanayotarajiwa | Yes | IBA Guide §5 — remedies include apology, compensation, fee reduction |
+| complaint_to_regulatory_body_made | Je, umekwisha lalamika kwa chombo cha udhibiti? | Yes | TLS Ethics Rules 2023; SRA — routing decision for parallel complaints |
+| complainant_name | Jina la mlalamikaji | Yes | SRA form — Name (required) |
+| complainant_address | Anwani ya mlalamikaji | Yes | SRA form — Address (required) |
+| complainant_phone | Simu ya mlalamikaji | Yes | SRA form — Telephone (required) |
+| complainant_email | Barua pepe ya mlalamikaji | Yes | SRA form — Email (required) |
+| supporting_documents | Nyaraka za kuthibitisha | Optional (but strongly advised) | SRA — "copies of letters, emails, statements, or court materials" explicitly listed |
 
-### Communication & Responsiveness
-- My lawyer never returns my calls or replies to my messages for weeks at a time
-- I have not received any update on my case in four months
-- The law firm did not inform me that my case had been adjourned — I made a wasted trip to court
-- I asked for a copy of my case file and it has been three weeks with no response
-- Nobody at the firm knows the status of my case when I call — the partner is always unavailable
-- I sent an urgent email about a court order with a two-day deadline and received no reply
-- I was told my case was progressing well but I discovered the file has been inactive for months
-- The firm's receptionist takes messages that are never passed to the assigned advocate
+### Conditional Fields (collect based on issue type)
 
-### Court Services & Judiciary Complaints
-- My case has been adjourned 12 times over two years and no judgment has been delivered
-- Court registry staff are demanding informal payments to process urgent applications
-- My file was lost at the High Court registry — I have been given no explanation
-- The court clerk told me my case is not listed on the cause list even though I paid all fees
-- Execution of judgment has stalled — the bailiff has not visited the debtor despite repeated requests
-- I cannot get a certified copy of my court judgment despite multiple requests and payments
-- The court typist made errors in the typed judgment that changed the meaning
-- Summons were served on the wrong address and my case was decided in my absence
-- The probate registry in Dodoma has had my file for eight months without processing
-- Land court ruling was issued without including my submission as an interested party
-- The small claims court refused to accept my claim without justification
-- Court fee receipts do not match the published fee schedule — possible irregular collection
+**If issue_type = Professional Negligence:**
+- negligence_type → missed court deadline / wrong legal advice / failure to file / failure to challenge evidence / failure to disclose settlement offer / unauthorized action
+- court_name → court where the matter was pending
+- court_file_number → court file or cause number
+- relevant_court_dates → key dates (filing deadline, hearing date, appeal window)
+- consequence_of_negligence → case dismissed / appeal missed / case lost / financial loss / property loss
 
-### Land & Property Legal Disputes
-- The advocate who handled my land sale did not conduct a title search — land has two owners
-- My land title deed has not been registered despite completion of the transfer process
-- The advocate promised to process my right of occupancy but disappeared after taking fees
-- Subdivision of family land was done without all beneficiaries' consent — advocate did not advise us properly
-- A forged power of attorney was used to sell my land — the advocate did not verify identity
-- The conveyancing took 18 months — the buyer cancelled — advocate is blaming MLHHSD
-- I paid stamp duty through the advocate but MLHHSD says it was never received
+**If issue_type = Fee Dispute / Overcharging:**
+- fee_agreed_tzs → amount agreed at engagement start
+- fee_invoiced_tzs → amount actually billed
+- fee_agreement_type → written retainer / verbal agreement / court-fixed scale fee
+- fee_agreement_documented → whether fee agreement was in writing (Yes/No)
+- disputed_charges → specific charges disputed (appearance fees / disbursements / stamp duty / additional hours)
+- itemised_bill_provided → whether a detailed bill was provided (Yes/No)
+- documents_withheld_for_fees → whether lawyer is withholding documents pending payment (Yes/No)
 
-### Legal Aid & Access to Justice
-- The legal aid clinic said they would take my case but never followed up
-- I was told I do not qualify for legal aid but not given any reasons or alternatives
-- The court-appointed advocate appeared unprepared and did not present my evidence correctly
-- Legal aid cases seem to be treated as lower priority — my case has had no movement
-- Pro bono representation promised by the law firm was withdrawn without notice
-- The referral from TLS Legal Aid to a private firm resulted in unexpected charges
+**If issue_type = Conflict of Interest:**
+- conflict_type → representing opposing party simultaneously / acting for related party without disclosure / personal interest in matter outcome
+- conflict_disclosed_at_start → whether any conflict was disclosed at engagement start (Yes/No)
+- discovery_of_conflict → how complainant discovered the conflict
 
-### ADR & Alternative Dispute Resolution
-- The mediator was clearly biased toward the other party during our commercial dispute mediation
-- The arbitration award is not being enforced even though it has been registered with the court
-- I agreed to mediation to avoid court, but the firm pushed us into full litigation unnecessarily
-- The Zanzibar Kadhi court order I obtained is not being recognized in Dar es Salaam
-- ADR proceedings were conducted without my full understanding of the process — nobody explained my rights
+**If issue_type = Breach of Confidentiality:**
+- information_disclosed → what confidential information was shared
+- disclosed_to → opposing party / court / third party / public / unknown
+- harm_caused → case prejudiced / financial loss / reputational damage
 
----
+**If issue_type = Abandoned Case / Withdrawal Without Notice:**
+- withdrawal_notice_given → Yes/No
+- withdrawal_notice_date → date notice was given (if any)
+- new_hearing_date → any hearing date that is now at risk
+- alternative_representation_secured → whether complainant has found a new lawyer (Yes/No)
+- urgency_level → imminent hearing date (Yes/No + date)
 
-## Suggestion / Advice Signals — Legal Services / Law Firms
+**If issue_type = Land / Property / Conveyancing:**
+- property_description → plot number, area, location
+- title_deed_status → registered / unregistered / disputed / two owners
+- mlhhsd_reference → Ministry of Lands reference if applicable
+- stamp_duty_paid → Yes/No
+- stamp_duty_receipt → whether receipt was provided by advocate (Yes/No)
+- subdivision_consent_obtained → whether all beneficiaries consented to subdivision (Yes/No)
 
-### Service Delivery Improvements
-- Law firms should be required to provide written fee agreements before taking any money
-- There should be a client portal where I can track my case progress in real time
-- Advocates should be required to send monthly status updates on pending cases
-- Law firms should appoint a dedicated client liaison so clients always have one contact person
-- Digital case management systems should be implemented so files cannot be lost
-- A standard retainer agreement template should be mandated by TLS to protect clients
-- The firm should offer payment plans for legal services to make them more accessible
+**If issue_type = Dishonesty / Fraud / Misappropriation:**
+- funds_misappropriated_tzs → amount misappropriated from client funds or trust account
+- funds_source → client funds given for court fees / stamp duty / settlement / other
+- evidence_of_fraud → receipts, bank statements, correspondence
+- police_report_filed → Yes/No + OB number if filed
 
-### Court & Judiciary Suggestions
-- The Judiciary should digitize court cause lists so litigants can check online
-- An electronic filing system should reduce the need for multiple office visits
-- Introduce a performance management system for judges to reduce case backlog
-- Court interpreters should be available in all magistrate courts for minority language speakers
-- Mobile court sessions should be held in rural districts where access to courts is difficult
-- Court fees should be payable via mobile money to eliminate the need to handle cash
-- Small claims court should have a fast-track 30-day resolution process
+**If issue_type = Communication Failure:**
+- last_contact_date → date of last meaningful communication from lawyer
+- contact_attempts_made → number of times complainant tried to reach lawyer
+- updates_expected → what communication was promised and not delivered
 
-### Legal Aid & Access Suggestions
-- Government should increase funding to legal aid bureaus to serve more low-income clients
-- TLS should maintain a public register of lawyers who are currently under suspension
-- Law school clinics should partner with courts to offer free services on specific case types
-- Digital legal aid should be introduced — simple legal questions answered via SMS or app
-- Community paralegals should be trained and certified to handle routine matters at ward level
+### Issue Type Classification
 
-### ADR Suggestions
-- Mediation should be mandatory before litigation in commercial disputes above TZS 50 million
-- The cost of arbitration should be capped relative to dispute value for SME protection
-- Community mediation centers should be established in every ward in Tanzania
-- Arbitration awards should be automatically registered and enforceable without a separate court application
-- Kadhi court jurisdiction should be expanded and recognized nationwide for Muslim personal law matters
+| Code | Issue Type | Regulatory Body | Resolution Target |
+|------|-----------|----------------|-------------------|
+| LEG-GR-01 | Professional Negligence | TLS Ethics Committee; courts | 30 working days |
+| LEG-GR-02 | Missed Court Deadline | TLS Ethics Committee | 21 working days |
+| LEG-GR-03 | Fee Dispute / Overcharging | TLS; Legal Ombudsman equivalent | 21 working days |
+| LEG-GR-04 | Conflict of Interest | TLS Ethics Committee (2023 Rules) | 21 working days |
+| LEG-GR-05 | Breach of Confidentiality | TLS; courts | 14 working days |
+| LEG-GR-06 | Communication Failure | TLS; firm internal | 14 working days |
+| LEG-GR-07 | Abandoned Case / Withdrawal Without Notice | TLS Ethics Committee | 14 working days |
+| LEG-GR-08 | Dishonesty / Fraud / Misappropriation | Police + TLS | Immediate escalation |
+| LEG-GR-09 | Land / Property / Conveyancing | TLS; MLHHSD | 30 working days |
+| LEG-GR-10 | Court Registry / Judiciary Issue | Judicial Service Commission | 30 working days |
+| LEG-GR-11 | Legal Aid Quality Issue | Legal Aid Board / TLS | 21 working days |
+| LEG-GR-12 | ADR Process Complaint | TIArb; courts | 21 working days |
 
----
+### Resolution Standards for This Industry
 
-## Inquiry / Question Signals — Legal Services / Law Firms
+- **TLS Ethics Committee Rules 2023**: Written complaint must be submitted to TLS. Ethics Committee investigates and may recommend reprimand, suspension, or striking off the roll. TLS holds the advocate's response within 21 days of receiving the complaint.
+- **TLS Act CAP.307**: TLS has statutory authority to investigate complaints against advocates practising in Tanzania mainland. Complaints must relate to professional conduct.
+- **SRA (as model standard)**: Service quality complaints (not regulatory breaches) are distinguished from conduct complaints — service complaints go to the firm's internal complaints process first; conduct complaints go directly to the regulatory body.
+- **IBA Guide 2007**: Firms should have a published complaints procedure; complainants should attempt internal resolution first unless urgency prevents this.
+- **Legal Ombudsman model**: Financial compensation, apology, and fee reduction are recognised remedies — capture desired_outcome early to align expectations.
+- **Tanzania courts**: Professional negligence causing financial loss may be pursued in civil courts independently of TLS disciplinary proceedings.
 
-### Procedural Questions
-- How do I file a case in the primary court near my area?
-- What documents do I need to open a succession/probate case at the High Court?
-- How long does a land dispute case normally take at the Land Division?
-- What is the difference between a magistrate court and the High Court?
-- What is the small claims court limit in Tanzania and how do I use it?
-- How do I apply for legal aid in Tanzania?
-- What is the fee to file a civil case at the Resident Magistrate Court?
-- Can I represent myself in court without a lawyer?
-- How do I get a court order enforced after I win a case?
-- What is the statute of limitations for a contract dispute in Tanzania?
-- How do I apply for an injunction to stop someone from selling my land?
-- What happens if the other party does not appear in court?
-- How do I appeal a decision from the primary court?
-- How long does a commercial arbitration typically take?
-- What is the difference between mediation and arbitration?
+### Escalation Triggers (field values that require immediate escalation)
 
-### Lawyer & Firm Questions
-- How do I verify that an advocate is licensed to practice in Tanzania?
-- Can I report a lawyer to the Tanganyika Law Society?
-- What are my rights if my lawyer is not communicating with me?
-- How do I change lawyers in the middle of a case?
-- Is it legal for a lawyer to represent both parties in a contract?
-- What should a legal fee agreement contain?
-- Can I get a second legal opinion while already engaged with a law firm?
-- What is a retainer fee and how does it work?
-- How do I get my file back from a law firm after I terminate the relationship?
-- Are lawyers in Tanzania required to hold client funds in a trust account?
-
-### Land & Property Legal Questions
-- How do I transfer a title deed in Tanzania?
-- What is a right of occupancy and how long does it last?
-- Can a foreigner own land in Tanzania?
-- How do I register a mortgage on my property?
-- What documents are needed for a land sale agreement in Tanzania?
-- How do I get a certified copy of my title deed if the original is lost?
-- How do I challenge a fraudulent land sale where I am the rightful owner?
-- What is the stamp duty rate for property transactions?
-- How long does conveyancing typically take in Dar es Salaam?
-- What is the difference between deemed right of occupancy and granted right of occupancy?
-
-### Succession & Family Law
-- How do I apply for letters of administration after a family member dies?
-- How is property inherited when there is no will in Tanzania?
-- How do I get a court order for child maintenance?
-- What is the legal process for divorce in Tanzania?
-- Can I contest a will in the High Court?
-- How does Islamic law of succession apply in Tanzania?
+- `issue_type = LEG-GR-08` (Dishonesty / Fraud) → refer to Police and TLS immediately; advise complainant to stop all further payments to the advocate
+- `urgency_level = Yes` (imminent hearing date AND advocate is unreachable) → flag for same-day human review; advise complainant to seek emergency representation
+- `documents_withheld_for_fees = Yes` AND `urgency_level = Yes` → urgent legal intervention required; advise complainant of right to file court application for file return
+- Advocate alleged to have colluded with opposing counsel or judge → refer to Judicial Service Commission and PCCB
+- Criminal matter: client convicted due to advocate's failure to appear or gross negligence → urgent review; possible application for review/retrial
+- Forged court documents or false judgment in use → refer to Police and courts immediately
+- Property lost or facing execution based on fraudulent ruling → urgent court application required; flag for immediate human review
+- Client detained without consular notification (foreign national) → refer to Ministry of Foreign Affairs and Vienna Convention obligations
+- `issue_type = LEG-GR-11` (Legal Aid) AND client faces imminent criminal trial without representation → urgent referral to Legal Aid Board
 
 ---
 
-## Compliment / Applause Signals — Legal Services / Law Firms
+## SUGGESTION / IMPROVEMENT — Fields
 
-### Case Outcome & Advocacy Quality
-- My advocate fought hard for me in court and we won — I am very grateful
-- The legal team prepared an outstanding submission and the judge complimented it
-- Thanks to the law firm's intervention, we reached a fair settlement in just three weeks
-- The advocate's cross-examination was brilliant — it exposed the other side's false testimony
-- My title deed transfer was completed in just six weeks — the fastest I have heard of
-- The legal opinion provided was thorough and protected us from a very costly mistake
-- The firm won us a landmark judgment that has helped many others in similar situations
+### Core Fields
 
-### Communication & Client Service
-- My advocate always kept me updated before and after every court appearance
-- The firm provided a clear written timeline of what would happen at each stage
-- Every call was returned within 24 hours — exceptional responsiveness
-- The partner personally called to explain a complex court ruling in simple terms
-- I received a detailed monthly statement showing exactly how my retainer was used
-- The client portal was very useful — I could check my case status at any time
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| law_firm_name | Jina la kampuni ya kisheria | Yes | IBA Guide 2007 — education and information requirements for improvement |
+| suggestion_category | Aina ya pendekezo | Yes | IBA Guide; SRA publishing complaints guidance |
+| suggestion_detail | Maelezo ya pendekezo | Yes | Full description of improvement idea |
+| matter_type_context | Aina ya kesi (muktadha) | Optional | IBA Guide — contextualises suggestion within specific practice area |
 
-### Professionalism & Integrity
-- My lawyer disclosed a potential conflict of interest proactively and stepped back — very ethical
-- The firm returned unused retainer funds without me having to ask — highly professional
-- The advocate gave honest advice that saved me from pursuing a weak case
-- The firm offered a payment plan that made their services accessible to me
-- Legal aid provided by this firm was indistinguishable in quality from paid services
+### Industry-Specific Improvement Categories
 
-### Speed & Efficiency
-- My probate case was concluded in four months — excellent speed
-- The emergency injunction was filed and granted within 48 hours — exceptional
-- The firm completed our company registration and secretarial work faster than promised
-- The arbitration was concluded in one session — very efficiently managed by the mediator
+| Category Code | Category Name | Swahili |
+|--------------|---------------|---------|
+| LEG-SG-01 | Client Communication / Case Updates | Mawasiliano na mteja kuhusu kesi |
+| LEG-SG-02 | Fee Transparency / Written Agreement | Uwazi wa ada na makubaliano ya maandishi |
+| LEG-SG-03 | Case Progress Tracking | Ufuatiliaji wa maendeleo ya kesi |
+| LEG-SG-04 | Client Portal / Technology | Mfumo wa mtandaoni kwa mteja |
+| LEG-SG-05 | Plain Language Explanations | Maelezo ya lugha ya kawaida |
+| LEG-SG-06 | Legal Aid Expansion / Access | Upanuzi wa msaada wa kisheria |
+| LEG-SG-07 | Court Process Efficiency | Ufanisi wa mchakato wa mahakama |
+| LEG-SG-08 | ADR / Mediation Access | Upatikanaji wa usuluhisho wa nje ya mahakama |
+| LEG-SG-09 | Community Legal Education | Elimu ya kisheria kwa jamii |
+| LEG-SG-10 | Document Management / File Handling | Usimamizi wa nyaraka na faili |
+
+---
+
+## INQUIRY / QUESTION — Fields
+
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| law_firm_or_lawyer_name | Jina la kampuni au wakili | Yes | SRA; TLS — routes inquiry to correct entity |
+| inquiry_type | Aina ya swali | Yes | SRA; TLS — determines information source |
+| case_reference_number | Nambari ya kesi (kama ipo) | Optional | SRA; TLS — speeds up record retrieval |
+| full_name | Jina kamili | Yes | SRA; TLS — required for personalised response |
+| contact_details | Mawasiliano | Yes | SRA; TLS — required for follow-up |
+| specific_question | Swali maalum | Yes | SRA; IBA — full question text required |
+
+### Common Inquiry Types & Required Data Per Type
+
+| Inquiry Type | Additional Fields Needed |
+|-------------|-------------------------|
+| Case / Matter status | case_reference_number, matter_type, last_known_hearing_date |
+| Fee estimate / Cost information | matter_type, case_complexity, stage_of_proceedings |
+| Legal aid availability | matter_type, location, income_level (general) |
+| Lawyer accreditation / TLS membership | lawyer_name, law_firm_name |
+| Document / File retrieval | case_reference, type_of_document_required |
+| Court process / Procedure | court_name, type_of_application, stage |
+| Land transfer / Conveyancing process | property_type, location, parties_involved |
+| Succession / Probate process | deceased_estate_value_range, will_exists |
+| Lawyer verification (TLS register) | lawyer_name, law_firm_name |
+
+---
+
+## APPLAUSE / COMPLIMENT — Fields
+
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| law_firm_or_lawyer_name | Jina la kampuni au wakili | Yes | IBA Guide — positive feedback improves conduct standards; ISO 9001 §9.1.2 |
+| subject_of_praise | Kinachosifiwa | Yes | IBA Guide; ISO 9001 — enables recognition and replication of excellent practice |
+| matter_type | Aina ya kesi | Optional | IBA Guide — contextualises praise within practice area |
+| description | Maelezo ya uzoefu mzuri | Yes | ISO 9001 §9.1.2 — client satisfaction data |
+| named_individual | Jina la mtu anayesifiwa | Optional | IBA Guide — individual recognition encourages excellence |
+
+### Praise Subject Categories
+
+| Code | Subject | Swahili |
+|------|---------|---------|
+| LEG-AP-01 | Case Outcome / Result | Matokeo ya kesi |
+| LEG-AP-02 | Professionalism / Ethics | Utaalamu na maadili |
+| LEG-AP-03 | Communication Quality | Ubora wa mawasiliano |
+| LEG-AP-04 | Speed of Resolution | Kasi ya kumaliza kesi |
+| LEG-AP-05 | Accessibility / Client Care | Upatikanaji na huduma kwa mteja |
+| LEG-AP-06 | Fee Fairness / Transparency | Uwazi na haki ya ada |
+| LEG-AP-07 | Legal Aid Quality | Ubora wa msaada wa kisheria |
+
+---
+
+## AI Conversation Guidance for This Industry
+
+- **Lead with lawyer name, firm name, and matter type — in that order**: These three fields determine jurisdiction (TLS vs. courts), applicable professional rules, and routing. Ask "Tunazungumzia wakili au kampuni gani ya kisheria?" and "Kesi yako inahusiana na nini — ardhi, familia, madai ya biashara, kesi ya jinai, au jambo lingine?" before asking about the nature of the complaint.
+- **Collect financial loss and fee dispute as separate, sequential questions**: First ask "Je, tatizo la wakili likusababishia hasara yoyote ya kifedha — kama kupoteza kesi au faini?" and only then, separately, ask "Je, pia kuna tatizo na ada au ankara ya wakili?" Conflating these two questions leads to confused answers and missed data.
+- **For urgent situations (imminent hearing dates, property being seized), identify urgency at the start**: After the initial greeting, ask "Je, kuna kitu kinachohitaji kuchukuliwa hatua haraka sana — kama tarehe ya mahakama inakuja au mali inazuiwa?" If yes, flag immediately for human review before completing the full intake.
+- **For land / property complaints, ask for plot number and title deed status early**: In Tanzania, land disputes are extremely common and require MLHHSD context. Ask "Mali hiyo ina hati ya kumiliki (title deed) au hati ya haki ya kukaa (right of occupancy)?" early.
+- **Never ask if the lawyer committed fraud directly** — instead, ask what happened to the money given and let the complainant describe. Ask "Ulimpa wakili pesa kwa madhumuni gani — kama ada za mahakama au stakabadhi?" and "Je, kuna ushahidi wowote wa matumizi ya pesa hiyo?" — the pattern of answers will surface fraud signals without putting words in the complainant's mouth.
+
+## Swahili Key Phrases for Field Collection
+
+| Field Being Collected | Swahili Phrase to Use |
+|----------------------|----------------------|
+| lawyer_name | "Jina la wakili wako ni nani?" |
+| law_firm_name | "Ni kampuni gani ya kisheria unayozungumzia?" |
+| matter_type | "Kesi yako au jambo lako la kisheria linahusiana na nini — ardhi, familia, biashara, jinai, au kingine?" |
+| engagement_start_date | "Ulianza kushirikiana na wakili huyu lini?" |
+| issue_type | "Tatizo lako kuu ni nini — ucheleweshaji, kutokufanya kazi vizuri, ada kubwa kupita kiasi, au jambo lingine?" |
+| financial_loss_caused_tzs | "Je, tatizo hili limekusababishia hasara ya kifedha? Ni kiasi gani takriban?" |
+| desired_outcome | "Unataka nini kifanyike — msamaha, kurejesha pesa, au kitu kingine?" |
+| complaint_to_regulatory_body_made | "Je, umeshalalamika kwa TLS au mahakama yoyote kuhusu tatizo hili?" |
+| documents_withheld_for_fees | "Je, wakili anashikilia nyaraka zako au faili yako kwa sababu ya madeni ya ada?" |
+| urgency_level | "Je, kuna tarehe ya mahakama inayokuja hivi karibuni ambayo inaweza kuathirika?" |
+| bar_membership_number | "Je, unajua nambari ya usajili wa wakili huyo katika TLS? Kama hujui, tunaweza kuthibitisha jina lake." |
+
+## Action Recommendations Based on Field Values
+
+| Field | Value | Recommended Action |
+|-------|-------|--------------------|
+| issue_type | LEG-GR-08 (Dishonesty / Fraud) | Immediate escalation; refer to Police and TLS; advise complainant to stop payments |
+| urgency_level | Yes (imminent hearing) | Flag for same-day human review; advise complainant to seek emergency representation |
+| documents_withheld_for_fees | Yes AND urgency_level = Yes | Advise immediate court application for file return; flag urgent |
+| complaint_to_regulatory_body_made | Yes (TLS) | Capture TLS reference number; link to existing TLS case |
+| complaint_to_regulatory_body_made | No | Provide TLS Ethics Committee contact details and complaint process |
+| bar_membership_number | Unknown | Advise complainant to verify advocate's TLS membership on TLS register before proceeding |
+| matter_type | Criminal AND lawyer failed to appear AND conviction resulted | Flag as urgent; advise on application for review or retrial |
+| issue_type | LEG-GR-04 (Conflict of Interest) AND conflict_disclosed = No | Flag as TLS Ethics Rules 2023 breach; recommend formal TLS complaint |
+| financial_loss_caused_tzs | > TZS 10,000,000 | Recommend legal advice on civil negligence claim independent of TLS disciplinary process |
+| issue_type | LEG-GR-09 (Land / Conveyancing) AND title_deed_status = Two owners | Flag as urgent; advise complainant to apply for caution/caveat at MLHHSD immediately |
+| issue_type | LEG-GR-11 (Legal Aid) AND imminent_trial = Yes | Urgent referral to Legal Aid Board; note client's right to state-provided representation |
+| desired_outcome | Compensation | Explain TLS Ethics Committee can recommend fee reduction or apology; civil court required for damages |
 
 ---
 
 ## Key Entities & Roles
 
-**Regulatory Bodies:**
-Tanganyika Law Society (TLS), Judiciary of Tanzania, Tanzania Institute of Arbitrators (TIArb), Registration Insolvency and Trusteeship Agency (RITA), Ministry of Lands Housing and Human Settlements Development (MLHHSD), Attorney General's Office, Director of Public Prosecutions (DPP), Law Reform Commission of Tanzania
-
-**Job Titles & Roles:**
-Advocate, attorney, partner, associate, legal clerk, paralegal, court registrar, magistrate, High Court judge, Court of Appeal justice, arbitrator, mediator, notary public, commissioner for oaths, company secretary, legal aid officer, bailiff, court process server, court typist, interpreter, probate officer
-
-**Legal Instruments & Documents:**
-Title deed, right of occupancy (ROO), power of attorney, affidavit, plaint, written statement of defence, injunction, interim order, judgment, decree, execution order, letters of administration, grant of probate, retainer agreement, fee note, cause list, court summons, witness statement, arbitration award, mediation agreement, company certificate of incorporation, memorandum of association, articles of association, share certificate, stamp duty receipt, land allocation letter
-
-**Key Courts:**
-Primary Court, District Court, Resident Magistrate Court, High Court (mainland), Court of Appeal, Land Division of High Court, Labour Division, Commercial Division (Commercial Court Dar es Salaam), Industrial Court of Tanzania, Small Claims Court, Kadhi Court (Zanzibar), Juvenile Court
-
-**Legislation:**
-Civil Procedure Code (Cap 33), Land Act 1999 (Cap 113), Village Land Act 1999 (Cap 114), Law of Contract Act (Cap 345), Land Registration Act, Advocates Act, Arbitration Act 2020, Mediation Act 2020, Legal Aid Act 2017, Magistrates Courts Act, Zanzibar Courts Act
+**Regulatory Bodies:** Tanganyika Law Society (TLS), Judiciary of Tanzania, Tanzania Institute of Arbitrators (TIArb), RITA (Registration Insolvency and Trusteeship Agency), MLHHSD (Ministry of Lands Housing and Human Settlements Development), Attorney General's Office, DPP (Director of Public Prosecutions), Law Reform Commission, PCCB (Prevention and Combating of Corruption Bureau)
+**Job Titles:** Advocate, Attorney, Partner, Associate, Legal Clerk, Paralegal, Court Registrar, Magistrate, High Court Judge, Court of Appeal Justice, Arbitrator, Mediator, Notary Public, Commissioner for Oaths, Company Secretary, Legal Aid Officer, Bailiff, Court Process Server, Probate Officer
+**Courts:** Primary Court, District Court, Resident Magistrate Court, High Court (mainland), Court of Appeal, Land Division of High Court, Labour Division, Commercial Division (Dar es Salaam), Industrial Court, Small Claims Court, Kadhi Court (Zanzibar), Juvenile Court
+**Legal Documents:** Title deed, right of occupancy, power of attorney, affidavit, plaint, written statement of defence, injunction, interim order, judgment, decree, execution order, letters of administration, grant of probate, retainer agreement, fee note, cause list, court summons, witness statement, arbitration award, mediation agreement, stamp duty receipt
 
 ---
 
 ## Kiswahili / Swahili Equivalents
 
-**Malalamiko (Complaints):**
-- Wakili wangu hakuja mahakamani na kesi yangu iliondolewa — My lawyer did not appear in court and my case was struck out
-- Nimempa wakili pesa lakini hafanyi kazi yoyote — I gave the lawyer money but no work is being done
-- Kesi yangu imechukua miaka mitatu bila hukumu — My case has taken three years without a judgment
-- Wakili alifanya makosa ya kisheria na nimepoteza kesi — The lawyer made legal errors and I lost the case
-- Mstahimiliwa hawalipii hukumu iliyotolewa mahakamani — The judgment debtor is not paying the court order
-- Faili yangu imepotezwa ofisini mwa wakili — My file has been lost at the lawyer's office
-- Nimelipa ada lakini sijapewa risiti wala hati yoyote — I paid fees but received no receipt or any document
-- Wakili alinipa ushauri mbaya kuhusu ardhi yangu — The lawyer gave me wrong advice about my land
-- Kesi yangu imepigwa kwa sababu wakili hakufika — My case was dismissed because the lawyer did not appear
-- Msajili wa mahakama anadai pesa za ziada — The court registrar is demanding extra money
+### Malalamiko (Complaints)
+- "Wakili wangu hakuja mahakamani na kesi yangu iliondolewa — sijui kilichotokea"
+- "Nimempa wakili pesa lakini hafanyi kazi yoyote kwa miezi sita"
+- "Kesi yangu imechukua miaka mitatu bila hukumu"
+- "Wakili alifanya makosa ya kisheria na nimepoteza kesi"
+- "Faili yangu imepotezwa ofisini mwa wakili"
+- "Nilelipa ada lakini sijapewa risiti wala hati yoyote"
+- "Wakili alinipa ushauri mbaya kuhusu ardhi yangu — sasa kuna wamiliki wawili"
+- "Msajili wa mahakama anadai pesa za ziada kuliko ada rasmi"
 
-**Mapendekezo (Suggestions):**
-- Wakili wote wapewe mfumo wa kuwasiliana na wateja kwa wakati halisi — All lawyers should have a real-time client communication system
-- Mahakama zifungue mfumo wa kielektroniki wa kuwasilisha maandishi — Courts should open an electronic document filing system
-- Huduma ya msaada wa kisheria iongezwe wilayani — Legal aid services should be expanded at district level
-- Orodha ya mashauri ya mahakama iwe kwenye tovuti inayoweza kupigiwa — Court cause lists should be published on an accessible website
-- Upatanisho lazima ufanyike kabla ya shauri la mahakama kwa mashauri ya biashara — Mediation should be mandatory before court proceedings in commercial disputes
+### Mapendekezo (Suggestions)
+- "Wakili wote wapewe mfumo wa kuwasiliana na wateja kwa wakati halisi"
+- "Mahakama zifungue mfumo wa kielektroniki wa kuwasilisha maandishi"
+- "Huduma ya msaada wa kisheria iongezwe wilayani"
+- "Orodha ya mashauri ya mahakama iwe kwenye tovuti inayoweza kupigiwa"
+- "Upatanisho lazima ufanyike kabla ya shauri la mahakama kwa mashauri ya biashara"
 
-**Maswali (Inquiries):**
-- Nifungue kesi mahakama gani kwa mgogoro wa ardhi? — Which court do I open a case in for a land dispute?
-- Gharama ya kufungua kesi ya madai ni ngapi? — How much does it cost to file a civil case?
-- Naweza kuwakilisha nafsi yangu mahakamani? — Can I represent myself in court?
-- Jinsi gani ya kupata msaada wa kisheria bila malipo? — How do I get free legal aid?
-- Muda gani kesi ya mirathi huchukua? — How long does a succession case take?
-- Wakili anaweza kuwakilisha pande zote mbili? — Can a lawyer represent both parties?
-- Ninapataje nakala ya hati yangu ya hukumu? — How do I get a copy of my court judgment?
-- Jinsi ya kuripoti wakili anayedhulumu mteja? — How do I report a lawyer who is mistreating a client?
+### Maswali (Inquiries)
+- "Nifungue kesi mahakama gani kwa mgogoro wa ardhi?"
+- "Gharama ya kufungua kesi ya madai ni ngapi?"
+- "Naweza kuwakilisha nafsi yangu mahakamani bila wakili?"
+- "Jinsi gani ya kupata msaada wa kisheria bila malipo?"
+- "Wakili anaweza kuwakilisha pande zote mbili — hii ni halali?"
+- "Jinsi ya kuripoti wakili anayedhulumu mteja kwa TLS?"
 
-**Pongezi (Compliments):**
-- Wakili wangu alifanya kazi nzuri sana — tulifanikiwa mahakamani — My lawyer did excellent work — we succeeded in court
-- Ninapongeza timu ya kisheria kwa usimamizi mzuri wa kesi yangu — I commend the legal team for excellent case management
-- Msaada wa kisheria ulipatikana haraka na kwa ubora — Legal aid was available quickly and with quality
-- Wakili alinirudishia pesa zilizobaki bila kuomba — asante — The lawyer returned the remaining money without being asked — thank you
-- Makampuni yanayotoa huduma ya kisheria kwa watu maskini yanafanya kazi nzuri sana — Firms providing legal services to the poor are doing very important work
+### Pongezi (Compliments)
+- "Wakili wangu alifanya kazi nzuri sana — tulifanikiwa mahakamani"
+- "Ninapongeza timu ya kisheria kwa usimamizi mzuri wa kesi yangu"
+- "Msaada wa kisheria ulipatikana haraka na kwa ubora"
+- "Wakili alinirudishia pesa zilizobaki bila kuomba — asante sana"
 
 ---
 
 ## Industry-Specific Escalation Triggers
 
-1. Client reports imminent threat of imprisonment or detention and advocate is unreachable
-2. Advocate colluded with opposing counsel or judge — corruption allegation with documentary evidence
-3. Criminal matter where client was convicted due to advocate's failure to appear or gross negligence
+1. Client reports imminent threat of imprisonment or detention and advocate is unreachable — same-day human review
+2. Advocate alleged to have colluded with opposing counsel or judge — refer to Judicial Service Commission and PCCB
+3. Criminal matter where client was convicted due to advocate's failure to appear or gross negligence — urgent review for retrial application
 4. Forged court documents or false judgment being used in fraud against a client
-5. Imminent execution of a court order (property seized, account frozen) based on a fraudulent ruling
+5. Imminent property execution based on fraudulent ruling — urgent court application required
 6. Client lost land or property due to forged power of attorney — advocate involved or negligent
-7. Advocate misappropriated client funds from trust account — theft of client money
+7. Advocate misappropriated client funds from trust account — theft of client money; refer to Police and TLS
 8. Child custody order not being enforced and child is at immediate risk of harm
-9. Forced or coerced confession or false witness statement induced by an officer of the court
-10. Advocate threatening client to drop legitimate complaint to TLS or the court
-11. Judiciary official demanding bribe for case scheduling, certified copies, or execution orders
-12. Foreign national detained without consular notification — violation of Vienna Convention rights
-13. Client reporting that legal aid was denied and they face immediate criminal trial without representation
+9. Forced or coerced false witness statement induced by an officer of the court
+10. Advocate threatening client to drop legitimate complaint to TLS
+11. Judiciary official demanding bribe for case scheduling, certified copies, or execution orders — refer to PCCB
+12. Foreign national detained without consular notification — Vienna Convention violation; refer to Ministry of Foreign Affairs
+13. Client facing imminent criminal trial without legal aid representation — urgent Legal Aid Board referral
 
 ---
 
 ## Disambiguation Notes
 
-- **Legal Services vs. Government Services:** Complaints about court registries, bailiffs, and judges belong to legal services (judiciary) when the complaint is about the judicial process; they belong to government services when the issue is a government ministry or statutory body acting outside court proceedings.
-- **Legal Services vs. Real Estate:** Land title transfer complaints belong to legal services when an advocate's negligence or the conveyancing process is at issue; they belong to real estate/property when the complaint is about a developer, estate agent, or property management company.
-- **Legal Services vs. Financial/Insurance:** A complaint about a legal dispute arising from a banking or insurance contract is classified by the primary industry (banking/insurance) unless the complaint specifically targets the advocate or legal process handling the claim.
-- **ADR vs. Court Services:** Mediation and arbitration complaints are classified under legal services; only escalate to government services if the complaint involves a statutory tribunal (e.g., Fair Competition Tribunal, Labour Court) as a government body rather than a private dispute resolution provider.
-- **Company Secretarial vs. Consultancy:** Company registration and secretarial services belong to legal services when provided by an advocate or law firm; they belong to consultancy/business services when provided by a non-legal business advisory firm.
+- **Legal Services vs. Government Services**: Court registry, bailiff, and judge complaints belong to Legal Services (judiciary) when the complaint targets the judicial process; classify as Government Services if the complaint is about a government ministry or statutory body acting outside court proceedings.
+- **Legal Services vs. Real Estate / Property**: Land title transfer complaints belong to Legal Services when an advocate's negligence or conveyancing process is the issue; classify as Real Estate when the complaint targets a developer, estate agent, or property management company.
+- **Legal Services vs. Financial / Insurance**: A complaint about a legal dispute arising from a banking or insurance contract is classified by the primary industry (banking/insurance) unless the complaint specifically targets the advocate or legal process handling the claim.
+- **ADR vs. Court Services**: Mediation and arbitration complaints are Legal Services; escalate to Government Services only if a statutory tribunal (Fair Competition Tribunal, Labour Court) is involved as a government body rather than a private dispute resolution provider.
+- **Company Secretarial vs. Consultancy**: Company registration and secretarial services belong to Legal Services when provided by an advocate or law firm; classify under Business Consultancy when provided by a non-legal business advisory firm.
+- **TLS conduct complaint vs. service quality complaint**: TLS Ethics Committee handles conduct breaches (dishonesty, fraud, conflict of interest). Service quality complaints (poor communication, delays) should first go to the firm's internal complaints process — if unresolved, they can then be referred to TLS.

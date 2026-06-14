@@ -1,332 +1,397 @@
 ---
-tags: [industry-kb, feedback-classification]
+tags: [industry-kb, feedback-classification, field-standards]
 ---
-# Pharmacy / Pharmaceutical — Industry-Specific Feedback Classification Knowledge Base
+# Pharmacy / Pharmaceutical — Feedback Collection Fields & Standards
 
 ## Industry Identifiers
 
-pharmacy, chemist, duka la dawa, pharmaceutical, drug store, dispensary pharmacy, hospital pharmacy, retail pharmacy, drug wholesaler, medicine distributor, pharmaceutical manufacturer, herbal medicine, traditional medicine, dawa za asili, prescription drug, OTC medicine, over-the-counter, controlled substance, narcotic, antibiotic, antimalarial, antihypertensive, antiretroviral, ARV, insulin, painkiller, supplement, vitamin, TFDA, TMDA (Tanzania Medicines and Medical Devices Authority), NHIF approved pharmacy, drug shortage, counterfeit medicine, generic drug, branded medicine, medicine recall, pharmacist, pharmaceutical technician, drug registration, drug license, batch number, expiry date, dosage, side effects, drug interaction, dawa bandia, dawa ghafi
+pharmacy, chemist, duka la dawa, pharmaceutical, drug store, dispensary pharmacy, hospital pharmacy, retail pharmacy, drug wholesaler, medicine distributor, pharmaceutical manufacturer, herbal medicine, traditional medicine, dawa za asili, prescription drug, OTC medicine, over-the-counter, controlled substance, narcotic, antibiotic, antimalarial, antihypertensive, antiretroviral, ARV, insulin, painkiller, supplement, vitamin, TMDA, TFDA, Tanzania Medicines and Medical Devices Authority, NHIF approved pharmacy, drug shortage, counterfeit medicine, dawa bandia, generic drug, branded medicine, medicine recall, pharmacist, mfamasia, pharmaceutical technician, fundi wa dawa, drug registration, drug license, batch number, nambari ya bachi, expiry date, tarehe ya kuisha, dosage, kipimo, side effects, madhara, drug interaction, mwingiliano wa dawa, dispensary, dawa ghafi, adverse drug reaction, ADR, pharmacovigilance, ufuatiliaji wa madhara, cold chain, MSD, Medical Stores Department, dawa ya agizo, dawa bila agizo
+
+## Why Industry-Specific Fields Matter
+
+Pharmacy feedback sits at the intersection of consumer protection and life-threatening pharmacovigilance — a reported adverse drug reaction without batch number, concomitant medications, and onset timing cannot be processed by TMDA VigiFlow or trigger a product recall, meaning a counterfeit or contaminated drug batch stays on shelves. The WHO CIOMS I framework, ICH E2B(R3) ICSR standard, Tanzania TMDA Yellow Form, and FDA MedWatch all mandate specific technical fields that no generic complaint form captures.
+
+## Source Standards
+
+- FDA MedWatch Form 3500A (mandatory) and 3500B (voluntary) — adverse drug/device event reporting
+- WHO CIOMS I Form — international minimum for Individual Case Safety Reports (ICSRs)
+- ICH E2B(R3) — electronic ICSR standard; mandatory for WHO VigiBase submission
+- WHO VigiFlow — electronic pharmacovigilance platform used by TMDA
+- Tanzania TMDA Yellow Form — national paper-based ADR reporting system (operational since 1987)
+- Tanzania TMDA VigiFlow — electronic ADR submission system
+- ADR Reporting Form v1.2 — regional ADR form with detailed clinical fields
+- Naranjo Algorithm — standard causality assessment tool for ADRs
+- WHO-UMC Causality Scale — Certain / Probable / Possible / Unlikely / Unclassifiable
+- ISO 10002:2018 — Complaint Management System minimum fields
+- Tanzania MOHCDGEC National Guide for Complaint, Compliment and Suggestion Management
+- Tanzania NHIF Drug Formulary and Essential Medicines List (EML)
+- Medical Stores Department (MSD) supply chain standards
 
 ---
 
-## Complaint / Grievance Signals — Pharmacy / Pharmaceutical
+## GRIEVANCE / COMPLAINT — Required & Recommended Fields
 
-### Drug Quality & Authenticity
-- "I believe the medicine I was given is counterfeit — it had no effect at all"
-- "The tablets dissolve immediately when I touch them — the coating seems wrong"
-- "The antibiotic I bought here had no effect — I suspect it's a fake"
-- "The ARVs given to me don't look like my usual ones — different color and size"
-- "The insulin pen cartridge was cloudy when it should be clear"
-- "The painkiller packaging looks different from the same brand I bought last month"
-- "The medicine smells different — chemical smell that wasn't there before"
-- "These tablets are crumbling before I even take them — poor manufacturing quality"
-- "The batch number on the box and the bottle inside don't match — suspicious"
-- "The antimalarial tablets I took had no effect — I'm still sick after completing the course"
-- "I found the medicine pack was previously opened and resealed"
-- "The syrup had an unusual layer forming on top — it looked separated and wrong"
-- "My usual brand of blood pressure tablets has been replaced with a generic that makes me dizzy"
+### Core Fields (collect for ALL pharmacy complaints)
 
-### Expiry & Storage
-- "The medicine sold to me was already expired — I checked at home"
-- "The expiry date on the box has been scratched off or is unreadable"
-- "The sticker on the medicine looked like it was placed over another expiry date"
-- "The pharmacy stored insulin outside the fridge — it will be ineffective now"
-- "The medicines were displayed in direct sunlight at this pharmacy — improper storage"
-- "The medicine I received was near expiry — only two weeks left on the date"
-- "The temperature in the storage room was visibly hot — these are heat-sensitive drugs"
-- "Vaccines were kept in an old, faulty fridge — cold chain was broken"
+| Field | Swahili Label | Required? | Why It Enables Better Action |
+|-------|--------------|-----------|------------------------------|
+| complaint_unique_id | Nambari ya malalamiko | Yes | ISO 10002:2018 — tracking, deduplication, TMDA cross-reference |
+| date_complaint_received | Tarehe malalamiko yalipokewa | Yes | TMDA 15-day mandatory reporting clock starts here; ISO 10002 SLA |
+| time_complaint_received | Wakati malalamiko yalipokewa | Yes | Shift accountability; chain of custody timeline |
+| channel_received | Njia ya kupokea | Yes | Walk-in / phone / SMS / online / written — access equity monitoring |
+| complainant_full_name | Jina kamili la mlalamikaji | Yes | CIOMS I minimum — identifiable reporter required for ICSR validity |
+| complainant_relationship_to_patient | Uhusiano na mgonjwa | Yes | Self / family / carer / health worker — determines consent requirements |
+| complainant_phone | Simu ya mlalamikaji | Yes | TMDA Yellow Form follow-up; pharmacovigilance officer callbacks |
+| complainant_email | Barua pepe | No | Secondary contact for written TMDA response |
+| complainant_professional_qualification | Taaluma ya mlalamikaji | Yes | Doctor / pharmacist / nurse / patient / consumer — determines reporting pathway (mandatory vs. voluntary); credibility weight in causality assessment |
+| pharmacy_name | Jina la duka la dawa | Yes | TMDA inspection trigger; chain of custody |
+| pharmacy_location | Mahali pa duka la dawa | Yes | TMDA enforcement jurisdiction; consumer geographic access data |
+| pharmacy_tmda_license_number | Nambari ya leseni ya TMDA | No | Cross-reference against TMDA registered pharmacy database |
+| complaint_category | Aina ya malalamiko | Yes | Determines field set and regulatory reporting pathway |
+| remedy_sought | Suluhisho analotaka | Yes | ISO 10002:2018 — guides resolution approach |
+| date_acknowledged | Tarehe ya kutoa jibu la awali | Yes | ISO 10002 — acknowledgment SLA; Tanzania Guide |
 
-### Wrong Medication & Dispensing Errors
-- "The pharmacist gave me the wrong medication — wrong name on the prescription"
-- "I was given adult dosage when my prescription clearly says pediatric"
-- "The drug dispensed is for hypertension but my prescription is for diabetes"
-- "The quantity dispensed was half what the prescription said — they didn't tell me"
-- "Two different drugs in the same bag were switched — labels don't match contents"
-- "The pharmacist filled the prescription without reading the doctor's instructions"
-- "I was given a different brand name and the drug class is completely different"
-- "The tablet strength dispensed was 500mg but prescription said 250mg"
-- "The pharmacy gave my prescription to another customer by mistake"
-- "The controlled drug was dispensed without proper prescription documentation"
+### Complaint Category Taxonomy (use for complaint_category field)
 
-### Drug Availability & Shortage
-- "The pharmacy has been out of ARVs for three weeks — patients are at risk"
-- "Insulin is not available anywhere in this town — I've checked five pharmacies"
-- "The NHIF-approved pharmacy has no stock of my prescribed medication"
-- "I was told to come back tomorrow for three consecutive days — still no medicine"
-- "Essential medicines on the NHIF formulary are consistently unavailable"
-- "The pharmacy orders anti-TB drugs but they never arrive in adequate supply"
-- "Anti-epileptic medication for my child has been out of stock for one month"
-- "The MOHSW supplied pharmacy is consistently empty — what is happening to the government supply chain?"
-- "Chemotherapy drugs were unavailable for two weeks — my treatment was interrupted"
+- `adverse_drug_reaction` — Physical harm, unexpected reaction, allergy, toxicity after taking a medicine
+- `medication_dispensing_error` — Wrong drug, wrong dose, wrong patient, wrong frequency, wrong quantity dispensed
+- `drug_quality_counterfeit` — Suspected fake, substandard, deteriorated, or tampered drug
+- `drug_expiry_storage` — Expired drug sold, improper storage conditions (cold chain failure, sunlight exposure)
+- `drug_shortage_unavailability` — Essential medicine out of stock; ARV/insulin/TB drug gaps
+- `pharmacist_staff_conduct` — Rudeness, failure to counsel, dispensing without prescription, privacy breach
+- `pricing_nhif_insurance` — Overcharging, NHIF rejection, undisclosed fees, price discrepancy
+- `licensing_compliance` — Pharmacy operating without license, selling controlled drugs without prescription, unregistered products
 
-### Pharmacist & Staff Conduct
-- "The pharmacist didn't counsel me on how to take the medication or the side effects"
-- "The pharmacist was dismissive and didn't answer my questions about drug interactions"
-- "The staff member dispensing the drug did not have a white coat or name tag — I'm not sure they're qualified"
-- "The pharmacist dispensed prescription medicine to me without asking for the prescription"
-- "I was given incorrect dosage instructions — three times a day instead of twice"
-- "The pharmacy assistant was rude and rushed me even though I had important questions"
-- "No one told me that this drug needs to be taken with food — I took it on an empty stomach and had severe side effects"
-- "The pharmacist was on the phone the entire time and barely looked at my prescription"
-- "The staff discussed my medical prescription out loud where other customers could hear"
-- "The pharmacy refused to substitute a generic for the branded drug even when I couldn't afford the brand"
-- "The pharmacist denied being a pharmacist — I think they are an unqualified attendant"
-- "They pressured me to buy additional products I didn't need — opportunistic upselling"
+### Conditional Fields — Adverse Drug Reaction (ADR)
 
-### Pricing & NHIF
-- "The pharmacy charged me for a medicine that NHIF should cover"
-- "I was given a partial supply but charged for the full prescription"
-- "The price of the antibiotic here is three times what I paid at the previous pharmacy"
-- "The receipt doesn't show the drug name, just an amount — not transparent"
-- "NHIF card was rejected even though the pharmacy is listed as NHIF-approved"
-- "The pharmacist says the medicine is out of stock but is willing to sell it at a higher price from a 'private' supply"
-- "I was charged separately for packaging that should be included in the drug price"
-- "The price changed between when I was quoted and when I returned to pick up the medicine"
-- "The pharmacy doesn't accept the medical insurance provided by my employer"
-- "They offered to waive the prescription requirement if I paid more — this is illegal"
+*Triggered when complaint_category = adverse_drug_reaction. These fields align with CIOMS I / ICH E2B(R3) / TMDA Yellow Form. The international legal minimum is: identifiable reporter + identifiable patient + one suspect drug + one adverse reaction.*
 
-### Licensing & Compliance
-- "This pharmacy doesn't display its TMDA license number publicly"
-- "I suspect this pharmacy is selling prescription drugs without requiring a prescription"
-- "The pharmacy is selling herbal products with medical claims but no TMDA registration"
-- "A drug that is controlled/scheduled is being sold freely without a prescription here"
-- "The pharmacy is operating without a licensed pharmacist on the premises"
-- "This outlet sells traditional medicine mixed with pharmaceuticals without any separation or labeling"
-- "The pharmacy was selling medicines that are not on the TMDA registered product list"
+#### Section A: Patient Information
 
----
+| Field | Swahili Label | Required? | Framework Source | Why |
+|-------|--------------|-----------|-----------------|-----|
+| patient_initials | Herufi za kwanza za mgonjwa | Yes | CIOMS I; ICH E2B D; FDA 3500B | Patient privacy — initials not full name; enables deduplication in VigiBase without identifying patient |
+| patient_date_of_birth | Tarehe ya kuzaliwa | Yes | CIOMS I; FDA 3500B; TMDA Yellow | Age-related pharmacokinetic differences; pediatric vs. geriatric risk profiles |
+| patient_age | Umri wa mgonjwa | Yes | ADR form v1.2; CIOMS I | Complement to date of birth; essential if DOB unknown |
+| patient_sex | Jinsia | Yes | All frameworks | Sex-based ADR risk differences — e.g. QT prolongation; hormonal drug interactions |
+| patient_weight_kg | Uzito (kg) | No | FDA 3500B; ADR form | Dosing calculation; overdose vs. therapeutic dose assessment |
+| patient_race_ethnicity | Kabila / Asili | No | FDA 3500B | Pharmacogenomic differences; enzyme polymorphisms relevant to drug metabolism |
+| relevant_medical_history | Historia ya magonjwa ya awali | Yes | CIOMS I; ICH E2B D | Excludes confounders; identifies predisposing conditions; organ dysfunction |
+| known_drug_allergies | Mzio wa dawa unaojulikana | Yes | FDA 3500B; ADR form | Cross-reactivity assessment — critical for causality |
+| pregnancy_status | Hali ya ujauzito | Yes | FDA 3500B | Teratogenicity and maternal risk classification; mandatory field if patient is female of childbearing age |
 
-## Suggestion / Advice Signals — Pharmacy / Pharmaceutical
+#### Section B: Adverse Reaction Details
 
-### Service Improvement
-- "You should implement a patient medication record system so you can check for interactions"
-- "A counseling area separate from the dispensing counter would give patients privacy"
-- "Consider providing printed dosage instruction leaflets in Swahili for patients who can't read English"
-- "A prescription reminder SMS service would help patients take their medication on time"
-- "You should verify that all staff who handle prescriptions are registered pharmaceutical technicians"
-- "Installing a pharmacy management software system would reduce dispensing errors"
-- "A call-ahead service to check medicine availability before the patient travels would save time"
-- "Implementing barcode scanning at dispensing would reduce wrong-drug errors"
-- "Home delivery of chronic disease medications would benefit elderly and disabled patients"
-- "Consider partnering with NHIF to allow electronic prescription processing"
+| Field | Swahili Label | Required? | Framework Source | Why |
+|-------|--------------|-----------|-----------------|-----|
+| adverse_reaction_description | Maelezo ya mmenyuko mbaya | Yes | All frameworks | Core datum for pharmacovigilance signal detection in WHO VigiBase |
+| meddra_term | Neno la MedDRA | Yes (VigiFlow) | ICH E2B(R3) Section E; WHO VigiBase | Enables cross-border aggregation in WHO VigiBase; mandatory for electronic ICSR |
+| date_reaction_started | Tarehe ya kuanza mmenyuko | Yes | ADR form v1.2; CIOMS I; FDA 3500B | Time-to-onset calculation; core input for Naranjo causality algorithm |
+| time_of_onset_after_drug | Muda uliopita baada ya dawa | Yes | CIOMS I; TMDA Yellow | Naranjo Algorithm Question 2 — hours/days between first dose and onset |
+| date_of_recovery | Tarehe ya kupona | No (Required if recovered) | ADR form v1.2 | Duration of adverse event; severity assessment |
+| reaction_seriousness | Uzito wa mmenyuko | Yes | FDA 3500A/B; ICH E2B Section E; CIOMS I | Legal definition of serious ADR triggers mandatory reporting timelines |
+| patient_outcome | Hali ya mgonjwa | Yes | ADR form v1.2; CIOMS I | Recovered / recovering / not recovered / sequelae / fatal / unknown — signal evaluation |
+| laboratory_test_data | Data za vipimo vya maabara | No | ADR form v1.2 Section B; ICH E2B F | Confirmation of organ damage; objective causality evidence |
 
-### Drug Access & Availability
-- "Stock forecasting for chronic disease medications (ARVs, insulin, antihypertensives) should be done monthly"
-- "A real-time drug availability dashboard accessible to patients online would save them walking to multiple pharmacies"
-- "The government should consider subsidizing essential medicines at registered private pharmacies"
-- "Pharmacies in rural areas need a reliable supply chain — working with medical stores is not enough"
-- "An early warning system for drug shortages would allow pharmacies to plan ahead"
-- "You should register more generic suppliers to reduce dependence on one branded source"
+**Reaction Seriousness Classification** — reaction_seriousness must use these ICH E2B / FDA criteria (any ONE present = serious):
+- Death
+- Life-threatening event
+- Hospitalization (initial or prolonged)
+- Disability or permanent damage
+- Congenital anomaly or birth defect
+- Required medical or surgical intervention to prevent permanent damage
 
-### Patient Safety & Counseling
-- "All patients picking up new prescriptions should receive mandatory counseling — not optional"
-- "Allergy history should be asked before dispensing any new drug"
-- "Drug interaction checks should be routine for patients on multiple medications"
-- "Pharmacists should be proactive in advising patients when a cheaper generic is available"
-- "Color-coded labels for morning/midday/evening dosing would help patients with multiple medicines"
-- "Childproof caps should be standard for all dispensed medication"
-- "You should offer medication adherence support groups for patients on long-term therapy like ARVs"
+#### Section C: Suspect Drug Information
 
-### Counterfeit Drug Prevention
-- "Installing a drug verification portal (e.g., scan barcode to verify TMDA registration) would help consumers"
-- "All pharmacies should have a TMDA verification QR code display for customers to check product authenticity"
-- "Training pharmacy staff to recognize counterfeit drug packaging would save lives"
-- "You should report any suspected counterfeit drugs to TMDA and notify your customers proactively"
+| Field | Swahili Label | Required? | Framework Source | Why |
+|-------|--------------|-----------|-----------------|-----|
+| drug_brand_name | Jina la biashara la dawa | Yes | All frameworks | Product identification for the specific product dispensed |
+| drug_generic_inn_name | Jina la kimataifa la dawa (INN) | Yes | WHO VigiFlow; CIOMS I; TMDA Yellow | International interoperability; WHO Drug Dictionary coding; recall linkage |
+| batch_lot_number | Nambari ya bachi / lot | Yes (recalls) | ADR form v1.2; TMDA Yellow; FDA 3500A | CRITICAL — without batch number a product recall cannot be scoped; TMDA requires for all quality complaints. Ask patient to retain original packaging |
+| manufacturer_name | Jina la mzalishaji | Yes | ADR form v1.2; CIOMS I; TMDA Yellow | Manufacturer notification within 15 working days (CIOMS I rule); recall action |
+| expiry_date | Tarehe ya kuisha | Yes | ADR form v1.2; TMDA Yellow | Identifies out-of-date product; storage failure investigation |
+| dosage_form | Umbo la dawa | Yes | ICH E2B(R3) G; TMDA Yellow | Tablet / capsule / injection / syrup / etc. — route-specific absorption differences |
+| dose_taken | Kipimo kilichotumiwa | Yes | All frameworks | Overdose vs. therapeutic dose assessment; dose-response relationship |
+| dose_prescribed | Kipimo kilichoagizwa | Yes | ADR form v1.2 | Discrepancy detection: overdose / underdose / transcription error |
+| route_of_administration | Njia ya kutumia dawa | Yes | ADR form v1.2; CIOMS I; ICH E2B G | Route-specific ADR risk — IV > oral; inhalation risks |
+| dosing_frequency | Mara ngapi kwa siku | Yes | ADR form v1.2 | Accumulation assessment; drug interaction patterns |
+| therapy_start_date | Tarehe ya kuanza dawa | Yes | ADR form v1.2; CIOMS I | Onset-to-reaction interval calculation |
+| therapy_end_date | Tarehe ya kuacha dawa | Yes | ADR form v1.2 | Dechallenge assessment — did stopping the drug resolve the ADR? |
+| indication_for_use | Sababu ya kutumia dawa | Yes | ICH E2B G; CIOMS I | Rules out off-label use as contributing factor; confirms correct indication |
+| action_taken_with_drug | Hatua iliyochukuliwa na dawa | Yes | ADR form v1.2 Section C | Withdrawn / dose reduced / no change / N/A / unknown — dechallenge test |
+| dechallenge_result | Matokeo ya kusimama dawa | Yes | ADR form v1.2 | Did stopping the drug resolve the reaction? Positive dechallenge strengthens causality to "Probable" |
+| rechallenge_result | Matokeo ya kuanza tena dawa | No | ADR form v1.2 | Positive rechallenge = "Certain" causality on WHO-UMC scale — strongest causality proof available |
+| storage_conditions | Hali ya uhifadhi wa dawa | Yes | TMDA Yellow Form; quality context | Temperature / light / humidity at pharmacy and at home — degraded drugs cause ADRs; affects recall scope |
+| purchase_date | Tarehe ya kununua | Yes | TMDA Yellow | Links to specific dispensing batch and pharmacist on duty |
+| where_purchased | Mahali paliponunuliwa | Yes | TMDA Yellow; Tanzania Guide | Chain of custody; counterfeit source tracing; TMDA inspection routing |
 
----
+#### Section D: Concomitant (Other) Medications
 
-## Inquiry / Question Signals — Pharmacy / Pharmaceutical
+| Field | Swahili Label | Required? | Framework Source | Why |
+|-------|--------------|-----------|-----------------|-----|
+| all_current_medications | Dawa zote za sasa | Yes | CIOMS I; ICH E2B G; ADR form v1.2 | Drug-drug interaction detection — 20–30% of ADRs caused by interactions; WHO VigiBase interaction signal generation |
+| otc_supplements_herbals | Dawa za madukani, virutubisho, dawa za asili | Yes | FDA 3500B Section D | Herb-drug interactions frequently missed — e.g. St. John's Wort and ARVs; dawa za asili interactions |
 
-### Prescription & Dispensing
-- "Can I get this antibiotic without a prescription — I've taken it before and know I need it"
-- "My prescription is from a government hospital — will you honor it here at a private pharmacy?"
-- "Can I get a partial supply if I can't afford the full prescription?"
-- "The doctor wrote the brand name but can I get the generic equivalent?"
-- "Can my relative collect my prescription on my behalf?"
-- "My prescription is written in English — can you help me understand what was prescribed?"
-- "Is a prescription from a doctor in another country valid here?"
-- "How long is a prescription valid — can I use it two months after it was written?"
-- "Do you dispense controlled substances like morphine with a prescription?"
-- "Can I get my chronic medication dispensed for three months at once?"
+*For each concomitant medication, collect: name, dose, route, frequency, dates started/stopped, and indication*
 
-### Medication Information & Side Effects
-- "What are the side effects of this medication?"
-- "Can I take this antibiotic with the blood pressure medicine I'm already on?"
-- "Is it safe to drink alcohol while taking this antibiotic?"
-- "This medicine makes me very drowsy — is there an alternative that won't?"
-- "How should I take this medication — before or after meals?"
-- "Can I stop taking this medication if I feel better before completing the course?"
-- "What should I do if I miss a dose?"
-- "Can a pregnant woman take this medicine safely?"
-- "Is this pain medication safe for children under 5?"
-- "Can I split this tablet in half if I can't swallow it whole?"
-- "This medicine is not working — should I increase the dose myself?"
-- "What happens if I accidentally double-dose?"
-- "Can I take paracetamol and ibuprofen at the same time?"
+#### Section E: Prescriber & Dispensing Information
 
-### Drug Availability & Sourcing
-- "Do you stock Metformin 1000mg?"
-- "Is insulin (Humulin R) available here or do I need to go to the hospital pharmacy?"
-- "Which pharmacies in this area are NHIF-approved?"
-- "Is Coartem available without a prescription at this pharmacy?"
-- "Do you carry antiretroviral drugs or only through government facilities?"
-- "When will you restock this medication — I've been coming every day"
-- "Do you sell medical supplies like syringes, lancets, and glucose test strips?"
-- "Can you order a medicine for me that you don't currently stock?"
-- "Is there a cheaper alternative to this branded medicine?"
-- "Do you carry traditional herbal supplements registered by TMDA?"
+| Field | Swahili Label | Required? | Framework Source | Why |
+|-------|--------------|-----------|-----------------|-----|
+| prescribing_clinician_name | Jina la daktari aliyeandika agizo | Yes | ADR form v1.2; TMDA Yellow | Prescriber notification; prescribing pattern analysis; Medical Council |
+| prescribing_facility | Kituo cha matibabu | Yes | ADR form v1.2 | Chain of custody; institutional pattern analysis |
+| dispensing_pharmacist_name | Jina la mfamasia aliyegawa | Yes | TMDA Yellow; quality complaints | Dispensing error vs. prescribing error differentiation; pharmacist accountability |
+| dispensing_facility_name | Jina la duka la dawa | Yes | TMDA Yellow | Chain of custody confirmation |
+| prescription_date | Tarehe ya agizo la dawa | Yes | TMDA Yellow | Lag between prescription and dispensing; identifies stale prescriptions |
+| previously_reported_to_tmda | Je, tayari imeripotiwa TMDA? | Yes | Tanzania TMDA Yellow Form | Avoids duplicate reports; ensures regulatory reach |
+| tmda_reference_number | Nambari ya kumbukumbu ya TMDA | No | TMDA Yellow | Cross-referencing if previously reported |
+| causality_assessment | Tathmini ya sababu | No (intake) / Yes (PV officer) | ADR form v1.2; CIOMS I | Naranjo / WHO-UMC scale: Certain / Probable / Possible / Unlikely / Unclassifiable — completed by pharmacovigilance officer, not AI |
 
-### NHIF & Insurance
-- "Is this pharmacy registered with NHIF?"
-- "Which medicines are covered under NHIF at your pharmacy?"
-- "My NHIF has been rejected — can you check why?"
-- "Can I claim NHIF reimbursement if I paid cash at a non-NHIF pharmacy?"
-- "Does iCHF (improved Community Health Fund) cover medicines at private pharmacies?"
-- "What insurance providers does your pharmacy accept?"
+### Conditional Fields — Dispensing Error (complaint_category = medication_dispensing_error)
 
-### Regulations & Licensing
-- "Is this pharmacy licensed by TMDA?"
-- "How do I report a suspicious pharmacy to TMDA?"
-- "Is it legal to buy prescription drugs online in Tanzania?"
-- "What is the difference between a registered pharmaceutical technician and a pharmacist?"
-- "Can a pharmacy operate without a pharmacist present at all times?"
-- "How do I verify if a drug is registered by TMDA before buying it?"
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| error_type | Aina ya kosa | Yes | Wrong drug / wrong dose / wrong patient / wrong quantity / wrong frequency / wrong route / wrong label — NRLS 19-category taxonomy |
+| intended_drug | Dawa iliyopaswa kutolewa | Yes | Correct drug for comparison; determines harm potential |
+| drug_actually_received | Dawa iliyopokelewa kweli | Yes | Actual dispensed product |
+| prescribed_dose | Kipimo kilichoandikwa | Yes | Baseline for dose error calculation |
+| dose_actually_dispensed | Kipimo kilichotolewa | Yes | Discrepancy quantification |
+| patient_took_wrong_drug | Je, mgonjwa alitumia dawa mbaya? | Yes | Determines whether clinical review is urgently needed |
+| clinical_review_needed | Je, hakiki ya kimatibabu inahitajika? | Yes | If patient ingested wrong drug → medical review required immediately |
+| prescribing_doctor_notified | Je, daktari amearifiwa? | Yes | Accountability and corrective prescribing |
 
----
+### Conditional Fields — Drug Quality / Counterfeit (complaint_category = drug_quality_counterfeit)
 
-## Compliment / Applause Signals — Pharmacy / Pharmaceutical
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| drug_name | Jina la dawa | Yes | Product identification |
+| batch_lot_number | Nambari ya bachi | Yes | Recall scoping — non-negotiable; instruct patient to keep packaging |
+| manufacturer_name | Jina la mzalishaji | Yes | Manufacturer notification; recall initiation |
+| expiry_date | Tarehe ya kuisha | Yes | Batch validation |
+| suspected_defect_description | Maelezo ya kasoro inayoshukiwa | Yes | Color / smell / texture / efficacy / packaging anomalies |
+| purchase_date | Tarehe ya kununua | Yes | Batch traceability |
+| packaging_available | Je, pakiti ipo? | Yes | Evidence for TMDA testing; ask patient to retain product |
+| harm_resulted | Je, madhara yalitokea? | Yes | Determines whether ADR fields also apply |
+| reported_to_tmda | Je, imeripotiwa TMDA? | Yes | TMDA enforcement trigger |
 
-### Pharmacist & Staff
-- "The pharmacist took time to explain all the side effects and how to take each medicine — very professional"
-- "The pharmaceutical technician noticed a potential drug interaction and called the doctor before dispensing — excellent practice"
-- "The staff were patient and helpful even though the pharmacy was busy"
-- "The pharmacist recommended a cheaper generic that works just as well — saved me money"
-- "The pharmacist at this clinic dispensary knows all the patients by name — very personalized care"
-- "The counseling I received before starting my ARV treatment was thorough and compassionate"
-- "Staff followed up with a call to check if my medication was working — beyond expectations"
-- "The pharmacist realized the doctor had made a prescription error and corrected it before dispensing"
-- "The pharmacy assistant was fast, accurate, and answered all my questions confidently"
+### Conditional Fields — Drug Shortage (complaint_category = drug_shortage_unavailability)
 
-### Drug Availability & Efficiency
-- "This is the only pharmacy in the area that always has insulin in stock — I am grateful"
-- "They ordered my uncommon medication especially for me within 24 hours — excellent service"
-- "The NHIF process here is smooth — no rejections, no queues, medicine ready fast"
-- "The pharmacy was well-stocked with all my chronic medications — first time in months"
-- "Their home delivery service for my elderly mother's medicines is a lifesaver"
-- "The electronic prescription system here is very efficient — no waiting for manual verification"
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| drug_name | Jina la dawa | Yes | Specific product |
+| drug_class | Aina ya dawa | Yes | ARV / insulin / TB / oncology / antihypertensive — determines escalation urgency |
+| pharmacies_checked | Maduka yaliyoangaliwa | Yes | Scope: individual stock-out vs. regional shortage |
+| duration_of_shortage | Muda wa ukosefu | Yes | Weeks / months — systemic vs. temporary |
+| patient_health_impact | Athari kwa afya ya mgonjwa | Yes | Treatment gap assessment — ARV gap risks resistance; insulin gap risks DKA |
+| nhif_formulary_drug | Je, iko kwenye orodha ya NHIF? | Yes | NHIF formulary drugs must be available at approved pharmacies — violation flag |
+| msd_supply_chain_issue | Je, MSD ndiyo tatizo? | No | Medical Stores Department supply chain alert if systemic |
 
-### Facility & Environment
-- "The pharmacy is clean, well-organized, and the medicines are properly stored"
-- "The fridge for cold-chain medicines was clearly maintained correctly"
-- "I was impressed by the separate counseling room for private medication discussions"
-- "The pharmacy displays its TMDA license and the pharmacist's registration certificate openly — builds trust"
-- "The waiting area was comfortable and I was attended to within minutes"
+### Resolution Standards for This Industry
 
-### Pricing & Transparency
-- "Every item was clearly priced and the receipt matched exactly what I paid"
-- "The pharmacist proactively told me about the cheaper generic option — didn't just charge me for the brand"
-- "The pharmacy honored the NHIF coverage without any extra charges"
-- "Price comparison between brands was offered without me having to ask — very transparent"
+- **ADR reports (serious: harm_level = death or life-threatening)**: Report to TMDA within 7 calendar days (ICH E2B / CIOMS I expedited 7-day rule)
+- **ADR reports (serious: hospitalization, disability, congenital anomaly)**: Report to TMDA within 15 working days
+- **ADR reports (non-serious)**: Report to TMDA within 90 days
+- **Counterfeit / substandard drug**: Immediate TMDA notification; product quarantine at pharmacy; batch number to TMDA product recall unit
+- **Dispensing error with patient harm**: Immediate clinical referral; pharmacist to notify prescribing doctor; TMDA notification if harm_level >= 3
+- **Drug shortage (ARV/insulin/TB)**: Escalate to MSD and MOHCDGEC within 24 hours; NTLP for TB drugs
+- **Pharmacy without license**: Refer to TMDA Inspection and Enforcement Unit
+- **Acknowledgment**: Within 3 working days (ISO 10002); TMDA cases have their own regulatory timelines
+- **TMDA reporting portal**: VigiFlow electronic system; Yellow Form for paper-based; tmda.go.tz
+
+### Escalation Triggers (field values requiring immediate escalation)
+
+- `complaint_category = adverse_drug_reaction` AND `reaction_seriousness = death` → 7-day TMDA expedited report; preserve batch; clinical investigation
+- `complaint_category = adverse_drug_reaction` AND `reaction_seriousness = life_threatening` → 7-day TMDA report; immediate clinical referral
+- `complaint_category = adverse_drug_reaction` AND `reaction_seriousness` includes hospitalization, disability, or congenital_anomaly → 15-day TMDA report
+- `complaint_category = drug_quality_counterfeit` AND `batch_lot_number` is known → Immediate TMDA product recall unit notification; pharmacy quarantine order
+- `drug_class = ARV` AND `duration_of_shortage > 14 days` → MSD + MOHCDGEC emergency alert; HIV treatment interruption risk; drug resistance risk
+- `drug_class = insulin` AND patient in active crisis → Medical emergency; drug shortage escalation to MSD simultaneously
+- `drug_class = TB_drugs` AND treatment gap confirmed → NTLP (National TB and Leprosy Programme) alert; MDR-TB risk
+- `error_type = controlled_drug_dispensed_without_prescription` → TMDA Criminal Investigation Unit + police
+- `complaint_category = drug_expiry_storage` AND product type = vaccine → EPI (Expanded Programme on Immunization) emergency; cold chain failure protocol
+- `complaint_category = licensing_compliance` AND pharmacy has no TMDA license → TMDA Inspection and Enforcement Unit referral
+- `complaint_category = medication_dispensing_error` AND `patient_took_wrong_drug = Yes` → Immediate clinical referral; prescribing doctor notification
+- `drug_class = chemotherapy` AND treatment gap confirmed → Oncology department emergency escalation
 
 ---
 
-## Key Entities & Roles
+## SUGGESTION / IMPROVEMENT — Fields
 
-**Staff Titles:** Pharmacist (Daktari wa Dawa / Mfamasia), Pharmaceutical Technician (Fundi wa Dawa), Pharmacy Attendant, Dispensary Officer, Drug Store Manager, Regulatory Affairs Pharmacist, Medical Sales Representative (MSR), Drug Inspector, Traditional Medicine Practitioner
+### Core Fields
 
-**Drug Categories:** Prescription-Only Medicine (POM), Over-the-Counter (OTC), Controlled Drug/Narcotic, Generic Medicine, Branded/Originator Medicine, Biological Medicine/Biosimilar, Herbal/Traditional Medicine (Dawa za Asili), Supplement/Vitamin, Medical Device/Supply
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| date_submitted | Tarehe iliyowasilishwa | Yes | Tracking; trend analysis |
+| channel | Njia | Yes | Walk-in / online / SMS / suggestion box — access equity |
+| submitter_name | Jina la mwasilishaji | No | Anonymous submissions accepted — ISO 10002:2018 |
+| submitter_contact | Mawasiliano | No | Optional follow-up contact |
+| product_service_category | Aina ya bidhaa / huduma | Yes | Dispensing speed / drug availability / labeling / counseling / pricing / staff attitude / opening hours / cold chain / NHIF processing |
+| specific_issue | Tatizo mahususi | Yes | Actionability — "labeling" must specify: language / font size / Swahili instructions / allergy warnings |
+| frequency_of_issue | Mara ngapi tatizo linatokea | Yes | Systemic vs. one-off; prioritization |
+| proposed_improvement | Uboreshaji unaopendekezwa | Yes | Makes suggestion actionable |
+| has_medication_safety_implication | Je, ina athari za usalama wa dawa? | Yes | Pharmacy-specific — a suggestion about labeling or storage may have patient safety implications requiring TMDA escalation |
+| estimated_patient_impact | Athari inayokadiriwa kwa wagonjwa | No | How many patients affected; severity of impact |
+| response_provided | Je, jibu limetolewa? | Yes | ISO 10002 requires acknowledgment |
 
-**Common Drug Names (Tanzania Context):** Coartem (artemether-lumefantrine — malaria), Doxycycline, Amoxicillin, Metformin, Amlodipine, Atenolol, Humulin (insulin), Efavirenz/Tenofovir/Lamivudine (ARV), Tramadol, Diclofenac, Paracetamol, Ibuprofen, ORS (Oral Rehydration Salts), Zinc (childhood diarrhea), Folic Acid, Ferrous Sulfate, Albendazole, Mebendazole, Fluconazole, Metronidazole, Co-trimoxazole, TB drugs (RHZE — Rifampicin/Isoniazid/Pyrazinamide/Ethambutol), Depo-Provera, Microgynon, Artemisinin-based Combination Therapy (ACT)
+### Industry-Specific Improvement Categories
 
-**Regulatory & Government Bodies (Tanzania):** TMDA — Tanzania Medicines and Medical Devices Authority (formerly TFDA), MOHCDGEC (Ministry of Health), Medical Stores Department (MSD), NHIF (National Health Insurance Fund), Tanzania Pharmacy Board (within TMDA), Pharmacy and Poisons Board, Tanzania Food and Drugs Authority (TFDA — legacy name still used), Medicines Information Centre
-
-**Key Processes:** Drug Registration (Usajili wa Dawa), Prescription Verification, Drug Dispensing (Ugawaji wa Dawa), Cold Chain Management, Drug Storage (Uhifadhi wa Dawa), Drug Recall (Urejeshaji wa Dawa), Pharmacovigilance (Ufuatiliaji wa Madhara ya Dawa), NHIF Drug Formulary, Essential Medicines List (EML), Drug Interaction Check, Medication Reconciliation, Adverse Drug Reaction (ADR) Reporting, Expiry Date Monitoring, Batch Traceability
-
-**NHIF Pharmacy Terms:** NHIF Approved Pharmacy, NHIF Drug Formulary, Capitation, Fee-for-Service Pharmacy, NHIF Claims, Prior Authorization, Referral Drug List
-
----
-
-## Kiswahili / Swahili Equivalents
-
-### Malalamiko (Complaints)
-- "Nadhani dawa hizi ni bandia — hazikufanya kazi yoyote"
-- "Mfamasia alinipatia dawa mbaya — jina kwenye agizo la daktari ni tofauti"
-- "Dawa zimekwisha tarehe ya matumizi — niliangalia nikirudi nyumbani"
-- "ARV zangu zimekwisha ghala kwa wiki tatu — ninajisikiaje sasa?"
-- "Hakuna mtu aliyenieleza jinsi ya kunywa dawa hizi na madhara yake"
-- "Mfamasia alikataa kutoa dawa mbadala wa bei nafuu ingawa niliomba"
-- "Bei ya dawa hapa ni mara tatu zaidi ya duka la dawa jirani"
-- "NHIF yangu ilikataliwa hata duka hili liko orodha ya NHIF"
-- "Dawa zilihifadhiwa kwenye jua moja kwa moja — hii ni hatari kwa ubora wa dawa"
-- "Msaidizi wa duka alikuwa mkali na aliniharakisha wakati nilikuwa na maswali muhimu"
-- "Walinipa kiasi kidogo lakini walinilipisha dawa nzima — hawakuniambia upungufu"
-- "Mfamasia hakuwa pale — mtu asiyestahiki ndiye aliyonipa dawa zangu"
-- "Duka hili halijaweka nambari ya leseni ya TMDA wazi — ninashuku"
-- "Walinipa dawa zinazohitaji agizo bila kuniuliza agizo lo lote"
-
-### Mapendekezo (Suggestions)
-- "Mfumo wa kukumbusha mgonjwa kwa SMS angeweza kusaidia watu kukumbuka dawa zao"
-- "Maelekezo ya matumizi ya dawa yatolewa kwa Kiswahili, si Kiingereza peke yake"
-- "Chumba cha faragha cha ushauri ningependekeza — maswali ya afya yanahitaji siri"
-- "Orodha ya dawa zilizopo kwa wakati halisi mtandaoni ingeweza kuokoa mgonjwa safari nyingi"
-- "Mfamasia anapaswa kuuliza historia ya mzio kabla ya kutoa dawa yoyote mpya"
-- "Ushirikiano zaidi na NHIF ungehitajika ili mchakato iwe rahisi na haraka"
-- "Dawa za magonjwa sugu (shinikizo la damu, kisukari, ARV) zinapaswa kuwa na akiba ya kutosha"
-- "Dawa za watoto zinatakiwa zifungashwe kwa vifuniko salama kwa watoto (childproof caps)"
-- "Uhalali wa dawa unaweza kuthibitishwa kwa msimbo wa QR — fikiria kutekeleza hili"
-
-### Maswali (Inquiries)
-- "Dawa hii ina madhara gani — daktari hakueleza"
-- "Naweza kunywa pombe nikitumia antibiotic hii?"
-- "Dawa hii salama kwa mwanamke mjamzito?"
-- "Nahitaji agizo la daktari kupata dawa hii au ninaweza kununua moja kwa moja?"
-- "Je, duka hili linakubali NHIF?"
-- "Dawa mbadala wa bei nafuu wa hii ipo?"
-- "Dawa hii inachukua muda gani kuanza kufanya kazi?"
-- "Naweza kuacha dawa kabla ya kumalizia kipindi cha matibabu nikijisikia vizuri?"
-- "Insulin inapatikana hapa au niende hospitali?"
-- "Kwa nini dawa yangu imeisha ghala kwa mara nyingine — NHIF inasema inapaswa kuwepo?"
-- "Ninaweza kumtumia ndugu yangu kuchukua dawa zangu?"
-- "Dawa hizi zinaweza kutumiwa pamoja au zitadhuru mwili wangu?"
-- "Batchi nambari ya dawa hii inaweza kuthibitishwa na TMDA vipi?"
-- "Duka hili lina leseni halali ya TMDA?"
-
-### Pongezi / Shukrani (Compliments)
-- "Mfamasia alieleza kwa kina jinsi ya kutumia dawa na madhara yake — nashukuru sana"
-- "Wafanyakazi waligundua mkanganyiko kwenye agizo langu na walipiga simu daktari — kitaalamu sana"
-- "Walinielekeza dawa mbadala wa bei nafuu bila kuniuliza — waliwaza zaidi yangu"
-- "ARV zangu zilikuwa zinapatikana kila wakati nilipotembelea duka hili — nawashukuru"
-- "Mfamasia alifuatilia simu ili kujua kama dawa zilifanya kazi vizuri — huduma bora"
-- "Duka hili ni safi na vizuri, na dawa zimehifadhiwa ipasavyo"
-- "Mchakato wa NHIF ulifanywa haraka bila ugumu wowote — ninashukuru"
-- "Nilipata dawa za kipekee zilizoagizwa ndani ya siku moja — huduma ya haraka"
+- `dispensing_accuracy` — Barcode scanning, prescription verification systems, double-check protocols
+- `patient_counseling` — Mandatory counseling on new prescriptions, allergy history collection before dispensing, Swahili instruction leaflets
+- `drug_availability` — Stock forecasting for chronic disease drugs, MSD ordering protocols, generic supplier diversification
+- `cold_chain_management` — Fridge temperature monitoring, cold chain alert systems, vaccine storage validation
+- `nhif_processing` — Electronic prescription integration, NHIF claims speed, formulary access
+- `counterfeit_prevention` — TMDA QR verification displays, batch number scanning, staff training on identifying substandard products
+- `patient_privacy` — Separate counseling room, soundproofing at dispensing counter, prescription confidentiality
+- `accessibility` — Home delivery for chronic medications, extended hours, rural supply chains
+- `drug_information` — Drug interaction check systems, patient medication records, pharmacist prescribing pattern reviews
+- `pricing_transparency` — Posted price lists, receipt itemization, generic substitution proactive offers
 
 ---
 
-## Industry-Specific Escalation Triggers
+## INQUIRY / QUESTION — Fields
 
-1. "I believe this medicine is counterfeit — patients are taking ineffective or harmful drugs" — TMDA reportable emergency, immediate product seizure trigger
-2. "Patient suffered a serious adverse drug reaction — anaphylaxis, organ failure, or death" — pharmacovigilance emergency; TMDA ADR reporting and clinical referral
-3. "ARV supply has been out of stock for more than two weeks — HIV patients may face treatment interruption and resistance" — MSD/MOHCDGEC urgent supply chain alert
-4. "Insulin unavailable and diabetic patient is in crisis without medication" — medical emergency and essential medicine shortage alert
-5. "Controlled drug (opioid, narcotic) sold without valid prescription" — TMDA and police criminal matter; prescription drug abuse
-6. "Wrong medication dispensed to a patient — patient took it before the error was discovered" — clinical emergency; patient needs immediate medical review
-7. "Expired vaccine administered to children due to cold chain failure" — public health emergency; MOHCDGEC and TMDA notification required
-8. "Pharmacy selling drugs with removed or falsified expiry dates (relabeling)" — criminal activity requiring TMDA enforcement action
-9. "Pharmacy operating without a licensed pharmacist on premises" — TMDA licensing violation; immediate inspection trigger
-10. "Chemotherapy drug shortage causing treatment interruption for cancer patients" — oncology emergency escalation
-11. "Anti-TB drugs unavailable causing treatment gap — risk of drug-resistant TB (MDR-TB)" — NTLP (National TB and Leprosy Programme) alert
-12. "Pharmacy dispensing an unregistered herbal product with claims to cure HIV/AIDS/cancer" — TMDA enforcement and consumer protection
-13. "Suspected dispensing of psychoactive substances as regular medication" — police and TMDA criminal matter
-14. "Vaccine cold chain failure — entire batch potentially compromised" — EPI (Expanded Programme on Immunization) emergency
-15. "Children accidentally ingested pharmacy products left accessible without childproof packaging" — poison control emergency
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| date_received | Tarehe iliyopokelewa | Yes | SLA monitoring |
+| channel | Njia | Yes | Response channel matching |
+| inquirer_name | Jina la muulizaji | Yes | Identity for response |
+| inquirer_relationship_to_patient | Uhusiano na mgonjwa | Yes | Consent check: third-party medication queries require patient consent before sharing clinical information |
+| query_type | Aina ya swali | Yes | Routes to correct resource — see taxonomy below |
+| drug_name_in_question | Jina la dawa husika | Yes | Clinical context for any medication query |
+| specific_question | Swali mahususi | Yes | Actual content of the inquiry |
+| urgency_level | Kiwango cha haraka | Yes | Routine / urgent — urgent includes: pregnant patient, pediatric dose, suspected drug interaction, emergency access |
+| preferred_response_channel | Njia inayopendelewa ya kujibu | Yes | Accessibility; patient preference |
+
+### Common Inquiry Types & Required Data Per Type
+
+**drug_availability** — Is this medicine in stock?
+- Additional fields: `drug_generic_name`, `drug_brand_name`, `dosage_form`, `quantity_needed`
+- Note: If unavailable, offer to provide nearest stocked pharmacy or check MSD supply chain
+
+**drug_interaction** — Can I take these two medicines together?
+- Additional fields: `all_current_medications` (full list), `medical_conditions`
+- Note: Must be routed to registered pharmacist — AI should not provide clinical drug interaction advice; provide pharmacist contact
+
+**dosage_information** — How do I take this medicine?
+- Additional fields: `drug_name`, `patient_age`, `patient_weight_kg` (pediatric), `prescribing_doctor_instructions`
+- Note: AI provides general information; specific dose adjustments require pharmacist
+
+**side_effects** — What are the effects of this drug?
+- Additional fields: `drug_name`, `indication_for_use`
+- Note: Distinguish inquiry (information) from complaint (ongoing harm); if patient already experiencing side effects, reclassify as ADR
+
+**prescription_clarification** — Can I get this without a prescription? Is this prescription valid here?
+- Additional fields: `drug_name`, `prescription_date`, `prescribing_country` (if foreign)
+- Note: Controlled drugs always require valid prescription; AI should not advise bypassing
+
+**nhif_insurance** — Is this pharmacy NHIF-registered? Is this drug on the formulary?
+- Additional fields: `nhif_card_number`, `drug_name`, `insurance_provider`
+
+**drug_substitute** — Is there a cheaper generic equivalent?
+- Additional fields: `brand_name`, `active_ingredient_name`, `dosage_form`
+
+**expiry_verification** — How do I verify if this drug is expired / authentic?
+- Additional fields: `drug_name`, `batch_number`, `expiry_date_visible`
+- Action: Provide TMDA verification portal contact / QR scanning instructions
+
+**tmda_regulatory** — How do I report a suspicious pharmacy? Is this drug TMDA-registered?
+- Additional fields: `pharmacy_name`, `pharmacy_location`, `drug_name`
+- Action: Provide TMDA hotline and VigiFlow reporting instructions
 
 ---
 
-## Disambiguation Notes
+## APPLAUSE / COMPLIMENT — Fields
 
-- **Pharmacy vs. Hospital Dispensary:** A hospital pharmacy (dispensary within a hospital) complaint about drug dispensing should be classified under Pharmacy if the specific issue is with the dispensing process, drug quality, or pharmacist conduct. If the complaint is about the broader hospital service (waiting time, ward conditions, clinical decisions), classify under Healthcare/Hospital.
-- **Pharmacy vs. TFDA/TMDA Regulatory Complaint:** A consumer complaint about a specific pharmacy or medicine they received belongs under Pharmacy. A complaint about TMDA's regulatory failure to stop counterfeit drugs in general belongs under Government/Regulatory Bodies.
-- **Pharmacy vs. Food Supplement:** Health supplements sold at pharmacies (vitamins, protein powders) may be classified as food products if TMDA has registered them as supplements, not medicines. If the product is marketed with medical claims and sold in a pharmacy, classify under Pharmacy.
-- **Drug shortage vs. Individual stock-out:** "My pharmacy doesn't have this drug today" is a service-level complaint. "This drug has been unavailable in all pharmacies in the region for months" is a systemic shortage issue potentially requiring escalation to MSD/MOHCDGEC — note the scope difference.
-- **Traditional/Herbal Medicine vs. Pharmaceutical:** Traditional medicine practitioners and herbalists (waganga wa jadi) selling only traditional remedies operate under different regulation. Classify under Pharmacy only if the seller also operates a registered pharmacy or sells registered pharmaceutical products alongside herbal ones. Pure traditional medicine complaints should be categorized separately if your taxonomy includes a Traditional Medicine category.
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| date_submitted | Tarehe iliyowasilishwa | Yes | Trend analysis; recognition timeliness |
+| channel | Njia | Yes | Access monitoring |
+| submitter_name | Jina la mshukuriaji | No | Anonymous compliments are valid |
+| staff_member_praised | Jina la mtumishi anayeshukuriwa | Yes | Recognition delivery to specific pharmacist or technician |
+| staff_designation | Cheo / Jukumu | Yes | Pharmacist / pharmaceutical technician / dispensary officer / pharmacy attendant |
+| pharmacy_branch | Tawi la duka la dawa | Yes | Location-specific performance trending |
+| date_of_praised_interaction | Tarehe ya huduma iliyoshukuriwa | Yes | Links to specific dispensing encounter |
+| specific_behavior_praised | Tendo mahususi linaloshukuriwa | Yes | "Explained drug interaction clearly" / "caught a prescribing error" / "recommended cheaper generic" / "double-checked allergy before dispensing" — reinforces patient-safe pharmacy behaviors specifically |
+| patient_safety_catch | Je, kulikuwa na jambo la usalama lililozuiwa? | No | If pharmacist caught a prescribing error, identified a dangerous interaction, or noticed a counterfeit — this positive near-miss triggers a learning report. The catch becomes a system improvement |
+| staff_notified | Je, mtumishi amearifiwa? | Yes | Closes recognition loop; motivation |
+
+---
+
+## AI Conversation Guidance for This Industry
+
+- **Lead with the drug name and the problem, not the form.** Open with "What medicine is this about, and what happened?" The drug name and the problem description are the two most diagnostic pieces of information and should be collected first. Everything else builds from there. Do not ask for patient demographics before you know what drug is involved.
+
+- **Urgency triage is mandatory before detailed collection.** If the patient says they are currently experiencing a reaction (difficulty breathing, swelling, chest pain, loss of consciousness), stop immediately and say: "This sounds like a medical emergency. Please call emergency services or go to the nearest hospital right now. We can complete this report afterward." Pharmacovigilance data collection must never delay emergency care.
+
+- **Batch number is the single most important field in a drug quality complaint — ask for it immediately and ask the patient to keep the packaging.** Say: "Before anything else — do you still have the medicine box or bottle? The batch number printed on it is the most important piece of information for investigating this. Please don't throw it away." Without the batch number, a counterfeit drug recall cannot be executed.
+
+- **Concomitant medications are the most commonly missed required field.** After collecting the suspect drug, always ask: "Are you taking any other medicines at the moment — including over-the-counter medicines, vitamins, supplements, or traditional herbal medicines (dawa za asili)?" Drug-drug interactions cause 20–30% of ADRs, and herb-drug interactions are systematically under-reported in Tanzania.
+
+- **Dechallenge and rechallenge are the causality proof — ask them gently in sequence.** After the reaction is described: "Did you stop taking the medicine? And if so, did the reaction improve after stopping?" (dechallenge). If yes: "Did you try taking the medicine again? And did the reaction come back?" (rechallenge). A positive rechallenge alone upgrades causality to "Certain" and changes the entire weight of the report to TMDA.
+
+- **For drug shortage complaints, quantify the scope before escalating.** Ask: "Have you checked other pharmacies? How many? And how long has this been unavailable?" Individual stock-out vs. regional shortage requires different escalation paths — the former goes to the pharmacy manager; the latter goes to MSD and MOHCDGEC.
+
+- **Compliments about prescription error catches are gold.** If a patient says "the pharmacist noticed my doctor made a mistake," treat this as both a compliment AND a near-miss safety learning report. Ask: "What was the error that was caught?" This data feeds clinical governance and can prevent the same error from reaching the next patient.
+
+## Swahili Key Phrases for Field Collection
+
+| Purpose | Swahili Phrase |
+|---------|---------------|
+| Opening pharmacy complaint | "Tatizo lako ni kuhusu dawa gani, na kilichotokea ni nini?" |
+| Batch number urgency | "Kabla ya chochote — je, bado una pakiti ya dawa? Nambari ya bachi iliyo juu yake ni muhimu sana — tafadhali usitupe" |
+| Emergency redirect | "Hali hii inaonekana kama dharura ya kimatibabu. Tafadhali piga simu ya dharura au nenda hospitali sasa hivi — tutakamilisha ripoti hii baadaye" |
+| Onset timing | "Mmenyuko huu ulianza baada ya muda gani wa kuanza dawa — masaa mangapi au siku ngapi?" |
+| Dechallenge | "Je, uliposimama kutumia dawa, mmenyuko uliisha au ulipungua?" |
+| Rechallenge | "Baadaye, je, ulianza tena dawa ile ile? Kama ndiyo — mmenyuko ulirudi?" |
+| Concomitant medications | "Je, unanywa dawa nyingine zozote sasa hivi — dawa za madukani, vitamini, virutubisho, au dawa za asili (mitishamba)?" |
+| Allergy history | "Je, una mzio wowote unaojulikana wa dawa?" |
+| Storage conditions | "Dawa hii ilihifadhiwa wapi — kwenye jokofu, au nje? Na nyumbani ulihifadhia wapi?" |
+| Drug shortage scope | "Umekwenda maduka mangapi bila kupata dawa hii? Na imekuwa hivi kwa wiki ngapi?" |
+| ADR seriousness | "Je, mmenyuko huu ulisababisha kulazwa hospitalini, ulemavu, au hatari ya maisha?" |
+| Counterfeit signs | "Kuna tofauti gani kati ya dawa hii na dawa zako za kawaida — rangi, ladha, harufu, au athari?" |
+| Where purchased | "Ulinunua dawa hii wapi — jina la duka na mahali pake?" |
+| TMDA reporting | "Hili tayari limeripotiwa TMDA? Kama hapana, tutakusaidia kufanya ripoti ya Yellow Form" |
+| Compliment staff name | "Unakumbuka jina la mfamasia au mtumishi huyo — hata jina la kwanza litamsaidia kupokea pongezi" |
+| Prescription error catch | "Mfamasia aligundua hitilafu gani kwenye agizo la daktari wako?" |
+
+## Action Recommendations Based on Field Values
+
+| If Field | Equals | Recommended Action |
+|----------|--------|-------------------|
+| reaction_seriousness | death or life_threatening | 7-day TMDA expedited report; preserve batch; immediate clinical investigation |
+| reaction_seriousness | hospitalization, disability, or congenital_anomaly | 15-day TMDA mandatory report via VigiFlow or Yellow Form |
+| complaint_category | drug_quality_counterfeit AND batch_lot_number known | TMDA product recall unit notification immediately; request pharmacy to quarantine remaining stock |
+| complaint_category | drug_quality_counterfeit AND batch_lot_number unknown | Instruct patient to retrieve packaging; note pharmacy and purchase date for TMDA inspection |
+| drug_class | ARV AND duration_of_shortage > 14 days | MSD + MOHCDGEC emergency alert; HIV programme officer notification; drug resistance risk |
+| drug_class | insulin AND patient_health_impact = active_crisis | Medical emergency parallel track; MSD shortage alert simultaneously |
+| drug_class | TB_drugs AND treatment gap confirmed | NTLP (National TB and Leprosy Programme) immediate alert; MDR-TB prevention priority |
+| error_type | controlled_drug_dispensed_without_prescription | TMDA Criminal Investigation Unit; police referral |
+| complaint_category | drug_expiry_storage AND product_type = vaccine | EPI emergency; cold chain failure protocol; MOHCDGEC notification |
+| complaint_category | licensing_compliance AND no_tmda_license | TMDA Inspection and Enforcement Unit referral; pharmacy ID and location |
+| patient_took_wrong_drug | Yes | Immediate clinical referral; prescribing doctor notification; poison control if overdose risk |
+| dechallenge_result | positive (reaction resolved when drug stopped) | Causality upgraded to Probable; strengthens TMDA report |
+| rechallenge_result | positive (reaction returned when restarted) | Causality = Certain (WHO-UMC); strongest possible TMDA signal report |
+| patient_safety_catch | Yes (compliment — prescribing error caught) | Convert to near-miss learning report; share at pharmacy governance meeting; recognize staff formally |
+| has_medication_safety_implication | Yes (suggestion) | Route to pharmacy director and QIT; not just store manager |
+| query_type | drug_interaction | Route to registered pharmacist; AI must not provide drug interaction clinical advice |
+| query_type | side_effects AND patient experiencing them now | Reclassify as ADR complaint; begin ADR field collection |
+| drug_class | chemotherapy AND treatment gap | Oncology department emergency escalation; MOHCDGEC supply chain alert |
+| previously_reported_to_tmda | No AND reaction_seriousness is serious | Generate TMDA report immediately; 7-day or 15-day clock starts at date_complaint_received |
+
+---
+
+## Key Entities & Roles (Tanzania Context)
+
+**Staff Titles:** Pharmacist (Mfamasia / Daktari wa Dawa), Pharmaceutical Technician (Fundi wa Dawa), Dispensary Officer, Pharmacy Attendant, Drug Store Manager, Medical Sales Representative (MSR), Drug Inspector (TMDA), Traditional Medicine Practitioner (Mganga wa Jadi)
+
+**Drug Categories:** Prescription-Only Medicine (POM / Dawa ya Agizo), Over-the-Counter (OTC / Dawa bila Agizo), Controlled Drug / Narcotic, Generic Medicine, Branded / Originator Medicine, Biological / Biosimilar, Herbal / Traditional Medicine (Dawa za Asili), Supplement / Vitamin, Medical Device / Supply
+
+**Common Drug Names (Tanzania):** Coartem (artemether-lumefantrine — malaria), Doxycycline, Amoxicillin, Metformin, Amlodipine, Atenolol, Humulin (insulin), Efavirenz / Tenofovir / Lamivudine (ARV), Tramadol, Diclofenac, Paracetamol, Ibuprofen, ORS, Zinc (childhood diarrhea), Folic Acid, Ferrous Sulfate, Albendazole, Fluconazole, Metronidazole, Co-trimoxazole, TB drugs (RHZE), Depo-Provera, Microgynon, Artemisinin-based Combination Therapy (ACT)
+
+**Regulatory & Government Bodies:** TMDA (Tanzania Medicines and Medical Devices Authority), MOHCDGEC, Medical Stores Department (MSD), NHIF, Tanzania Pharmacy Board (within TMDA), NTLP (National TB and Leprosy Programme), EPI (Expanded Programme on Immunization), WHO-UMC (Uppsala Monitoring Centre)
+
+**Key Processes:** Drug Registration (Usajili wa Dawa), Prescription Verification, Dispensing (Ugawaji wa Dawa), Cold Chain Management, Drug Recall (Urejeshaji wa Dawa), Pharmacovigilance (Ufuatiliaji wa Madhara ya Dawa), ADR Reporting, VigiFlow, TMDA Yellow Form, NHIF Drug Formulary, Essential Medicines List (EML), Naranjo Algorithm, WHO-UMC Causality Scale, ICH E2B(R3) ICSR, CIOMS I Form

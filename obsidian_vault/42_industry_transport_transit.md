@@ -1,330 +1,268 @@
 ---
-tags: [industry-kb, feedback-classification]
+tags: [industry-kb, feedback-classification, field-standards]
 ---
-# Transport / Public Transit — Industry-Specific Feedback Classification Knowledge Base
+# Transport / Public Transit — Feedback Collection Fields & Standards
 
 ## Industry Identifiers
 
-daladala, BRT, UDART, bodaboda, bajaji, Bolt, Uber, Little, SGR, TAZARA, ferry, MV Bukoba, Zanzibar ferry, JNIA (Julius Nyerere International Airport), SUMATRA, intercity bus, coach, Dar Express, kilimanjaro bus, airport taxi, railway, station, conductor, driver, manifest, fare, ticket, route permit, upcountry, Lake Victoria, Mwanza ferry, port, terminal, bus stand, platform, boarding pass
+daladala, BRT, UDART, bodaboda, bajaji, boda boda, tuk-tuk, Bolt, Uber, Little, SGR, TAZARA, ferry, MV Bukoba, Zanzibar ferry, JNIA, SUMATRA, LATRA, intercity bus, coach, Dar Express, Kilimanjaro Express, Royal Coach, Scandinavian Express, airport taxi, railway, station, conductor, driver, manifest, fare, ticket, route permit, upcountry bus, Lake Victoria ferry, Mwanza ferry, port transfer, bus terminal, platform, boarding pass, transit, public transport, matatu, basi, nauli, route deviation, overloading, PSV license, route permit, passenger manifest
+
+## Why Industry-Specific Fields Matter
+
+Generic feedback fields miss the regulatory chain that governs transport complaints in Tanzania — LATRA 2024 requires specific vehicle and route identifiers before a complaint can be formally escalated to the authority, and safety-critical incidents (accidents, injuries, overloading) trigger mandatory notification timelines that differ from commercial disputes. Without mode, route, vehicle registration, and incident time, the AI cannot distinguish a fare overcharge requiring mediation from a road accident requiring immediate emergency escalation.
+
+## Source Standards
+
+- Tanzania LATRA Complaint Handling Procedures Rules 2024 (GN No. 16 of 2024) — mandatory complaint fields, 7-day rule, 21-day supplier response window
+- Tanzania SUMATRA Complaints and Review Rules 2008 — vehicle and operator identification requirements
+- EU Regulation 261/2004 — departure/destination fields, care obligations for delayed passengers
+- EU Regulation 1371/2007 — rail passenger delay rights
+- ITF Discussion Paper DP2013/16: Measuring and Valuing Convenience and Service Quality — route-level quality dimensions
+- NTSB 49 CFR Part 830 — injury classification and mandatory notification thresholds
+- NHTSA Vehicle Owner Questionnaire (VOQ) system — incident context, police report fields
+- OTIF CIV Uniform Rules (COTIF Appendix A) — rail passenger journey fields
+- IATA Consumer Protection Principles — affected passenger count, care obligations
+- Athens Convention 2002 (PAL) — maritime passenger luggage liability fields
 
 ---
 
-## Complaint / Grievance Signals — Transport / Public Transit
+## GRIEVANCE / COMPLAINT — Required & Recommended Fields
 
-### Safety & Accidents
-- The daladala driver was speeding and recklessly overtaking on the highway
-- Our bus was involved in an accident due to the driver's negligence — passengers were injured
-- The bodaboda rider ran a red light and nearly caused a collision — he had no helmet
-- Driver was using his phone throughout the entire journey while driving
-- The BRT bus brakes were clearly faulty — I could feel it was not stopping normally
-- Our intercity coach had a blowout because tyres were visibly worn and bald
-- The ferry was overloaded — people were standing on the roof and the crew allowed it
-- Our bus had no functional seatbelts despite a 6-hour highway journey
-- Driver was visibly impaired — I believe he was drinking before the journey
-- The bus had no emergency exits and all exits were blocked by luggage
-- I reported to the conductor that a passenger was unconscious — they ignored us
-- The ferry sailed in rough weather when all passengers could see it was dangerous
-- Our taxi driver was speeding at over 150 km/h on the Morogoro highway and refused to slow down
-- The Bolt driver had no car insurance as I confirmed after an accident
+### Core Fields (collect for ALL complaints in this industry)
 
-### Overcharging & Fare Disputes
-- The daladala conductor charged me double fare and refused to give change
-- My Bolt ride showed TZS 15,000 on the app but the driver demanded TZS 25,000 in cash
-- The intercity bus charged me luggage fee but there was no such fee mentioned at booking
-- The conductor overcharged me because I could not speak Swahili — tourist exploitation
-- Fare was raised without notice at peak hours and no sign was displayed
-- The BRT officer would not accept my prepaid card and insisted I buy a new one at TZS 2,000
-- Airport taxi driver quoted TZS 40,000 before departure but charged TZS 120,000 on arrival
-- Booking was made online for TZS 55,000 but the agent at the counter added hidden fees of TZS 15,000
-- The ferry ticket price was doubled because I bought at the dock instead of the office — no prior information
-- The conductor on the night coach collected fares but did not issue tickets to all passengers
+| Field | Swahili Label | Required? | Why It Enables Better Action |
+|-------|--------------|-----------|------------------------------|
+| transport_mode | Aina ya usafiri | Yes | Determines which regulator handles the complaint (LATRA for road, SUMATRA for ferries/marine, Tanzania Railways for SGR/TAZARA, TCAA for airport transfers); drives all downstream field logic |
+| route_number_or_name | Nambari/jina la njia | Yes | LATRA 2024 requires route-level identification; enables pattern detection across repeated route violations |
+| vehicle_registration | Nambari ya usajili wa gari | Yes | LATRA 2024 mandatory; allows regulator to pull vehicle and operator records instantly |
+| driver_name_or_badge | Jina/nambari ya dereva | Recommended | LATRA 2024; enables direct disciplinary action against the specific driver rather than just the company |
+| incident_date | Tarehe ya tukio | Yes | LATRA 2024; NTSB 49 CFR 830; triggers the 7-day consumer complaint window and 21-day supplier response deadline |
+| incident_time | Wakati wa tukio | Yes | Corroborates with vehicle logs, CCTV, and passenger manifests |
+| departure_point | Mahali pa kuanzia | Yes | EU 261/2004 Article 3; OTIF CIV; required to verify the passenger was on the route and the operator was operating the route at that time |
+| destination_point | Mahali pa kwenda | Yes | Same sources; needed to establish the passenger's contracted journey |
+| issue_type | Aina ya tatizo | Yes | Drives the conditional field logic below; determines escalation path |
+| incident_description | Maelezo ya tukio | Yes | LATRA 2024; NTSB; provides the narrative record for regulatory referral |
+| complainant_full_name | Jina kamili la mlalamikaji | Yes | LATRA 2024 requires named complainant (anonymous complaints accepted only where merit is evident) |
+| complainant_phone | Nambari ya simu | Yes | LATRA 2024; required for follow-up and resolution notification |
+| complainant_email | Barua pepe | Recommended | LATRA 2024; for formal written responses |
+| number_of_passengers_affected | Idadi ya abiria walioathirika | Recommended | EU 261/2004 Articles 9 and 12; IATA; scales the urgency and care obligations |
 
-### Vehicle Condition & Comfort
-- The daladala was so overcrowded that I had to hang outside the door for 30 minutes
-- Air conditioning in the intercity bus was completely broken on a 10-hour journey
-- The seats were torn and uncomfortable — I had back pain for three days after the trip
-- The bus had a strong smell of fuel inside the cabin — I felt dizzy for the whole journey
-- Windows were broken and wind was blowing in — some passengers including children were shivering
-- The night coach toilet was locked and passengers were not allowed to use it
-- Luggage compartment was not secured — bags fell off the bus on the highway
-- The bajaji had no windscreen and during rain we were all soaked
-- The ferry cabin was not cleaned and smelled very bad — there were no life jackets at the seats
-- SGR train compartment lights were not working and it was a night journey
+### Conditional Fields (collect based on issue type)
 
-### Schedule, Punctuality & Route Issues
-- The intercity bus was 3 hours late departing with no explanation given to waiting passengers
-- The BRT arrived 45 minutes late and the station app showed no real-time updates
-- My reserved seat on the SGR was already occupied when I boarded — no staff helped
-- Bus departed before the scheduled time — I arrived on time but missed the bus
-- The daladala deviated from its registered route and dropped passengers in a location far from the destination
-- The ferry cancelled its afternoon departure without notifying passengers who had bought tickets
-- TAZARA train arrived in Mbeya 9 hours late — no announcements or updates were given
-- Night coach stopped for over two hours in the middle of the highway without explanation
-- The flight connection bus at JNIA was not at the agreed pickup point and I missed my flight
-- SGR booking showed Train 001 but passengers were moved to a different train without notice
+**If issue_type = Accident / Collision or Dangerous Driving:**
+- `injury_occurred` — Was anyone injured? [Yes / No] — NTSB 49 CFR Part 830; NHTSA VOQ
+- `injury_severity` — [None / Minor / Serious / Fatal] — NTSB Part 830.5 (serious injury triggers 24-hour mandatory notification)
+- `injury_description` — Description of injuries sustained — Athens Convention (PAL) 2002 claim elements
+- `police_report_filed` — Was a police report filed? [Yes / No] — NHTSA VOQ
+- `police_report_number` — Police report reference number — LATRA 2024; NHTSA VOQ
+- `police_station_name` — Name and location of police station — LATRA 2024
+- `witness_names_contacts` — Witness names and contacts — NTSB witness reporting guidance
+- `evidence_photos_video` — Photos or video [file upload] — NHTSA VOQ; LATRA 2024
+- `vehicle_speed_estimate` — Estimated speed at time of incident — NHTSA VOQ incident context
+- `road_conditions` — Road conditions [Dry / Wet / Murram / Highway / Urban] — NHTSA VOQ
 
-### Staff Conduct & Customer Service
-- The daladala conductor was verbally abusive when I asked for change
-- The BRT station officer was very rude and shouted at elderly passengers
-- Intercity bus driver refused to help a woman with a disability board the vehicle
-- Airport taxi driver was aggressive and demanded payment upfront under threats
-- The Bolt driver cancelled my ride after I was already waiting in the rain — no explanation
-- Train conductor asked me to pay a bribe to get my reserved seat
-- The ferry crew ignored passengers who were seasick and needed assistance
-- Bus company staff at the terminal were dismissive and told me to complain "somewhere else"
-- The SGR station officer at Dodoma Central refused to assist a passenger with a hearing impairment
-- Night coach crew allowed passengers to smoke inside the vehicle and did nothing when others complained
+**If issue_type = Overcharging / Fare Dispute:**
+- `amount_paid` — Amount actually paid — LATRA 2024
+- `correct_fare_known` — Correct fare as displayed or known — LATRA 2024
+- `receipt_issued` — Was a receipt issued? [Yes / No] — SUMATRA 2008
+- `receipt_photo` — Photo of receipt if issued [file upload]
 
-### Lost Property & Luggage
-- My bag was left on the bus and the company is claiming they cannot locate it
-- Luggage was damaged during transport and the intercity bus company is denying liability
-- I lost my phone on the BRT — reported at the station but nobody followed up
-- The ferry porters handling my cargo were rough and broke items inside the box
-- My parcel sent via intercity bus never arrived at the destination and the company is not responding
-- The airline ground transport service lost my checked-in luggage tag
-- Luggage was placed on the roof without securing it — fell off and was stolen before we realized
+**If issue_type = Luggage Lost or Damaged:**
+- `luggage_description` — Description of luggage/contents — IATA PIR standard; Athens Convention 2002 Article 3
+- `luggage_weight_kg` — Approximate weight (kg) — IATA PIR
+- `declared_value` — Estimated value of lost/damaged items — Athens Convention; IATA
+- `pir_reference` — Property Irregularity Report (PIR) number if issued — IATA PIR system
+- `luggage_photos` — Photos of damaged luggage [file upload] — IATA; NHTSA documentation principle
 
-### Booking & Ticketing Issues
-- I booked and paid for an intercity coach online but there was no record of my booking at the terminal
-- The online booking platform did not send a confirmation email and I could not board
-- The BRT prepaid card was loaded with TZS 10,000 but the balance shows only TZS 7,000
-- My SGR ticket could not be printed because the system was down — no alternative offered
-- Ticket refund was denied even though I cancelled 48 hours before departure
-- The Bolt app charged my card three times for one cancelled ride
-- Return ticket was not honored — the company claimed the route had changed
+**If issue_type = Late Arrival / Excessive Delay:**
+- `scheduled_departure_time` — Scheduled departure time — EU 261/2004; OTIF CIV
+- `actual_departure_time` — Actual departure time — EU 261/2004
+- `delay_duration_minutes` — Total delay in minutes — EU 1371/2007 (rail: 60+ min triggers compensation)
+- `notification_received` — Were passengers notified of the delay? [Yes / No / Only when asked] — ITF service quality standard
 
-### Accessibility & Inclusion
-- The BRT station has no ramp and I could not board with my wheelchair
-- Announcement at the bus terminal was only in English — most passengers are Swahili speakers
-- There was no seat reserved for pregnant women or the elderly on our overcrowded bus
-- The ferry dock has no accessible toilet for people with disabilities
-- SGR station staff were unable to assist a blind passenger to find the correct platform
+**If issue_type = Sexual Harassment / Assault:**
+- `perpetrator_role` — [Driver / Conductor / Fellow Passenger / Station Staff / Other]
+- `incident_location_detail` — Precise location (seat number, specific area of vehicle)
+- `witnesses_present` — Were witnesses present? [Yes / No]
+- `reported_to_police` — Was incident reported to police? [Yes / No]
+- `police_ob_number` — Police OB (Occurrence Book) number
 
----
+**If complaint was first filed with the service provider (LATRA 2024 pre-escalation requirement):**
+- `complained_to_provider_first` — Did you complain to the service provider first? [Yes / No] — LATRA 2024 requires this before escalating to LATRA
+- `date_complained_to_provider` — Date complaint was made to provider — LATRA 2024 (7-day window)
+- `provider_response_received` — Provider response received? [Yes / No / No response within 21 days] — LATRA 2024 (21-day supplier response deadline)
+- `provider_response_description` — Summary of provider's response — LATRA 2024
 
-## Suggestion / Advice Signals — Transport / Public Transit
+### Issue Type Classification
 
-### Safety & Vehicle Standards
-- SUMATRA should enforce annual vehicle roadworthiness checks for all intercity coaches
-- Every BRT bus should have a functional first aid kit and trained staff on board
-- Mandatory speed limiters should be installed on all intercity coaches
-- All bodaboda riders should be required to wear helmets and provide a spare helmet to passengers
-- The ferry should have a maximum capacity display and no sailing should occur when overloaded
-- CCTV cameras should be installed in all daladala and BRT buses for passenger safety
-- Night coaches should have a co-driver to allow rest breaks on long-distance journeys
-- All passenger vehicles should carry fire extinguishers and emergency contact numbers visibly displayed
-- Bodaboda registration should include a mandatory road safety training certificate
+- `OVERCHARGING` — Fare dispute, excess charge, no receipt, price higher than displayed
+- `DRIVER_CONDUCT_RECKLESS` — Over-speeding, phone use while driving, reckless overtaking
+- `DRIVER_CONDUCT_ABUSE` — Verbal abuse, harassment, refusal to assist disabled passengers
+- `ACCIDENT_COLLISION` — Road accident, collision, vehicle rollover
+- `ROUTE_DEVIATION` — Dropped passengers before destination, illegal route change
+- `NO_SHOW_DEPARTURE_FAILURE` — Bus did not depart, did not show up, cancelled without notice
+- `EXCESSIVE_DELAY` — Late departure, late arrival, unexplained stops
+- `VEHICLE_BREAKDOWN` — Breakdown during journey, mechanical failure
+- `OVERLOADING` — Passenger overcrowding beyond legal capacity
+- `VEHICLE_CONDITION` — Faulty brakes, no seatbelts, broken seats, unsanitary conditions
+- `LUGGAGE_LOST` — Missing luggage, parcel not delivered
+- `LUGGAGE_DAMAGED` — Items damaged during transport
+- `SEXUAL_HARASSMENT` — Sexual harassment or assault by transport staff or in vehicle
+- `ACCESSIBILITY_FAILURE` — No ramp, no priority seating, refusal to assist person with disability
+- `BOOKING_TICKETING` — Booking not honored, system failure, refund refused
+- `FARE_SYSTEM_FAILURE` — BRT card not accepted, balance error, card not loading
 
-### Customer Experience & Technology
-- Introduce a real-time tracking app for BRT buses so passengers can see arrival times
-- All daladala routes should be numbered and displayed at stops so visitors can navigate
-- Intercity bus companies should send SMS updates when there is a delay of more than 30 minutes
-- The BRT prepaid card should be rechargeable via M-Pesa and all major mobile money platforms
-- Introduce e-ticketing for intercity buses so passengers can book and manage seats on a phone
-- BRT stations should have accessible restrooms and drinking water for passengers
-- Install electronic displays at major daladala stops showing the next arrival
-- Airport taxi drivers should use a meter or app-fixed rates to prevent overcharging tourists
-- SGR should introduce a loyalty program for frequent passengers
-- Bolt and Uber drivers should be rated on safety behavior, not just punctuality
+### Resolution Standards for This Industry
 
-### Infrastructure & Route Planning
-- Introduce more BRT routes to cover Mikocheni, Mbagala, and Tegeta
-- Build dedicated bodaboda lanes on busy roads to reduce accidents
-- Ferry terminals should have covered waiting areas and proper seating
-- TAZARA should upgrade its passenger coaches — current ones are old and uncomfortable
-- Introduce direct SGR service to Mwanza to connect the lake zone
-- Bus terminals should have proper waste management — they are very dirty
-- Introduce park-and-ride facilities near BRT terminals to reduce city center congestion
+- **LATRA 2024**: Consumer must first complain to the service provider within 7 days of the incident. The provider has 21 days to respond. If no satisfactory response, the consumer may escalate to LATRA.
+- **SUMATRA 2008**: Marine transport complaints follow SUMATRA's own review process with formal written submission.
+- **EU Regulation 1371/2007 (rail)**: For delays exceeding 60 minutes, passengers are entitled to 25% of the ticket price; delays over 120 minutes entitle passengers to 50%. These principles inform SGR/TAZARA complaint handling.
+- **Athens Convention (PAL) 2002**: Carrier liability for luggage damage/loss on ferries is up to SDR 2,700 per passenger. Complaints must be submitted in writing.
+- **OTIF CIV**: Rail passenger must submit complaint to the carrier within 12 months of the incident.
+- **Safety incidents (NTSB principle)**: Accidents involving serious injury must be notified to the relevant authority within 24 hours.
 
-### Regulation & Enforcement
-- SUMATRA should publish monthly statistics on route violations and fines issued
-- Daladala route permits should be digitized and verifiable by the public
-- Overloading should result in immediate suspension of a vehicle's route permit
-- Introduce a public portal to report traffic violations by registered PSVs online
-- Bodaboda associations should be formalized and held accountable for their members' behavior
-- The ferry operator should be required to maintain an electronic passenger manifest
+### Escalation Triggers (field values that require immediate escalation)
+
+- `injury_severity` = Serious or Fatal → immediate emergency referral; notify LATRA, Traffic Police, and relevant emergency services
+- `issue_type` = ACCIDENT_COLLISION + `injury_occurred` = Yes → escalate within 1 hour; cross-notify SUMATRA or Tanzania Railways as applicable
+- Ferry or vessel reported overloaded and about to depart → imminent safety risk; contact Tanzania Harbours Authority (THA)
+- `issue_type` = DRIVER_CONDUCT_RECKLESS + vehicle still in motion with passengers → real-time emergency
+- `issue_type` = SEXUAL_HARASSMENT → escalate to senior staff immediately; preserve complainant privacy; advise police reporting
+- Driver confirmed intoxicated with passengers on board → emergency notification; do not wait for provider response
+- Bus/vehicle locks passengers inside and deviates route → LATRA emergency line
+- `issue_type` = LUGGAGE_LOST + `declared_value` > TZS 1,000,000 → formal carrier liability claim; Athens Convention thresholds apply for ferry cargo
+- Child travelling alone confirmed missing at terminal → immediate referral to police and THA/LATRA as applicable
 
 ---
 
-## Inquiry / Question Signals — Transport / Public Transit
+## SUGGESTION / IMPROVEMENT — Fields
 
-### BRT & Daladala Questions
-- Which BRT route do I take to get from Kivukoni to Morocco?
-- How do I get a BRT prepaid card and how much does it cost?
-- What is the BRT fare from Kimara to the city center?
-- How do I recharge my BRT card if it is lost or damaged?
-- Can I use the BRT card on a daladala?
-- What are the operating hours of the BRT system in Dar es Salaam?
-- Is there a student discount for the BRT?
-- Which daladala number goes to Mwenge from Posta?
-- How do I report a faulty BRT gate or card reader?
-- Is there a night BRT service from Kimara to the city?
+### Core Fields
 
-### Intercity Bus Questions
-- What is the price of a ticket from Dar es Salaam to Arusha on Dar Express?
-- How early should I arrive at the Ubungo bus terminal to board?
-- Is there a luggage allowance and what is the excess charge?
-- Can I book an intercity bus ticket online or must I go to the terminal?
-- What is the travel time from Dar es Salaam to Mbeya by coach?
-- Are there night coaches from Dar to Dodoma and are they safe?
-- How do I get a refund for a cancelled journey on Kilimanjaro Express?
-- Do intercity coaches have toilet facilities on board?
-- Is there a bus service that goes directly from Dar to Musoma?
-- Which is the most reputable bus company for the Dar-Arusha route?
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| transport_mode_affected | Aina ya usafiri inayoathiriwa | Yes | Ensures suggestion is routed to the correct operator and regulator |
+| route_or_service_affected | Njia au huduma inayoathiriwa | Recommended | ITF DP2013/16 recommends route-level service measurement for quality improvement |
+| suggestion_category | Aina ya pendekezo | Yes | Categorizes for operator routing and trend analysis |
+| suggestion_detail | Maelezo ya pendekezo | Yes | The substantive content |
+| perceived_priority | Kipaumbele | Recommended | ITF service quality framework; helps operators triage improvements |
+| submitter_contact | Mawasiliano ya mtoa pendekezo | Optional | For follow-up on adoption |
 
-### SGR & TAZARA Questions
-- What is the SGR fare from Dar es Salaam to Dodoma?
-- How do I book an SGR ticket — is there an app or only the website?
-- What is the SGR departure schedule from Dar es Salaam Central Station?
-- Can I take the SGR with my bicycle or motorcycle?
-- How long does the SGR journey from Dar to Dodoma take?
-- Is there a business class option on the SGR and what is included?
-- How do I get a refund if the SGR is delayed or cancelled?
-- What is the TAZARA schedule for the Dar-Kapiri Mposhi route?
-- How do I travel by train from Dar es Salaam to Mwanza?
-- What cargo can I send by TAZARA freight?
+### Industry-Specific Improvement Categories
 
-### Ferry & Water Transport Questions
-- What is the schedule for the Zanzibar ferry from Dar es Salaam?
-- How much does the Zanzibar ferry cost for residents vs. non-residents?
-- Which company operates the Lake Victoria ferry from Mwanza?
-- How early must I arrive before a ferry departure?
-- What is the weight limit for luggage on the Zanzibar ferry?
-- Is there a car ferry service to Zanzibar?
-- How do I report a safety concern on the Mwanza-Bukoba ferry?
-- What is the Dar-Zanzibar fast ferry vs. slow ferry difference in price and time?
-
-### Ride-Hailing & Taxi Questions
-- How do I report a dangerous Bolt driver in Tanzania?
-- What is the standard taxi rate from JNIA airport to city center?
-- How does Bolt pricing work during peak hours in Dar es Salaam?
-- How do I get a refund from Bolt after an incorrect charge?
-- What is the Bolt driver licensing requirement in Tanzania?
-- How do I register a bodaboda with the relevant authority?
-- Are ride-hailing apps like Bolt and Uber operating legally in Tanzania?
+- `SAFETY_VEHICLE_STANDARDS` — Speed limiters, seatbelts, roadworthiness enforcement, CCTV
+- `SCHEDULE_RELIABILITY` — Real-time tracking apps, SMS delay alerts, on-time performance
+- `FARE_TRANSPARENCY` — Displayed fares, receipts, M-Pesa payments, no hidden charges
+- `DRIVER_CONDUCT_TRAINING` — Safety training, customer service, anti-harassment protocols
+- `INFRASTRUCTURE_ROUTES` — New routes, better stops, shelter at terminals, accessible ramps
+- `REGULATION_ENFORCEMENT` — LATRA/SUMATRA enforcement, digital permits, public violation reporting
+- `ENVIRONMENTAL` — Cleaner vehicles, fuel efficiency standards, emissions
+- `ACCESSIBILITY_INCLUSION` — Ramps, priority seating, audio announcements, Swahili-only announcements
+- `TECHNOLOGY_DIGITAL` — E-ticketing, apps, USSD booking, BRT card via M-Pesa
 
 ---
 
-## Compliment / Applause Signals — Transport / Public Transit
+## INQUIRY / QUESTION — Fields
 
-### Safety & Driver Excellence
-- The bus driver drove very carefully on the mountain road — we felt safe the whole journey
-- The bodaboda rider insisted I wear a helmet and drove slowly — very responsible
-- The Bolt driver noticed my bag was in the boot and reminded me to take it — very honest
-- Our coach driver made a smooth emergency stop when a child ran onto the road — excellent reflexes
-- The ferry crew conducted a thorough safety briefing before departure — very professional
+### Core Fields
 
-### Punctuality & Schedule Adherence
-- The SGR departed and arrived exactly on schedule — impressive for Tanzania
-- The BRT is now more frequent in our area — journey time has improved significantly
-- Our Kilimanjaro Express coach departed on time and arrived 20 minutes early
-- The daladala operator on Route 17 is very consistent — it is always on time during my commute
-- The night ferry to Zanzibar was punctual and arrived before sunrise as scheduled
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| inquiry_type | Aina ya swali | Yes | Routes the inquiry to the correct information source |
+| transport_mode | Aina ya usafiri | Yes | Narrows answer scope immediately |
+| route_or_service | Njia au huduma | Recommended | Needed for fare, schedule, and route questions |
+| travel_date | Tarehe ya safari | Conditional | Required for booking, schedule, and seat-related inquiries |
+| contact_for_response | Mawasiliano ya kujibu | Recommended | Enables callback or SMS response |
 
-### Staff & Customer Service
-- The BRT conductor assisted an elderly woman to her seat — very kind and professional
-- The intercity bus driver stopped to allow a sick child to receive roadside help — commendable humanity
-- Terminal staff at Ubungo helped me find my correct bus when I was confused — thank you
-- SGR staff at Dodoma station were friendly and gave accurate information
-- The Bolt driver returned my forgotten phone — completely reliable and trustworthy
+### Common Inquiry Types & Required Data Per Type
 
-### Vehicle Quality & Comfort
-- The new SGR coaches are very comfortable — better than any train I have used in East Africa
-- The BRT buses are clean and air-conditioned — a significant improvement from daladala
-- The modern coaches on the Dar-Arusha route have USB charging ports and Wi-Fi — excellent service
-- The Zanzibar fast ferry was smooth, clean, and had excellent seating
-- Our intercity bus had a clean working toilet — rare and very appreciated on a long journey
+- `ROUTE_QUERY` → transport_mode, departure_point, destination_point
+- `SCHEDULE_QUERY` → transport_mode, route_or_service, travel_date
+- `FARE_QUERY` → transport_mode, route_or_service; travel_date if peak/off-peak rates differ
+- `BOOKING_QUERY` → transport_mode, travel_date, number_of_passengers
+- `LOST_PROPERTY` → transport_mode, vehicle_registration (if known), date_of_travel, description_of_lost_item; IATA PIR reference if already filed
+- `OPERATOR_LICENSING` → vehicle_registration or operator_name; SUMATRA/LATRA licensing status
+- `REFUND_QUERY` → ticket_reference, date_of_travel, reason_for_cancellation
+- `BRT_CARD_QUERY` → card_number (if available), issue_type (balance error / card lost / not accepted)
+- `SAFETY_REGULATION` → topic (helmets / speed limits / roadworthiness); operator or vehicle in question
 
-### Booking & Technology Praise
-- Booking my intercity bus online was very easy and confirmation was instant
-- The SGR app is excellent — I could check my seat and boarding time without queuing
-- Getting BRT credit via M-Pesa is very convenient — took less than a minute
-- The Bolt driver app showed me the real-time route and I could track the journey — great transparency
+---
+
+## APPLAUSE / COMPLIMENT — Fields
+
+### Core Fields
+
+| Field | Swahili Label | Required? | Why |
+|-------|--------------|-----------|-----|
+| transport_mode | Aina ya usafiri | Yes | Routes compliment to the correct operator for recognition |
+| route_or_service | Njia au huduma | Recommended | Enables route-level positive performance tracking (ITF quality measurement) |
+| driver_or_staff_name | Jina la dereva/mfanyakazi | Recommended | Enables specific staff recognition and rewards |
+| vehicle_registration | Nambari ya gari | Recommended | Corroborates the compliment and identifies the specific vehicle |
+| incident_date | Tarehe | Yes | Anchors the compliment to a specific service event |
+| positive_behavior_description | Maelezo ya tabia nzuri | Yes | The substantive record for staff recognition and training use |
+| positive_behavior_category | Aina ya mwenendo mzuri | Recommended | Enables trend analysis of what is working well |
+| submitter_contact | Mawasiliano ya mtoa sifa | Optional | For acknowledgement and verification if needed |
+
+---
+
+## AI Conversation Guidance for This Industry
+
+- **Start with mode, then route:** Open with "Okay, let me help you — which type of transport was this? A daladala, intercity bus, BRT, bodaboda, ferry, or something else?" Mode determines everything else — which regulator, which fields, which resolution path. Do not jump to problem details before establishing mode and route.
+- **Collect the vehicle registration conversationally:** Rather than "please provide vehicle registration," ask "Did you happen to see or note down the bus or vehicle number — it's usually on a plate at the front or back of the vehicle? Even a partial number helps." Many passengers in East Africa do note this because they know it matters.
+- **Handle injury/safety signals urgently and separately:** If the person mentions an accident, injury, or dangerous driving, shift tone immediately. Ask "Are you and any other passengers safe right now?" before continuing to collect complaint fields. Provide the LATRA emergency line or direct emergency contact if the incident is ongoing.
+- **Explain the LATRA 2024 pre-complaint rule naturally:** If the complaint is ready for formal escalation, tell the user: "To formally escalate this to LATRA, we need to know if you already complained to the bus company first — LATRA requires this step. Did you? If yes, when, and what did they say?" This prevents the complaint from being rejected on procedural grounds.
+- **Never ask for sexual harassment details bluntly:** If the user signals harassment ("the driver touched me" or "I was assaulted"), respond with empathy first ("I'm very sorry this happened to you"), confirm the person is safe, then ask only what is needed for the record (role of the perpetrator, approximate location, whether they wish to involve police). Do not ask for graphic descriptions.
+- **For Swahili-speaking users:** Use the Swahili key phrases below naturally in conversation; do not switch awkwardly between languages.
+
+## Swahili Key Phrases for Field Collection
+
+- "Usafiri huu ulikuwa wa aina gani — daladala, basi la masafa, BRT, bodaboda, au kivuko?" — What type of transport was this?
+- "Njia au nambari ya basi ilikuwa gani?" — What was the bus route or number?
+- "Uliona nambari ya usajili wa gari? Hata sehemu ya nambari inaweza kusaidia." — Did you see the vehicle registration number? Even part of the number can help.
+- "Tukio hili lilitokea lini — tarehe na takriban saa ngapi?" — When did this happen — date and approximately what time?
+- "Ulitoka wapi na ulikuwa unakwenda wapi?" — Where did you depart from and where were you going?
+- "Je, mtu yeyote alijeruhiwa katika tukio hili?" — Was anyone injured in this incident?
+- "Je, uliwasiliana na kampuni ya basi kuhusu tatizo hili kwanza?" — Did you contact the bus company about this issue first?
+- "Ungependa kutoa jina lako na nambari ya simu ili tuweze kukufuatilia?" — Would you like to share your name and phone number so we can follow up with you?
+- "Kuna ushahidi wowote — picha, video, au shahidi — unaouhusiana na tukio hili?" — Is there any evidence — photos, video, or witnesses — related to this incident?
+- "Ulikuwa umebeba mzigo wowote ambao umepotea au kuharibika?" — Were you carrying any luggage that was lost or damaged?
+
+## Action Recommendations Based on Field Values
+
+| Field | Value | Recommended Action |
+|-------|-------|--------------------|
+| injury_severity | Fatal | Immediate emergency escalation; notify LATRA, police, Tanzania Harbours Authority (marine) or Tanzania Railways (rail) within 1 hour; preserve all complaint data |
+| injury_severity | Serious | Escalate within 24 hours per NTSB 49 CFR 830.5 principle; flag for LATRA formal complaint |
+| issue_type | SEXUAL_HARASSMENT | Escalate to senior staff immediately; advise police OB filing; offer referral to GBV support; do not share complainant details without consent |
+| issue_type | OVERLOADING + ferry or vessel | Contact THA immediately; this is an imminent maritime safety risk |
+| issue_type | DRIVER_CONDUCT_RECKLESS + vehicle_in_motion | Treat as live emergency; advise passenger to call 114 (police) or 115 (fire/ambulance) |
+| complained_to_provider_first | No | Advise complainant to file with the operator first; provide LATRA escalation guidance for if no response within 21 days |
+| provider_response_received | No response within 21 days | Formally eligible for LATRA escalation; initiate referral |
+| transport_mode | Ferry / vessel | Route to SUMATRA and THA; apply Athens Convention (PAL) 2002 liability framework for luggage claims |
+| transport_mode | SGR or TAZARA | Route to Tanzania Railways Corporation; apply OTIF CIV delay compensation framework |
+| delay_duration_minutes | > 60 minutes (rail) | Advise on EU/OTIF compensation principles; document for formal claim |
+| luggage_declared_value | > TZS 500,000 | Recommend formal cargo insurance claim; Athens Convention carrier liability applies for sea transport |
+| issue_type | BOOKING_TICKETING + receipt_available = Yes | Escalate to operator with receipt evidence; strong case for full refund |
 
 ---
 
 ## Key Entities & Roles
 
 **Regulatory Bodies:**
-SUMATRA (Surface and Marine Transport Regulatory Authority), TCAA (Tanzania Civil Aviation Authority), Tanzania Roads Agency (TANROADS), Tanzania National Roads Agency, UDART (Urban and District Authorities for Road Transport), Tanzania Harbours Authority (THA), Tanzania Railway Corporation (TRC), Marine Services Company Limited (MSCL)
+LATRA (Land Transport Regulatory Authority) — road transport complaints and route violations since 2023; SUMATRA (Surface and Marine Transport Regulatory Authority) — marine, ferry, and legacy surface transport; UDART (Urban and District Authorities for Road Transport) — BRT operations; Tanzania Harbours Authority (THA) — port and ferry terminal safety; Tanzania Railways Corporation (TRC) — SGR; TAZARA (Tanzania-Zambia Railway Authority); TCAA (Tanzania Civil Aviation Authority) — airport ground transfers
 
-**Operators & Companies:**
-UDART (BRT operator), Tanzania Railways (SGR operator), TAZARA (Tanzania-Zambia Railway Authority), Azam Marine (Zanzibar ferry), Seagull Shipping, Dar Express, Kilimanjaro Express, Royal Coach, Scandinavian Express, Bolt Tanzania, Uber Tanzania, Little (ride-hailing), Mwangi Transport, Mkombozi Bus
+**Operators:**
+UDART (BRT), Tanzania Railways (SGR), TAZARA, Azam Marine (Zanzibar ferry), Dar Express, Kilimanjaro Express, Royal Coach, Scandinavian Express, Bolt Tanzania, Uber Tanzania, Little (ride-hailing)
 
-**Job Titles & Roles:**
-Bus driver, conductor, ticket inspector, station master, platform officer, porter, terminal manager, ferry captain, crew member, cabin attendant, bodaboda rider, taxi driver, ride-hailing driver, traffic police officer, SUMATRA inspector, railway engineer, cargo handler, airport transfer driver, bus marshal
-
-**Key Locations & Terminals:**
-Ubungo Terminus, Dar es Salaam Central Railway Station, Kidatu, Julius Nyerere International Airport (JNIA), Zanzibar Malindi Port, Mwanza Central Ferry Terminal, Dar es Salaam Ferry Terminal (Bandajana/Kisutu), Dodoma Central Station, Mbeya Station, Kilwa Road BRT Terminal, Kivukoni BRT, Morocco BRT, Kariakoo Bus Stand, Tegeta Terminal
-
-**Documents & Processes:**
-Route permit, passenger manifest, waybill, boarding pass, ticket stub, luggage receipt, travel insurance, roadworthiness certificate, TIN (Tax Identification Number) sticker on vehicle, SUMATRA sticker/badge, vehicle inspection certificate, driving licence (class C, D, E), public service vehicle (PSV) licence, electronic ticketing system (ETS)
-
----
-
-## Kiswahili / Swahili Equivalents
-
-**Malalamiko (Complaints):**
-- Dereva wa basi alikuwa anapiga gari kwa kasi nyingi — The bus driver was driving at very high speed
-- Kondakta alichukua nauli zaidi bila kutoa risiti — The conductor took extra fare without giving a receipt
-- Daladala ilikuwa imejaa watu kupita kiasi — ilikuwa hatari — The daladala was excessively overcrowded — it was dangerous
-- Bodaboda hana kofia ya ulinzi kwa abiria — The bodaboda rider has no passenger helmet
-- Basi liliondoka kabla ya muda uliopangwa — The bus departed before the scheduled time
-- Mzigo wangu ulipotea katika basi la usiku — My luggage got lost on the night bus
-- Gari la Bolt alikataa safari yangu bila sababu — The Bolt driver cancelled my trip without reason
-- Tiketi ya SGR haikukubalika kwenye mfumo — ilikuwa tatizo la kiufundi — The SGR ticket was not accepted in the system — it was a technical problem
-- Kivuko kilisafiri wakati wa dhoruba — ilikuwa hatari sana — The ferry sailed during a storm — it was very dangerous
-- Dereva alipiga simu yake muda wote wa safari — The driver was on his phone throughout the journey
-
-**Mapendekezo (Suggestions):**
-- Basi zote za masafa marefu ziwe na mikanda ya usalama — All long-distance buses should have seatbelts
-- BRT iwe na ratiba inayoweza kuonekana kwenye programu ya simu — BRT should have a schedule visible on a phone app
-- Madereva wa bodaboda wafundishwe usalama barabarani — Bodaboda riders should be trained on road safety
-- Vituo vya BRT viwe na bweni ya mtu mwenye ulemavu — BRT stations should have facilities for persons with disabilities
-- Tiketi za basi za masafa ziweze kununuliwa kwa M-Pesa — Intercity bus tickets should be purchasable via M-Pesa
-
-**Maswali (Inquiries):**
-- Daladala gani inanienda Mwenge kutoka Posta? — Which daladala takes me to Mwenge from Posta?
-- Nauli ya BRT kutoka Kimara hadi mjini ni ngapi? — What is the BRT fare from Kimara to the city center?
-- Ninaweza kubooks tiketi ya SGR mtandaoni? — Can I book an SGR ticket online?
-- Kivuko cha kwanza cha Zanzibar kinaondoka saa ngapi? — What time does the first Zanzibar ferry depart?
-- Jinsi gani ya kupata kadi ya BRT? — How do I get a BRT card?
-- Nauli ya usiku kwa Dar hadi Arusha ni ngapi? — What is the night bus fare from Dar to Arusha?
-- Ninapigie nani simu kuripoti ajali ya bodaboda? — Who do I call to report a bodaboda accident?
-- Je, kuna basi la moja kwa moja kutoka Dar hadi Musoma? — Is there a direct bus from Dar to Musoma?
-
-**Pongezi (Compliments):**
-- Dereva alisafirisha kwa usalama na tulifika salama — The driver drove safely and we arrived safely
-- Askari wa stesheni wa SGR alikuwa na msaada mkubwa — The SGR station officer was very helpful
-- Basi jipya la BRT ni safi na la starehe — asante — The new BRT bus is clean and comfortable — thank you
-- Kondakta alimhudumia mzee kwa heshima kubwa — The conductor served the elderly person with great respect
-- Huduma ya Bolt ilikuwa nzuri sana — dereva alikuwa wa kuaminika — The Bolt service was excellent — the driver was trustworthy
-
----
-
-## Industry-Specific Escalation Triggers
-
-1. Passenger reports an ongoing road accident involving a PSV (public service vehicle) — immediate emergency
-2. Ferry or boat is currently overloaded and about to depart — imminent capsizing risk
-3. Bus driver confirmed to be intoxicated or impaired and vehicle is in motion with passengers
-4. Passenger is stranded in a remote area after being wrongfully offloaded by a driver or conductor
-5. Child travelling alone has been removed from the vehicle at an unscheduled stop and left
-6. SGR or TAZARA train emergency brake activation during motion — possible derailment risk
-7. Passenger reports a fire, smoke, or fuel smell inside an intercity coach while in motion
-8. Ferry crew member reports the vessel is taking on water during a crossing
-9. BRT or intercity bus driver deliberately drove into an area not on the registered route and locked passengers inside
-10. Bodaboda rider fled the scene of an accident, leaving an injured passenger without help
-11. Report of a physical assault by a driver or conductor on a passenger
-12. JNIA airport vehicle stuck with passengers on active taxiway or runway area
-13. Ferry voyage abandoned mid-lake — passengers in life rafts or water — mass casualty risk
-14. Child or vulnerable adult confirmed missing at a bus terminal after last being seen on a specific vehicle
+**Key Processes & Documents:**
+Route permit, passenger manifest, roadworthiness certificate, PSV licence, Property Irregularity Report (PIR), police OB (Occurrence Book), LATRA complaint reference, BRT prepaid card, electronic ticketing, waybill (for parcels sent by bus)
 
 ---
 
 ## Disambiguation Notes
 
-- **Transport vs. Tourism:** Complaints about safari vehicle safety or tour bus quality belong to transport/transit if the primary issue is the vehicle or driver; they belong to tourism/hospitality if the complaint encompasses the wider safari experience, accommodation, or tour operator.
-- **Transport vs. Logistics/Freight:** Complaints about passenger safety, fares, and schedules belong to transport/transit; complaints about cargo shipment, parcel delivery, customs clearance, or fleet management belong to logistics/freight.
-- **Ride-Hailing vs. Taxi (Traditional):** Both belong to this industry. Distinguish by platform: Bolt, Uber, Little are app-based; yellow or white taxis with meters or agreed fares at stands are traditional taxi. Both follow similar complaint patterns but app-based rides have additional escalation paths through the platform.
-- **BRT vs. Daladala:** Both are public road transit. BRT is a formal UDART-operated service with prepaid cards, fixed routes, and stations. Daladala are privately operated minibuses with conductors. Feedback about the BRT system, cards, or stations escalates to UDART; feedback about daladala conduct or route violations escalates to SUMATRA.
-- **Transport vs. Airport (Aviation):** Complaints about airport ground transportation, taxis at JNIA, or shuttle buses belong to transport; complaints about flights, boarding, baggage handling, or airport facilities belong to aviation/airport services.
+- **Transport vs. Logistics/Freight:** Complaints about cargo shipment, parcel delivery, or freight damage belong to the Logistics KB (33). Complaints about passengers, fares, schedules, and personal luggage belong here.
+- **Transport vs. Aviation/Airport:** Complaints about flights, boarding, and baggage handling belong to the Aviation KB. Airport ground transportation (taxis, shuttles, JNIA bus) belongs here.
+- **Bodaboda personal transport vs. bodaboda parcel delivery:** If the bodaboda carried a person, this is Transport KB. If the bodaboda was carrying a parcel for delivery, that is Logistics KB (33).
+- **BRT vs. Daladala:** BRT complaints (cards, gates, UDART-operated buses) escalate to UDART. Daladala route and conduct violations escalate to LATRA.
+- **Transport vs. Tourism:** Complaints about a safari vehicle that is primarily about driver/vehicle safety belong here. Complaints about the broader tour package (accommodation, itinerary, guide) belong in Tourism/Hospitality KB (39).
