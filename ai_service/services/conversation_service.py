@@ -563,10 +563,6 @@ class ConversationService:
         """Submit all feedback items extracted from the conversation."""
         extracted = conv.get_extracted()
 
-        if not extracted.get("project_id") and not conv.project_id:
-            log.warning("conversation.submit_no_project", conv_id=str(conv.id))
-            return False, []
-
         common_data = {
             **extracted,
             "project_id": extracted.get("project_id") or (str(conv.project_id) if conv.project_id else None),
