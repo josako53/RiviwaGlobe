@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_FEEDBACK: str = Field(default="ai_feedback_kb")
 
     # ── Conversation settings ─────────────────────────────────────────────────
-    AUTO_SUBMIT_CONFIDENCE: float = Field(default=0.82,
+    AUTO_SUBMIT_CONFIDENCE: float = Field(default=0.80,
                                           description="Confidence threshold for auto-submitting feedback")
     MAX_TURNS_BEFORE_TIMEOUT: int = Field(default=30)
     SESSION_TIMEOUT_MINUTES: int = Field(default=60)
