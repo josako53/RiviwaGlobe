@@ -309,12 +309,19 @@ class ConversationService:
                 urgency_note = self._urgency_message(conv.language, incharge.name, incharge.phone)
                 reply = f"{reply}\n\n{urgency_note}"
 
-        # If conversation is in confirming stage and user explicitly says yes → force submit
+        # If user explicitly confirms in collecting or confirming stage → force submit
+        # (LLM sometimes stays in confirm/continue even when user says yes)
         _CONFIRM_WORDS = {"ndio", "ndiyo", "yes", "wasilisha", "submit", "tuma", "sawa", "okay", "ok", "confirm", "endelea"}
-        if conv.stage == ConversationStage.CONFIRMING and action != "submit":
+        if conv.stage in (ConversationStage.COLLECTING, ConversationStage.CONFIRMING) and action not in ("submit", "followup"):
             msg_words = set(message.lower().replace(",", " ").replace(".", " ").split())
             if msg_words & _CONFIRM_WORDS:
-                action = "submit"
+                _ext = conv.get_extracted()
+                _has_min = (
+                    _ext.get("feedback_type") not in (None, "", "unknown")
+                    and bool(_ext.get("description", "").strip())
+                )
+                if _has_min:
+                    action = "submit"
 
         # Update stage
         conv.stage = self._map_action_to_stage(action)
