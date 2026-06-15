@@ -99,7 +99,7 @@ TABLE INVENTORY
 # from __future__ import annotations  # removed: breaks List[Model] SQLModel relationship annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
