@@ -124,8 +124,14 @@ class FeedbackRepository:
     ) -> list[Feedback]:
         q = select(Feedback)
         if org_id:
-            q = q.join(ProjectCache, Feedback.project_id == ProjectCache.id).where(
-                ProjectCache.organisation_id == org_id
+            # Match feedbacks submitted directly under the org (no project) OR via a project
+            q = q.where(
+                or_(
+                    Feedback.org_id == org_id,
+                    Feedback.project_id.in_(
+                        select(ProjectCache.id).where(ProjectCache.organisation_id == org_id)
+                    ),
+                )
             )
         if project_id:                  q = q.where(Feedback.project_id                   == project_id)
         if feedback_type:               q = q.where(Feedback.feedback_type                == feedback_type)
