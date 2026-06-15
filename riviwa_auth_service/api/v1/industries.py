@@ -147,11 +147,14 @@ async def set_org_industries(
     publisher: PublisherDep,
     _=Depends(require_org_role(OrgMemberRole.ADMIN)),
 ) -> dict:
-    rows = await _svc(db, publisher).set_org_industries(
+    svc = _svc(db, publisher)
+    await svc.set_org_industries(
         org_id=org_id,
         industry_ids=body.industry_ids,
         primary_id=body.primary_industry_id,
     )
+    # Re-fetch with eager-loaded industry relationship to avoid lazy-load in async context
+    rows = await svc.get_org_industries(org_id=org_id)
     return {"items": [_org_industry_out(r) for r in rows], "count": len(rows)}
 
 
@@ -170,9 +173,11 @@ async def add_org_industry(
     is_primary:  bool = Query(default=False, description="Mark as primary industry"),
     _=Depends(require_org_role(OrgMemberRole.ADMIN)),
 ) -> dict:
-    row = await _svc(db, publisher).add_org_industry(
-        org_id=org_id, industry_id=industry_id, is_primary=is_primary
-    )
+    svc = _svc(db, publisher)
+    await svc.add_org_industry(org_id=org_id, industry_id=industry_id, is_primary=is_primary)
+    # Re-fetch with eager-loaded relationship
+    rows = await svc.get_org_industries(org_id=org_id)
+    row = next((r for r in rows if str(r.industry_id) == str(industry_id)), rows[-1] if rows else None)
     return _org_industry_out(row)
 
 
