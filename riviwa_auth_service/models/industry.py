@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text, UniqueConstraint, Boolean, Integer, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -98,8 +98,8 @@ class Industry(SQLModel, table=True):
     )
 
     # Relationships
-    org_industries: List["OrganisationIndustry"] = Relationship(back_populates="industry")
-    field_templates: List["IndustryFieldTemplate"] = Relationship(back_populates="industry")
+    org_industries: list["OrganisationIndustry"] = Relationship(back_populates="industry")
+    field_templates: list["IndustryFieldTemplate"] = Relationship(back_populates="industry")
 
 
 # ── OrganisationIndustry (M2M junction) ──────────────────────────────────────
