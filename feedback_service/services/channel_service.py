@@ -391,17 +391,31 @@ class ChannelService:
         messages = [{"role": t["role"], "content": t["content"]} for t in session.get_turns()]
         try:
             async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "Content-Type": "application/json",
-                        "x-api-key": settings.ANTHROPIC_API_KEY,
-                        "anthropic-version": "2023-06-01",
-                    },
-                    json={"model": "claude-sonnet-4-6", "max_tokens": 600,
-                          "system": system, "messages": messages},
-                )
-                text = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
+                if settings.ANTHROPIC_API_KEY:
+                    resp = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-api-key": settings.ANTHROPIC_API_KEY,
+                            "anthropic-version": "2023-06-01",
+                        },
+                        json={"model": "claude-sonnet-4-6", "max_tokens": 600,
+                              "system": system, "messages": messages},
+                    )
+                    text = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
+                else:
+                    # Fallback to Groq (OpenAI-compatible)
+                    groq_messages = [{"role": "system", "content": system}] + messages
+                    resp = await client.post(
+                        f"{settings.GROQ_BASE_URL}/chat/completions",
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                        },
+                        json={"model": settings.GROQ_MODEL, "max_tokens": 600,
+                              "messages": groq_messages, "temperature": 0.3},
+                    )
+                    text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
                 return _json.loads(text.strip())
         except Exception as exc:
             log.error("channel.llm_call_failed", session_id=str(session.id), error=str(exc))

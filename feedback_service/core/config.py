@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # ── LLM / AI conversation engine ─────────────────────────────────────────
     ANTHROPIC_API_KEY:  str  = Field(default="",
                                       description="Anthropic API key for Claude LLM (AI conversation engine).")
+    GROQ_API_KEY:       str  = Field(default="", description="Groq API key (fallback LLM for AI conversation).")
+    GROQ_MODEL:         str  = Field(default="llama-3.3-70b-versatile", description="Groq model name.")
+    GROQ_BASE_URL:      str  = Field(default="https://api.groq.com/openai/v1", description="Groq OpenAI-compat base URL.")
 
     # ── Voice / Audio pipeline ────────────────────────────────────────────────
     # STT (Speech-to-Text)
