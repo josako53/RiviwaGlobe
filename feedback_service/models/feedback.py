@@ -809,6 +809,13 @@ class Feedback(SQLModel, table=True):
         description="STT service used: 'whisper' | 'google_stt' | 'azure_stt' | 'manual'.",
     )
 
+    # ── Industry-specific custom fields ───────────────────────────────────────
+    custom_fields: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="Industry-specific fields defined by OrgCustomFieldDefinition. Keys are field_key values, e.g. {'patient_file_number': 'MNH-44521', 'drug_batch_number': 'AB123'}",
+    )
+
     # ── Location of the issue (Tanzania admin hierarchy + GPS) ───────────────
     # Maps directly to Annex 6 "Location of Grievance" section.
     # Full hierarchy: Region → District → LGA → Ward → Mtaa → GPS

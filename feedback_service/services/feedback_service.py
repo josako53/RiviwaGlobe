@@ -268,6 +268,7 @@ class FeedbackService:
             subject                      = data["subject"],
             description                  = data["description"],
             media_urls                   = data.get("media_urls"),
+            custom_fields                = data.get("custom_fields"),
             internal_notes               = data.get("internal_notes"),
             issue_location_description   = data.get("issue_location_description"),
             issue_region                 = data.get("issue_region"),

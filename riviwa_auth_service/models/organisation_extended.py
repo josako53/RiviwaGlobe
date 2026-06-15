@@ -191,6 +191,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -550,6 +551,11 @@ class OrgBranch(SQLModel, table=True):
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
+    custom_fields: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="Branch-level custom attributes e.g. NHIF branch code, service area radius",
+    )
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
     )
@@ -811,6 +817,11 @@ class OrgService(SQLModel, table=True):
 
     published_at: Optional[datetime] = Field(
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    custom_fields: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="Service/product custom attributes e.g. drug formulary, service accreditation",
     )
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)

@@ -164,7 +164,18 @@ from models.organisation_extended import (                         # noqa: F401,
     OrgServicePolicy,
 )
 
-# ── 9. Org projects, sub-projects, stages, checklists (FK → organisations) ───
+# ── 9. Department (FK → organisations, org_branches) ─────────────────────────
+from models.department import OrgDepartment                        # noqa: F401, E402
+
+# ── 10. Industries and custom field definitions (FK → organisations, industries)
+from models.industry import (                                      # noqa: F401, E402
+    Industry,
+    OrganisationIndustry,
+    OrgCustomFieldDefinition,
+    IndustryFieldTemplate,
+)
+
+# ── 11. Org projects, sub-projects, stages, checklists (FK → organisations) ──
 from models.org_project import (                                   # noqa: F401, E402
     OrgProject,
     OrgProjectInCharge,

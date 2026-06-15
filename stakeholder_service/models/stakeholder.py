@@ -441,6 +441,13 @@ class Stakeholder(SQLModel, table=True):
         description="Set on soft-delete; null while active.",
     )
 
+    # ── Custom fields ─────────────────────────────────────────────────────────
+    custom_fields: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="Org-defined custom stakeholder attributes e.g. beneficiary_id, vulnerability_score",
+    )
+
     # ── Relationships ─────────────────────────────────────────────────────────
     contacts: List["StakeholderContact"] = Relationship(
         back_populates="stakeholder",

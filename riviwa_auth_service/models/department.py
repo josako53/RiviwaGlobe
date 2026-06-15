@@ -34,6 +34,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -114,6 +115,13 @@ class OrgDepartment(SQLModel, table=True):
         nullable=False,
         index=True,
         description="Soft-delete: False = deactivated; excluded from active lists.",
+    )
+
+    # ── Custom Fields ─────────────────────────────────────────────────────────
+    custom_fields: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="Department-level custom attributes e.g. ward code, bed count, department head name",
     )
 
     # ── Audit ─────────────────────────────────────────────────────────────────

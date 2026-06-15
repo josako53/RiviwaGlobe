@@ -106,6 +106,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import ForeignKey, Column, DateTime, Enum as SAEnum, String, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -324,6 +325,13 @@ class Organisation(SQLModel, table=True):
         default=0,
         nullable=False,
         description="Max team members; 0 = unlimited",
+    )
+
+    # ── Custom Fields ─────────────────────────────────────────────────────────
+    custom_fields: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="Org-level custom attributes defined by OrgCustomFieldDefinition where entity_type='organisation'",
     )
 
     # ── Timestamps ────────────────────────────────────────────────────────────

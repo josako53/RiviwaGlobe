@@ -526,6 +526,12 @@ class ConversationService:
             org_struct = await self._fetch_org_structure(org_id)
             if org_struct:
                 context += "\n\n" + org_struct
+
+            # Append custom field definitions so the LLM knows what extra fields to collect.
+            custom_fields_section = await self._fetch_org_custom_fields(org_id)
+            if custom_fields_section:
+                context += "\n\n" + custom_fields_section
+
         return context
 
     async def _fetch_org_structure(self, org_id) -> str:
@@ -573,6 +579,72 @@ class ConversationService:
                 f"{p['title']} (id={p['id']})" for p in products[:20]
             ))
         return "\n".join(lines) if len(lines) > 1 else ""
+
+    async def _fetch_org_custom_fields(self, org_id) -> str:
+        """
+        Fetch org-specific custom field definitions from auth_service and format them
+        as a context block instructing the LLM which extra fields to collect.
+        Returns empty string on any failure — custom fields are best-effort.
+        """
+        import httpx
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/api/v1/orgs/{org_id}/custom-fields/ai-context",
+                    headers={
+                        "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                        "X-Service-Name": "ai_service",
+                    },
+                )
+            if r.status_code != 200:
+                return ""
+            raw = r.json()
+        except Exception:
+            return ""
+
+        # raw is expected: {"feedback": [...], "stakeholder": [...]}
+        feedback_fields = raw.get("feedback", [])
+        if not feedback_fields:
+            return ""
+
+        lines = [
+            "ORGANISATION CUSTOM FIELDS (collect these during conversation in addition to standard fields):",
+        ]
+        lines.append("Entity: FEEDBACK")
+        lines.append("Fields to collect:")
+        for f in feedback_fields:
+            key       = f.get("field_key", "")
+            label     = f.get("label") or key
+            label_sw  = f.get("label_sw") or ""
+            required  = f.get("is_required", False)
+            req_label = "Required" if required else "Optional"
+            combined  = f"{label} / {label_sw}" if label_sw else label
+            lines.append(f"  - {key} ({combined}): {req_label}")
+
+        lines.append(
+            'When submitting, include these as custom_fields: {'
+            + ", ".join(
+                f'"{f.get("field_key", "")}" : "<value>"'
+                for f in feedback_fields
+            )
+            + "}"
+        )
+
+        # Also mention stakeholder fields if present
+        stakeholder_fields = raw.get("stakeholder", [])
+        if stakeholder_fields:
+            lines.append("Entity: STAKEHOLDER")
+            lines.append("Fields to collect:")
+            for f in stakeholder_fields:
+                key       = f.get("field_key", "")
+                label     = f.get("label") or key
+                label_sw  = f.get("label_sw") or ""
+                required  = f.get("is_required", False)
+                req_label = "Required" if required else "Optional"
+                combined  = f"{label} / {label_sw}" if label_sw else label
+                lines.append(f"  - {key} ({combined}): {req_label}")
+
+        return "\n".join(lines)
 
     async def _submit_feedback(
         self, conv: AIConversation

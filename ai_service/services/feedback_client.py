@@ -137,6 +137,10 @@ class FeedbackClient:
         if data.get("media_urls"):
             payload["media_urls"] = data["media_urls"]
 
+        # Org-defined custom fields (collected per the org's custom field definitions)
+        if data.get("custom_fields"):
+            payload["custom_fields"] = data["custom_fields"]
+
         return payload
 
     @staticmethod
