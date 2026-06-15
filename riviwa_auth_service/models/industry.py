@@ -10,19 +10,14 @@ Tables
   industry_field_templates — pre-built field sets per industry (from KB research)
 ═══════════════════════════════════════════════════════════════════════════════
 """
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text, UniqueConstraint, Boolean, Integer, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
-
-if TYPE_CHECKING:
-    from models.organisation import Organisation
 
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
