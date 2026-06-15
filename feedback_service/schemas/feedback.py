@@ -244,6 +244,7 @@ class StaffSubmitFeedback(BaseModel):
 
     # ── SECTION G — Cross-references ──────────────────────────────────────────
     subproject_id: Optional[uuid.UUID] = Field(default=None, description="Sub-project (work package) this feedback relates to")
+    branch_id: Optional[uuid.UUID] = Field(default=None, description="OrgBranch UUID — which branch this feedback relates to")
     department_id: Optional[uuid.UUID] = Field(
         default=None,
         description="OrgDepartment UUID — which department this feedback is directed at (e.g. HR, Finance, Customer Care).",
