@@ -251,6 +251,7 @@ class FeedbackService:
             priority                     = FeedbackPriority(data.get("priority", "medium")),
             current_level                = GRMLevel.WARD,
             channel                      = FeedbackChannel(data["channel"]),
+            submission_method            = SubmissionMethod(data["submission_method"]) if data.get("submission_method") else SubmissionMethod.SELF_SERVICE,
             is_anonymous                 = is_anon,
             submitted_by_user_id         = None if is_anon else (token_sub or self._to_uuid(data.get("submitted_by_user_id"))),
             submitted_by_stakeholder_id  = None if is_anon else self._to_uuid(data.get("submitted_by_stakeholder_id")),
