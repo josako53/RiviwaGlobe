@@ -452,7 +452,7 @@ class FeedbackService:
             priority            = FeedbackPriority.MEDIUM,
             current_level       = GRMLevel.WARD,
             channel             = FeedbackChannel(channel_override),
-            submission_method   = SubmissionMethod.SELF_SERVICE,
+            submission_method   = SubmissionMethod(data["submission_method"]) if data.get("submission_method") else SubmissionMethod.SELF_SERVICE,
             is_anonymous        = is_anon,
             submitted_by_user_id = None if is_anon else user_id,
             subject             = data.get("subject") or data.get("description", "")[:100],
