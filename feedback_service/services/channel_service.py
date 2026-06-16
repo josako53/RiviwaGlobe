@@ -413,7 +413,8 @@ class ChannelService:
                             "Authorization": f"Bearer {settings.GROQ_API_KEY}",
                         },
                         json={"model": settings.GROQ_MODEL, "max_tokens": 600,
-                              "messages": groq_messages, "temperature": 0.3},
+                              "messages": groq_messages, "temperature": 0.3,
+                              "response_format": {"type": "json_object"}},
                     )
                     text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
                 return _json.loads(text.strip())
