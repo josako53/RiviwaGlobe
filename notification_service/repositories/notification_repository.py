@@ -324,7 +324,7 @@ class NotificationRepository:
         if notification_type:
             q = q.where(NotificationTemplate.notification_type == notification_type)
         if channel:
-            q = q.where(NotificationTemplate.channel == ChannelEnum(channel))
+            q = q.where(NotificationTemplate.channel == ChannelEnum(channel.lower()))
         if language:
             q = q.where(NotificationTemplate.language == language)
         q = q.order_by(
