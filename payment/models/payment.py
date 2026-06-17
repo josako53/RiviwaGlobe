@@ -25,8 +25,6 @@ Design
     refund              — outbound refund to Consumer/org
 ═══════════════════════════════════════════════════════════════════════════════
 """
-from __future__ import annotations
-
 import uuid
 from datetime import datetime
 from enum import Enum
