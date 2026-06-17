@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Query
-from core.dependencies import DbDep, StaffDep
+from core.dependencies import DbDep, StaffDep, _is_platform_admin
 from core.exporters import export_response
 from schemas.applause_performance import ApplausePerformanceResponse
 from schemas.grievance_performance import GrievancePerformanceResponse
@@ -20,7 +20,7 @@ def _svc(db): return ReportService(db=db)
 
 @router.get("/performance", summary="Overall performance dashboard — all types · exportable")
 async def performance_dashboard(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     stage_id:   Optional[uuid.UUID] = Query(default=None),
     from_date:  Optional[str]       = Query(default=None),
@@ -35,7 +35,9 @@ async def performance_dashboard(
     submission_method: Optional[str] = Query(default=None),
     format: str = _FMT,
 ):
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).performance(
+        org_id=org_id,
         project_id=project_id, from_date=from_date, to_date=to_date,
         stage_id=stage_id, region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
         priority=priority, channel=channel, submission_method=submission_method,
@@ -44,7 +46,7 @@ async def performance_dashboard(
 
 @router.get("/grievances", summary="Grievance performance page · exportable")
 async def grievance_performance(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     stage_id:   Optional[uuid.UUID] = Query(default=None),
     from_date:  Optional[str]       = Query(default=None),
@@ -62,7 +64,9 @@ async def grievance_performance(
     custom_seconds:    int           = Query(default=3600, description="Divisor when time_unit=custom e.g. 1800 = 30-min periods"),
     format: str = _FMT,
 ):
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).grievances(
+        org_id=org_id,
         project_id=project_id, from_date=from_date, to_date=to_date,
         stage_id=stage_id, region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
         priority=priority, channel=channel,
@@ -97,7 +101,7 @@ async def grievance_performance(
 )
 async def grievance_performance_report(
     db: DbDep,
-    _: StaffDep,
+    token: StaffDep,
     project_id:     Optional[uuid.UUID] = Query(default=None, description="Filter to a specific project."),
     stage_id:       Optional[uuid.UUID] = Query(default=None, description="Filter to a specific project stage."),
     subproject_id:  Optional[uuid.UUID] = Query(default=None, description="Filter to a specific sub-project."),
@@ -116,7 +120,9 @@ async def grievance_performance_report(
     time_unit:      str                 = Query(default="hours", description="Primary time unit: seconds | minutes | hours | days | custom"),
     custom_seconds: int                 = Query(default=3600, description="Divisor when time_unit=custom e.g. 1800 = 30-min periods"),
 ) -> GrievancePerformanceResponse:
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).grievance_performance(
+        org_id=org_id,
         project_id=project_id,
         from_date=from_date,
         to_date=to_date,
@@ -140,7 +146,7 @@ async def grievance_performance_report(
 
 @router.get("/suggestions", summary="Suggestion performance page · exportable")
 async def suggestion_performance(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     stage_id:   Optional[uuid.UUID] = Query(default=None),
     from_date:  Optional[str]       = Query(default=None),
@@ -157,7 +163,9 @@ async def suggestion_performance(
     custom_seconds:    int           = Query(default=3600, description="Divisor when time_unit=custom e.g. 1800 = 30-min periods"),
     format: str = _FMT,
 ):
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).suggestions(
+        org_id=org_id,
         project_id=project_id, from_date=from_date, to_date=to_date,
         stage_id=stage_id, region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
         channel=channel, submission_method=submission_method, status=status_,
@@ -190,7 +198,7 @@ async def suggestion_performance(
 )
 async def suggestion_performance_report(
     db: DbDep,
-    _: StaffDep,
+    token: StaffDep,
     project_id:     Optional[uuid.UUID] = Query(default=None, description="Filter to a specific project."),
     stage_id:       Optional[uuid.UUID] = Query(default=None, description="Filter to a specific project stage."),
     subproject_id:  Optional[uuid.UUID] = Query(default=None, description="Filter to a specific sub-project."),
@@ -209,7 +217,9 @@ async def suggestion_performance_report(
     time_unit:      str                 = Query(default="hours", description="Primary time unit: seconds | minutes | hours | days | custom"),
     custom_seconds: int                 = Query(default=3600, description="Divisor when time_unit=custom e.g. 1800 = 30-min periods"),
 ) -> SuggestionPerformanceResponse:
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).suggestion_performance(
+        org_id=org_id,
         project_id=project_id,
         from_date=from_date,
         to_date=to_date,
@@ -249,7 +259,7 @@ async def suggestion_performance_report(
     ),
 )
 async def suggestion_performance_detailed(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id:     Optional[uuid.UUID] = Query(default=None),
     stage_id:       Optional[uuid.UUID] = Query(default=None),
     subproject_id:  Optional[uuid.UUID] = Query(default=None, description="Filter to a specific sub-project (work package)"),
@@ -268,7 +278,9 @@ async def suggestion_performance_detailed(
     ),
     format: str = _FMT,
 ):
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).suggestion_performance_detailed(
+        org_id=org_id,
         project_id=project_id,
         from_date=from_date,
         to_date=to_date,
@@ -292,7 +304,7 @@ async def suggestion_performance_detailed(
 
 @router.get("/applause", summary="Applause performance page · exportable")
 async def applause_performance(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     stage_id:   Optional[uuid.UUID] = Query(default=None),
     from_date:  Optional[str]       = Query(default=None),
@@ -306,7 +318,9 @@ async def applause_performance(
     submission_method: Optional[str] = Query(default=None),
     format: str = _FMT,
 ):
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).applause(
+        org_id=org_id,
         project_id=project_id, from_date=from_date, to_date=to_date,
         stage_id=stage_id, region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
         channel=channel, submission_method=submission_method,
@@ -343,7 +357,7 @@ async def applause_performance(
 )
 async def applause_performance_report(
     db: DbDep,
-    _: StaffDep,
+    token: StaffDep,
     project_id:      Optional[uuid.UUID] = Query(default=None,  description="Scope to one project."),
     stage_id:        Optional[uuid.UUID] = Query(default=None,  description="Filter to a specific project stage."),
     subproject_id:   Optional[uuid.UUID] = Query(default=None,  description="Filter to a specific sub-project."),
@@ -362,7 +376,9 @@ async def applause_performance_report(
     time_unit:       str                 = Query(default="hours",description="Primary time unit for timing outputs: seconds | minutes | hours | days | custom"),
     custom_seconds:  int                 = Query(default=3600,  description="Divisor used when time_unit=custom. E.g. 1800 = 30-minute periods."),
 ) -> ApplausePerformanceResponse:
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).applause_performance(
+        org_id=org_id,
         project_id=project_id,
         from_date=from_date,
         to_date=to_date,
@@ -386,19 +402,20 @@ async def applause_performance_report(
 
 @router.get("/channels", summary="Breakdown by intake channel and submission method · exportable")
 async def channel_analytics(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     from_date: Optional[str] = Query(default=None),
     to_date: Optional[str] = Query(default=None),
     feedback_type: Optional[str] = Query(default=None),
     format: str = _FMT,
 ):
-    result = await _svc(db).channels(project_id=project_id, from_date=from_date, to_date=to_date, feedback_type=feedback_type)
+    org_id = None if _is_platform_admin(token) else token.org_id
+    result = await _svc(db).channels(org_id=org_id, project_id=project_id, from_date=from_date, to_date=to_date, feedback_type=feedback_type)
     return export_response(result, format=format, filename="channels-report", title="Riviwa — Channel Analytics Report")
 
 @router.get("/grievance-log", summary="Full grievance log (SEP Annex 5/6 format) · exportable")
 async def grievance_log(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     from_date:  Optional[str]       = Query(default=None),
     to_date:    Optional[str]       = Query(default=None),
@@ -413,7 +430,9 @@ async def grievance_log(
     skip: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=500),
     format: str = _FMT,
 ):
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).grievance_log(
+        org_id=org_id,
         project_id=project_id, from_date=from_date, to_date=to_date,
         region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
         priority=priority, channel=channel, status=status_, skip=skip, limit=limit,
@@ -422,7 +441,7 @@ async def grievance_log(
 
 @router.get("/suggestion-log", summary="Full suggestion log · exportable")
 async def suggestion_log(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     from_date:  Optional[str]       = Query(default=None),
     to_date:    Optional[str]       = Query(default=None),
@@ -436,7 +455,9 @@ async def suggestion_log(
     skip: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=500),
     format: str = _FMT,
 ):
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).suggestion_log(
+        org_id=org_id,
         project_id=project_id, from_date=from_date, to_date=to_date,
         region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
         channel=channel, status=status_, skip=skip, limit=limit,
@@ -445,7 +466,7 @@ async def suggestion_log(
 
 @router.get("/applause-log", summary="Full applause log · exportable")
 async def applause_log(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     from_date:  Optional[str]       = Query(default=None),
     to_date:    Optional[str]       = Query(default=None),
@@ -458,7 +479,9 @@ async def applause_log(
     skip: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=500),
     format: str = _FMT,
 ):
+    org_id = None if _is_platform_admin(token) else token.org_id
     result = await _svc(db).applause_log(
+        org_id=org_id,
         project_id=project_id, from_date=from_date, to_date=to_date,
         region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
         channel=channel, skip=skip, limit=limit,
@@ -466,16 +489,18 @@ async def applause_log(
     return export_response(result, format=format, filename="applause-log", title="Riviwa — Applause Log")
 
 @router.get("/summary", summary="Count summary · exportable")
-async def feedback_summary(db: DbDep, _: StaffDep, project_id: uuid.UUID = Query(...), format: str = _FMT):
-    result = await _svc(db).summary(project_id)
+async def feedback_summary(db: DbDep, token: StaffDep, project_id: uuid.UUID = Query(...), format: str = _FMT):
+    org_id = None if _is_platform_admin(token) else token.org_id
+    result = await _svc(db).summary(project_id, org_id=org_id)
     return export_response(result, format=format, filename="summary-report", title="Riviwa — Feedback Summary")
 
 @router.get("/overdue", summary="Grievances past target resolution date · exportable")
 async def overdue_grievances(
-    db: DbDep, _: StaffDep,
+    db: DbDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     priority: Optional[str] = Query(default=None),
     format: str = _FMT,
 ):
-    result = await _svc(db).overdue(project_id=project_id, priority=priority)
+    org_id = None if _is_platform_admin(token) else token.org_id
+    result = await _svc(db).overdue(org_id=org_id, project_id=project_id, priority=priority)
     return export_response(result, format=format, filename="overdue-report", title="Riviwa — Overdue Grievances")

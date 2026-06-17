@@ -57,9 +57,12 @@ async def list_reports(
     db: AsyncSession = Depends(get_async_session),
     _claims = JWTDep,
 ) -> dict:
-    q = select(FakeSuspectReport)
-    if organisation_id:
-        q = q.where(FakeSuspectReport.organisation_id == organisation_id)
+    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+    if caller_org_id is None:
+        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
+    # Always scope to the caller's org; ignore any requested organisation_id
+    effective_org_id = caller_org_id
+    q = select(FakeSuspectReport).where(FakeSuspectReport.organisation_id == effective_org_id)
     if report_status:
         q = q.where(FakeSuspectReport.status == report_status.upper())
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
@@ -73,9 +76,14 @@ async def get_report(
     db: AsyncSession = Depends(get_async_session),
     _claims = JWTDep,
 ) -> dict:
+    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+    if caller_org_id is None:
+        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
     r = await db.get(FakeSuspectReport, report_id)
     if not r:
         raise HTTPException(status_code=404, detail={"error": "REPORT_NOT_FOUND"})
+    if r.organisation_id != caller_org_id:
+        raise HTTPException(status_code=403, detail={"error": "FORBIDDEN"})
     assignments = (await db.execute(
         select(AgentAssignment).where(AgentAssignment.fake_report_id == report_id).order_by(AgentAssignment.assigned_at.desc())
     )).scalars().all()
@@ -95,9 +103,14 @@ async def update_report(
     db: AsyncSession = Depends(get_async_session),
     _claims = JWTDep,
 ) -> dict:
+    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+    if caller_org_id is None:
+        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
     r = await db.get(FakeSuspectReport, report_id)
     if not r:
         raise HTTPException(status_code=404, detail={"error": "REPORT_NOT_FOUND"})
+    if r.organisation_id != caller_org_id:
+        raise HTTPException(status_code=403, detail={"error": "FORBIDDEN"})
     if "status" in body:
         r.status = body["status"].upper()
         if r.status in ("RESOLVED", "CONFIRMED_FAKE", "DISMISSED"):
@@ -118,13 +131,20 @@ async def assign_agent(
     claims = JWTDep,
 ) -> dict:
     """Assign a field agent to investigate a fake report."""
+    caller_org_id = uuid.UUID(claims["org_id"]) if claims.get("org_id") else None
+    if caller_org_id is None:
+        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
     r = await db.get(FakeSuspectReport, report_id)
     if not r:
         raise HTTPException(status_code=404, detail={"error": "REPORT_NOT_FOUND"})
+    if r.organisation_id != caller_org_id:
+        raise HTTPException(status_code=403, detail={"error": "FORBIDDEN"})
     agent_id = uuid.UUID(body["agent_id"])
     agent = await db.get(FieldAgent, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail={"error": "AGENT_NOT_FOUND"})
+    if agent.organisation_id != caller_org_id:
+        raise HTTPException(status_code=403, detail={"error": "AGENT_ORG_MISMATCH"})
 
     r.assigned_agent_id = agent_id
     r.status = "UNDER_INVESTIGATION"
@@ -154,9 +174,11 @@ async def list_agents(
     db: AsyncSession = Depends(get_async_session),
     _claims = JWTDep,
 ) -> dict:
-    q = select(FieldAgent)
-    if organisation_id:
-        q = q.where(FieldAgent.organisation_id == organisation_id)
+    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+    if caller_org_id is None:
+        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
+    # Always scope to the caller's org
+    q = select(FieldAgent).where(FieldAgent.organisation_id == caller_org_id)
     if is_active is not None:
         q = q.where(FieldAgent.is_active == is_active)
     items = (await db.execute(q.order_by(FieldAgent.name))).scalars().all()
@@ -174,9 +196,12 @@ async def create_agent(
     db: AsyncSession = Depends(get_async_session),
     _claims = JWTDep,
 ) -> dict:
+    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+    if caller_org_id is None:
+        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
     agent = FieldAgent(
         user_id=uuid.UUID(body["user_id"]),
-        organisation_id=uuid.UUID(body["organisation_id"]),
+        organisation_id=caller_org_id,  # always taken from JWT, body value ignored
         name=body["name"], phone=body.get("phone"), email=body.get("email"),
     )
     db.add(agent)

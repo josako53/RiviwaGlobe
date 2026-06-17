@@ -191,11 +191,13 @@ class ReportService:
         stage_id=None,
         region=None, district=None, lga=None, ward=None, mtaa=None,
         priority=None, channel=None, submission_method=None,
+        org_id=None,
     ) -> dict:
         from_dt, to_dt, now = self._dr(from_date, to_date)
         all_items = await self.repo.list_all_for_project(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
         # Apply post-DB filters (stage_id, priority, channel, submission_method)
         all_items = self._filter(all_items, stage_id=stage_id,
@@ -262,11 +264,13 @@ class ReportService:
         priority=None, channel=None, submission_method=None, status=None,
         time_unit: str = "hours",
         custom_seconds: int = 3600,
+        org_id=None,
     ) -> dict:
         from_dt, to_dt, now = self._dr(from_date, to_date)
         items = await self.repo.list_grievances(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
         items = self._filter(items, stage_id=stage_id,
                              priority=priority, channel=channel,
@@ -369,11 +373,13 @@ class ReportService:
         channel=None, submission_method=None, status=None,
         time_unit: str = "hours",
         custom_seconds: int = 3600,
+        org_id=None,
     ) -> dict:
         from_dt, to_dt, _ = self._dr(from_date, to_date)
         items = await self.repo.list_suggestions(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
         items = self._filter(items, stage_id=stage_id,
                              channel=channel, submission_method=submission_method,
@@ -548,6 +554,7 @@ class ReportService:
         status=None,
         time_unit: str = "hours",
         custom_seconds: int = 3600,
+        org_id=None,
     ) -> dict:
         """
         Comprehensive grievance performance report.
@@ -565,6 +572,7 @@ class ReportService:
         items = await self.repo.list_grievances(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
 
         # In-memory filters
@@ -810,6 +818,7 @@ class ReportService:
         status=None,
         time_unit: str = "hours",
         custom_seconds: int = 3600,
+        org_id=None,
     ) -> dict:
         """
         Comprehensive suggestion performance report.
@@ -831,6 +840,7 @@ class ReportService:
         items = await self.repo.list_suggestions(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
 
         # Apply in-memory filters
@@ -962,6 +972,7 @@ class ReportService:
         ward=None,
         mtaa=None,
         group_location_by: str = "lga",
+        org_id=None,
     ) -> dict:
         """
         Extended suggestion performance report.
@@ -981,6 +992,7 @@ class ReportService:
         items = await self.repo.list_suggestions(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
         if stage_id:
             items = [f for f in items if str(f.stage_id) == str(stage_id)]
@@ -1002,11 +1014,11 @@ class ReportService:
         spid = _uuid.UUID(str(subproject_id)) if subproject_id else None
         skid = _uuid.UUID(str(stakeholder_id)) if stakeholder_id else None
 
-        daily          = await self.repo.suggestion_daily_rate(pid, from_dt, to_dt, spid, sid, lga, region, district, ward, category)
-        by_category    = await self.repo.suggestion_by_category(pid, from_dt, to_dt, spid, sid, lga, region)
-        by_location    = await self.repo.suggestion_by_location(pid, from_dt, to_dt, group_location_by, spid, sid)
-        by_stakeholder = await self.repo.suggestion_by_stakeholder(pid, from_dt, to_dt, spid, sid)
-        impl_times     = await self.repo.suggestion_implementation_times(pid, from_dt, to_dt, spid, sid, skid, category, lga, region)
+        daily          = await self.repo.suggestion_daily_rate(pid, from_dt, to_dt, spid, sid, lga, region, district, ward, category, org_id=org_id)
+        by_category    = await self.repo.suggestion_by_category(pid, from_dt, to_dt, spid, sid, lga, region, org_id=org_id)
+        by_location    = await self.repo.suggestion_by_location(pid, from_dt, to_dt, group_location_by, spid, sid, org_id=org_id)
+        by_stakeholder = await self.repo.suggestion_by_stakeholder(pid, from_dt, to_dt, spid, sid, org_id=org_id)
+        impl_times     = await self.repo.suggestion_implementation_times(pid, from_dt, to_dt, spid, sid, skid, category, lga, region, org_id=org_id)
 
         # Stage breakdown from in-memory items
         by_stage = {}
@@ -1061,11 +1073,13 @@ class ReportService:
         stage_id=None,
         region=None, district=None, lga=None, ward=None, mtaa=None,
         channel=None, submission_method=None,
+        org_id=None,
     ) -> dict:
         from_dt, to_dt, _ = self._dr(from_date, to_date)
         items = await self.repo.list_applause(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
         items = self._filter(items, stage_id=stage_id,
                              channel=channel, submission_method=submission_method)
@@ -1279,6 +1293,7 @@ class ReportService:
         status=None,
         time_unit: str = "hours",
         custom_seconds: int = 3600,
+        org_id=None,
     ) -> dict:
         """
         Comprehensive applause performance report.
@@ -1304,6 +1319,7 @@ class ReportService:
         items = await self.repo.list_applause(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
 
         # In-memory filters
@@ -1403,9 +1419,9 @@ class ReportService:
             "by_status":      self._by_status(items),
         }
 
-    async def channels(self, project_id=None, from_date=None, to_date=None, feedback_type=None) -> dict:
+    async def channels(self, project_id=None, from_date=None, to_date=None, feedback_type=None, org_id=None) -> dict:
         from_dt, to_dt, _ = self._dr(from_date, to_date)
-        items = await self.repo.list_all_for_project(project_id, from_dt, to_dt)
+        items = await self.repo.list_all_for_project(project_id, from_dt, to_dt, org_id=org_id)
         if feedback_type:
             items = [f for f in items if f.feedback_type.value == feedback_type]
         breakdown: dict = {}
@@ -1442,11 +1458,13 @@ class ReportService:
         region=None, district=None, lga=None, ward=None, mtaa=None,
         priority=None, channel=None, status=None,
         skip=0, limit=100,
+        org_id=None,
     ) -> dict:
         from_dt, to_dt, now = self._dr(from_date, to_date, default_days=90)
         items = await self.repo.list_grievances(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
         items = self._filter(items, priority=priority, channel=channel, status=status)
         paginated = items[skip:skip + limit]
@@ -1461,11 +1479,13 @@ class ReportService:
         self, project_id=None, from_date=None, to_date=None,
         region=None, district=None, lga=None, ward=None, mtaa=None,
         channel=None, status=None, skip=0, limit=100,
+        org_id=None,
     ) -> dict:
         from_dt, to_dt, now = self._dr(from_date, to_date, default_days=90)
         items = await self.repo.list_suggestions(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
         items = self._filter(items, channel=channel, status=status)
         paginated = items[skip:skip + limit]
@@ -1480,11 +1500,13 @@ class ReportService:
         self, project_id=None, from_date=None, to_date=None,
         region=None, district=None, lga=None, ward=None, mtaa=None,
         channel=None, skip=0, limit=100,
+        org_id=None,
     ) -> dict:
         from_dt, to_dt, now = self._dr(from_date, to_date, default_days=90)
         items = await self.repo.list_applause(
             project_id, from_dt, to_dt,
             region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+            org_id=org_id,
         )
         items = self._filter(items, channel=channel)
         paginated = items[skip:skip + limit]
@@ -1495,9 +1517,9 @@ class ReportService:
             "items": [self._log_row(f, now) for f in paginated],
         }
 
-    async def summary(self, project_id: uuid.UUID) -> dict:
-        by_type, by_status = await self.repo.counts_by_type_and_status(project_id)
-        open_count = await self.repo.count_open(project_id)
+    async def summary(self, project_id: uuid.UUID, org_id=None) -> dict:
+        by_type, by_status = await self.repo.counts_by_type_and_status(project_id, org_id=org_id)
+        open_count = await self.repo.count_open(project_id, org_id=org_id)
         return {
             "project_id": str(project_id),
             "open_count": open_count,
@@ -1505,9 +1527,9 @@ class ReportService:
             "by_status": [{"type": r[0], "status": r[1], "count": r[2]} for r in by_status],
         }
 
-    async def overdue(self, project_id=None, priority=None) -> dict:
+    async def overdue(self, project_id=None, priority=None, org_id=None) -> dict:
         now   = datetime.now(timezone.utc)
-        items = await self.repo.list_overdue(project_id, now)
+        items = await self.repo.list_overdue(project_id, now, org_id=org_id)
         if priority:
             items = [f for f in items if f.priority and f.priority.value == priority]
         return {

@@ -145,10 +145,13 @@ class AnalyticsRepository:
 
     async def get_sla_status(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         breached_only: bool = False,
     ) -> List[FeedbackSLAStatus]:
-        q = select(FeedbackSLAStatus).where(FeedbackSLAStatus.project_id == project_id)
+        if isinstance(project_id, list):
+            q = select(FeedbackSLAStatus).where(FeedbackSLAStatus.project_id.in_(project_id))
+        else:
+            q = select(FeedbackSLAStatus).where(FeedbackSLAStatus.project_id == project_id)
         if breached_only:
             q = q.where(
                 (FeedbackSLAStatus.ack_sla_breached == True)  # noqa: E712
@@ -162,15 +165,23 @@ class AnalyticsRepository:
 
     async def get_hotspot_alerts(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         status: str = "active",
     ) -> List[HotspotAlert]:
-        q = (
-            select(HotspotAlert)
-            .where(HotspotAlert.project_id == project_id)
-            .where(HotspotAlert.alert_status == status)
-            .order_by(HotspotAlert.spike_factor.desc())
-        )
+        if isinstance(project_id, list):
+            q = (
+                select(HotspotAlert)
+                .where(HotspotAlert.project_id.in_(project_id))
+                .where(HotspotAlert.alert_status == status)
+                .order_by(HotspotAlert.spike_factor.desc())
+            )
+        else:
+            q = (
+                select(HotspotAlert)
+                .where(HotspotAlert.project_id == project_id)
+                .where(HotspotAlert.alert_status == status)
+                .order_by(HotspotAlert.spike_factor.desc())
+            )
         result = await self.db.execute(q)
         return list(result.scalars().all())
 

@@ -106,25 +106,31 @@ async def get_sla_status(
     fb_db:  FeedbackDbDep = None,
     an_db:  AnalyticsDbDep = None,
 ) -> SLAStatusResponse:
+    """
+    SLA compliance status for grievances in the project (or all projects in an org).
+    Returns per-priority breakdown (ack SLA met/breached, resolution SLA met/breached)
+    and a flat overdue list. Uses pre-computed analytics_db data when available,
+    falling back to live feedback_db query.
+    """
     if not project_id and not org_id:
         raise AppValidationError(message="Provide either project_id or org_id.")
+
+    # Resolve the effective project scope — a list for org-path, single UUID for project-path.
     if org_id and not project_id:
         assert_org_access(_token, org_id)
         fb_repo = FeedbackAnalyticsRepository(fb_db)
         project_ids = await fb_repo.get_project_ids_for_org(org_id)
         if not project_ids:
             return SLAStatusResponse(by_priority=[], overdue_list=[], total_breached=0, overall_compliance_rate=None)
-        project_id = project_ids[0]
-    """
-    SLA compliance status for grievances in the project.
-    Returns per-priority breakdown (ack SLA met/breached, resolution SLA met/breached)
-    and a flat overdue list. Uses pre-computed analytics_db data when available,
-    falling back to live feedback_db query.
-    """
+        effective_project_id: "UUID | list" = project_ids  # full list — repo accepts List[UUID]
+    else:
+        assert_project_org_access(_token, await FeedbackAnalyticsRepository(fb_db).get_project_org_id(project_id))
+        effective_project_id = project_id
+
     # Try pre-computed analytics_db first (may fail if schema uses text vs uuid)
     an_repo = AnalyticsRepository(an_db)
     try:
-        sla_records = await an_repo.get_sla_status(project_id, breached_only=breached_only)
+        sla_records = await an_repo.get_sla_status(effective_project_id, breached_only=breached_only)
     except Exception:
         sla_records = []
 
@@ -191,7 +197,7 @@ async def get_sla_status(
 
     # Fallback: compute live from feedback_db
     fb_repo = FeedbackAnalyticsRepository(fb_db)
-    unresolved_rows = await fb_repo.get_unresolved_grievances(project_id)
+    unresolved_rows = await fb_repo.get_unresolved_grievances(effective_project_id)
 
     from datetime import timedelta, datetime, timezone as _tz
     priority_buckets: dict[str, dict] = {}
@@ -264,22 +270,8 @@ async def get_grievance_dashboard(
     _token: StaffDep = None,
     fb_db:  FeedbackDbDep = None,
 ) -> GrievanceDashboardResponse:
-    if not project_id and not org_id:
-        raise AppValidationError(message="Provide either project_id or org_id.")
-    if org_id and not project_id:
-        assert_org_access(_token, org_id)
-        fb_repo_tmp = FeedbackAnalyticsRepository(fb_db)
-        pids = await fb_repo_tmp.get_project_ids_for_org(org_id)
-        if not pids:
-            return GrievanceDashboardResponse(
-                summary=GrievanceSummaryStats(total_grievances=0, submitted=0, acknowledged=0, in_review=0,
-                                              escalated=0, resolved=0, closed=0, dismissed=0,
-                                              resolved_on_time_pct=None, resolved_late_pct=None, acknowledged_pct=None),
-                by_priority=[], by_department=[], by_stage=[], overdue=[], grievances=[], total=0, page=1, page_size=page_size,
-            )
-        project_id = pids[0]
     """
-    Comprehensive grievance dashboard for a project.
+    Comprehensive grievance dashboard for a project or all projects in an org.
     Returns:
     - summary stats (totals, resolved on time %, resolved late %, acknowledged %)
     - breakdown by priority (CRITICAL/HIGH/MEDIUM/LOW)
@@ -289,35 +281,53 @@ async def get_grievance_dashboard(
     - paginated full grievance list
     Filterable by department_id, status, priority, date_from, date_to.
     """
+    if not project_id and not org_id:
+        raise AppValidationError(message="Provide either project_id or org_id.")
+
+    repo = FeedbackAnalyticsRepository(fb_db)
+
+    # Resolve the effective project scope — list for org-path, single UUID for project-path.
+    if org_id and not project_id:
+        assert_org_access(_token, org_id)
+        pids = await repo.get_project_ids_for_org(org_id)
+        if not pids:
+            return GrievanceDashboardResponse(
+                summary=GrievanceSummaryStats(total_grievances=0, submitted=0, acknowledged=0, in_review=0,
+                                              escalated=0, resolved=0, closed=0, dismissed=0,
+                                              resolved_on_time_pct=None, resolved_late_pct=None, acknowledged_pct=None),
+                by_priority=[], by_department=[], by_stage=[], overdue=[], grievances=[], total=0, page=1, page_size=page_size,
+            )
+        effective_project_id: "UUID | list" = pids  # full list — repo accepts List[UUID]
+    else:
+        assert_project_org_access(_token, await repo.get_project_org_id(project_id))
+        effective_project_id = project_id
+
     from datetime import date as _date
     d_from = _date.fromisoformat(date_from) if date_from else None
     d_to   = _date.fromisoformat(date_to)   if date_to   else None
 
-    repo = FeedbackAnalyticsRepository(fb_db)
-    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
-
     summary_row, priority_rows, dept_rows, stage_rows, overdue_rows, list_data = (
         await repo.get_project_grievance_dashboard_summary(
-            project_id, department_id=department_id, status=status,
+            effective_project_id, department_id=department_id, status=status,
             priority=priority, date_from=d_from, date_to=d_to,
         ),
         await repo.get_project_grievance_by_priority(
-            project_id, department_id=department_id, status=status,
+            effective_project_id, department_id=department_id, status=status,
             date_from=d_from, date_to=d_to,
         ),
         await repo.get_project_grievance_by_dept(
-            project_id, status=status, priority=priority,
+            effective_project_id, status=status, priority=priority,
             date_from=d_from, date_to=d_to,
         ),
         await repo.get_project_grievance_by_stage(
-            project_id, status=status, priority=priority,
+            effective_project_id, status=status, priority=priority,
             date_from=d_from, date_to=d_to,
         ),
         await repo.get_project_grievance_overdue(
-            project_id, department_id=department_id, priority=priority,
+            effective_project_id, department_id=department_id, priority=priority,
         ),
         await repo.get_project_grievance_list(
-            project_id, department_id=department_id, status=status,
+            effective_project_id, department_id=department_id, status=status,
             priority=priority, date_from=d_from, date_to=d_to,
             page=page, page_size=page_size,
         ),
@@ -382,22 +392,26 @@ async def get_hotspots(
     if not project_id and not org_id:
         raise AppValidationError(message="Provide either project_id or org_id.")
 
+    an_repo = AnalyticsRepository(an_db)
+
+    # Resolve the effective project scope — list for org-path, single UUID for project-path.
     if org_id and not project_id:
         assert_org_access(_token, org_id)
         fb_repo_tmp = FeedbackAnalyticsRepository(fb_db)
         pids = await fb_repo_tmp.get_project_ids_for_org(org_id)
         if not pids:
             return HotspotResponse(total=0, alerts=[])
-        project_id = pids[0]
-
-    an_repo = AnalyticsRepository(an_db)
+        effective_project_id: "UUID | list" = pids  # full list — repo accepts List[UUID]
+    else:
+        assert_project_org_access(_token, await FeedbackAnalyticsRepository(fb_db).get_project_org_id(project_id))
+        effective_project_id = project_id
 
     if alert_status == "all":
-        active   = await an_repo.get_hotspot_alerts(project_id, status="active")
-        resolved = await an_repo.get_hotspot_alerts(project_id, status="resolved")
+        active   = await an_repo.get_hotspot_alerts(effective_project_id, status="active")
+        resolved = await an_repo.get_hotspot_alerts(effective_project_id, status="resolved")
         records  = active + resolved
     else:
-        records = await an_repo.get_hotspot_alerts(project_id, status=alert_status)
+        records = await an_repo.get_hotspot_alerts(effective_project_id, status=alert_status)
 
     alerts = [
         HotspotAlertItem(

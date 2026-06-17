@@ -85,7 +85,7 @@ async def generate_qr(
     `product_id`, `service_id`, `project_id`, `branch_id`, `department_id`
     """
     qr_type         = (body.get("qr_type") or "LOCATION").upper()
-    organisation_id = uuid.UUID(body["organisation_id"])
+    organisation_id = uuid.UUID(str(_claims["org_id"]))
 
     short_code   = generate_short_code(8)
     org_sms_code = await get_org_sms_code(str(organisation_id))
@@ -214,10 +214,13 @@ async def get_batch_status(
     db:       AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
+    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     batch = await repo.get_batch(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail={"error": "BATCH_NOT_FOUND"})
+    if batch.organisation_id and str(batch.organisation_id) != caller_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     return _batch_out(batch)
 
 
@@ -236,7 +239,7 @@ async def create_bulk_batch(
     Poll `GET /qr/bulk/{batch_id}` for status. When `status=READY`,
     `zip_url` contains a presigned MinIO URL to download the ZIP of PNGs.
     """
-    organisation_id = uuid.UUID(body["organisation_id"])
+    organisation_id = uuid.UUID(str(_claims["org_id"]))
     count           = int(body.get("count", 1))
     qr_type         = (body.get("qr_type") or "PRODUCT").upper()
 
@@ -321,10 +324,13 @@ async def get_qr_code(
     db:    AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
+    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     qr   = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
+    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     return _qr_out(qr)
 
 
@@ -340,10 +346,13 @@ async def list_qr_scans(
     db:                 AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
+    caller_org_id = str(_claims["org_id"])
     repo   = QRRepository(db)
     qr     = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
+    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     items, total = await repo.list_scans(
         qr_id=qr_id, feedback_submitted=feedback_submitted, page=page, size=size,
     )
@@ -374,10 +383,13 @@ async def get_qr_analytics(
     db:    AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
+    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     qr   = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
+    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     stats = await repo.scan_analytics_for_qr(qr_id)
     return {"qr_id": str(qr_id), "short_code": qr.short_code, **stats}
 
@@ -399,10 +411,13 @@ async def update_qr_code(
     All fields are optional — send only what you want to change.
     Unknown fields are silently ignored.
     """
+    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     qr   = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
+    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Cast UUID string fields to UUID objects
     for uuid_field in ("product_id", "service_id", "project_id", "branch_id", "department_id"):
@@ -426,10 +441,13 @@ async def deactivate_qr_code(
     db:    AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
+    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     qr   = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
+    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
     await repo.deactivate(qr)
     await db.commit()
     return {"message": "QR code deactivated.", "short_code": qr.short_code}

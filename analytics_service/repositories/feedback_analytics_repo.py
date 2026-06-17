@@ -353,7 +353,7 @@ class FeedbackAnalyticsRepository:
 
     async def get_unresolved_grievances(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         min_days: Optional[float] = None,
         priority: Optional[str] = None,
         status: Optional[str] = None,
@@ -365,8 +365,15 @@ class FeedbackAnalyticsRepository:
         """
         feedback_type='grievance' AND status NOT IN ('resolved','closed','dismissed').
         days_unresolved = EXTRACT(EPOCH FROM now()-submitted_at)/86400
+        Accepts a single project_id UUID or a list of UUIDs (org-level queries).
         """
-        params: Dict[str, Any] = {"project_id": str(project_id)}
+        if isinstance(project_id, list):
+            id_list = ", ".join(f"'{pid}'" for pid in project_id)
+            project_filter = f"f.project_id IN ({id_list})"
+            params: Dict[str, Any] = {}
+        else:
+            project_filter = "f.project_id = :project_id"
+            params: Dict[str, Any] = {"project_id": str(project_id)}
         extra_clauses: List[str] = []
 
         if min_days is not None:
@@ -412,7 +419,7 @@ class FeedbackAnalyticsRepository:
                 f.product_id,
                 f.category_def_id
             FROM feedbacks f
-            WHERE f.project_id = :project_id
+            WHERE {project_filter}
               AND f.feedback_type::text = 'GRIEVANCE'
               AND f.status::text NOT IN ('RESOLVED', 'CLOSED', 'DISMISSED')
               {extra}
@@ -2451,14 +2458,19 @@ class FeedbackAnalyticsRepository:
 
     async def get_project_grievance_dashboard_summary(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         department_id: Optional[uuid.UUID] = None,
         status: Optional[str] = None,
         priority: Optional[str] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {"project_id": str(project_id)}
+        if isinstance(project_id, list):
+            project_filter = "f.project_id IN ({})".format(", ".join(f"'{pid}'" for pid in project_id))
+            params: Dict[str, Any] = {}
+        else:
+            project_filter = "f.project_id = :project_id"
+            params: Dict[str, Any] = {"project_id": str(project_id)}
         extra = self._proj_grievance_filters(params, department_id, status, priority, date_from, date_to)
         sql = f"""
             SELECT
@@ -2492,7 +2504,7 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                           AS avg_days_unresolved
             FROM feedbacks f
-            WHERE f.project_id = :project_id
+            WHERE {project_filter}
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
         """
@@ -2501,13 +2513,18 @@ class FeedbackAnalyticsRepository:
 
     async def get_project_grievance_by_priority(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         department_id: Optional[uuid.UUID] = None,
         status: Optional[str] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"project_id": str(project_id)}
+        if isinstance(project_id, list):
+            project_filter = "f.project_id IN ({})".format(", ".join(f"'{pid}'" for pid in project_id))
+            params: Dict[str, Any] = {}
+        else:
+            project_filter = "f.project_id = :project_id"
+            params: Dict[str, Any] = {"project_id": str(project_id)}
         extra = self._proj_grievance_filters(params, department_id, status, None, date_from, date_to)
         sql = f"""
             SELECT
@@ -2518,7 +2535,7 @@ class FeedbackAnalyticsRepository:
                 )                                                                           AS unresolved,
                 COUNT(*) FILTER (WHERE f.status::text IN ('RESOLVED','CLOSED'))            AS resolved
             FROM feedbacks f
-            WHERE f.project_id = :project_id
+            WHERE {project_filter}
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
             GROUP BY f.priority
@@ -2528,13 +2545,18 @@ class FeedbackAnalyticsRepository:
 
     async def get_project_grievance_by_dept(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         status: Optional[str] = None,
         priority: Optional[str] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"project_id": str(project_id)}
+        if isinstance(project_id, list):
+            project_filter = "f.project_id IN ({})".format(", ".join(f"'{pid}'" for pid in project_id))
+            params: Dict[str, Any] = {}
+        else:
+            project_filter = "f.project_id = :project_id"
+            params: Dict[str, Any] = {"project_id": str(project_id)}
         extra = self._proj_grievance_filters(params, None, status, priority, date_from, date_to)
         sql = f"""
             SELECT
@@ -2550,7 +2572,7 @@ class FeedbackAnalyticsRepository:
                     ELSE NULL END
                 ) AS NUMERIC), 2)                                                           AS avg_resolution_hours
             FROM feedbacks f
-            WHERE f.project_id = :project_id
+            WHERE {project_filter}
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
             GROUP BY f.department_id
@@ -2560,13 +2582,18 @@ class FeedbackAnalyticsRepository:
 
     async def get_project_grievance_by_stage(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         status: Optional[str] = None,
         priority: Optional[str] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"project_id": str(project_id)}
+        if isinstance(project_id, list):
+            stage_project_filter = "s.project_id IN ({})".format(", ".join(f"'{pid}'" for pid in project_id))
+            params: Dict[str, Any] = {}
+        else:
+            stage_project_filter = "s.project_id = :project_id"
+            params: Dict[str, Any] = {"project_id": str(project_id)}
         extra = self._proj_grievance_filters(params, None, status, priority, date_from, date_to)
         sql = f"""
             SELECT
@@ -2581,7 +2608,7 @@ class FeedbackAnalyticsRepository:
             FROM fb_project_stages s
             LEFT JOIN feedbacks f ON f.stage_id = s.id
               AND f.feedback_type::text = 'GRIEVANCE' {extra}
-            WHERE s.project_id = :project_id
+            WHERE {stage_project_filter}
             GROUP BY s.id, s.name, s.stage_order
             ORDER BY s.stage_order
         """
@@ -2589,12 +2616,17 @@ class FeedbackAnalyticsRepository:
 
     async def get_project_grievance_overdue(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         department_id: Optional[uuid.UUID] = None,
         priority: Optional[str] = None,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
-        params: Dict[str, Any] = {"project_id": str(project_id), "limit": limit}
+        if isinstance(project_id, list):
+            project_filter = "f.project_id IN ({})".format(", ".join(f"'{pid}'" for pid in project_id))
+            params: Dict[str, Any] = {"limit": limit}
+        else:
+            project_filter = "f.project_id = :project_id"
+            params: Dict[str, Any] = {"project_id": str(project_id), "limit": limit}
         extra_clauses = []
         if department_id:
             extra_clauses.append("f.department_id = :department_id")
@@ -2618,7 +2650,7 @@ class FeedbackAnalyticsRepository:
                 f.assigned_committee_id                             AS committee_id,
                 f.issue_lga
             FROM feedbacks f
-            WHERE f.project_id = :project_id
+            WHERE {project_filter}
               AND f.feedback_type::text = 'GRIEVANCE'
               AND f.status::text NOT IN ('RESOLVED','CLOSED','DISMISSED')
               AND f.target_resolution_date IS NOT NULL
@@ -2631,7 +2663,7 @@ class FeedbackAnalyticsRepository:
 
     async def get_project_grievance_list(
         self,
-        project_id: uuid.UUID,
+        project_id: "uuid.UUID | List[uuid.UUID]",
         department_id: Optional[uuid.UUID] = None,
         status: Optional[str] = None,
         priority: Optional[str] = None,
@@ -2640,12 +2672,17 @@ class FeedbackAnalyticsRepository:
         page: int = 1,
         page_size: int = 50,
     ) -> Dict[str, Any]:
-        params: Dict[str, Any] = {"project_id": str(project_id)}
+        if isinstance(project_id, list):
+            project_filter = "f.project_id IN ({})".format(", ".join(f"'{pid}'" for pid in project_id))
+            params: Dict[str, Any] = {}
+        else:
+            project_filter = "f.project_id = :project_id"
+            params: Dict[str, Any] = {"project_id": str(project_id)}
         extra = self._proj_grievance_filters(params, department_id, status, priority, date_from, date_to)
         count_sql = f"""
             SELECT COUNT(*) AS total
             FROM feedbacks f
-            WHERE f.project_id = :project_id
+            WHERE {project_filter}
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
         """
@@ -2679,7 +2716,7 @@ class FeedbackAnalyticsRepository:
                 f.stage_id,
                 f.project_id
             FROM feedbacks f
-            WHERE f.project_id = :project_id
+            WHERE {project_filter}
               AND f.feedback_type::text = 'GRIEVANCE'
               {extra}
             ORDER BY f.submitted_at DESC

@@ -79,6 +79,7 @@ class ConversationRepository:
         self,
         status: Optional[str] = None,
         channel: Optional[str] = None,
+        org_id: Optional[uuid.UUID] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> List[AIConversation]:
@@ -87,6 +88,8 @@ class ConversationRepository:
             q = q.where(AIConversation.status == status)
         if channel:
             q = q.where(AIConversation.channel == channel)
+        if org_id:
+            q = q.where(AIConversation.organisation_id == org_id)
         q = q.order_by(AIConversation.last_active_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(q)
         return list(result.scalars().all())

@@ -58,8 +58,16 @@ class FeedbackRepository:
     ) -> Optional[Feedback]:
         q = select(Feedback).where(Feedback.id == feedback_id)
         if org_id:
-            q = q.join(ProjectCache, Feedback.project_id == ProjectCache.id).where(
-                ProjectCache.organisation_id == org_id
+            # Include feedback owned directly by the org (project_id IS NULL) OR
+            # feedback linked to a project that belongs to the org.
+            q = (
+                q.outerjoin(ProjectCache, Feedback.project_id == ProjectCache.id)
+                .where(
+                    or_(
+                        Feedback.org_id == org_id,
+                        (Feedback.project_id.isnot(None) & (ProjectCache.organisation_id == org_id)),
+                    )
+                )
             )
         if load_relations:
             q = q.options(
@@ -88,8 +96,16 @@ class FeedbackRepository:
             .where(Feedback.id == feedback_id)
         )
         if org_id:
-            q = q.join(ProjectCache, Feedback.project_id == ProjectCache.id).where(
-                ProjectCache.organisation_id == org_id
+            # Include feedback owned directly by the org (project_id IS NULL) OR
+            # feedback linked to a project that belongs to the org.
+            q = (
+                q.outerjoin(ProjectCache, Feedback.project_id == ProjectCache.id)
+                .where(
+                    or_(
+                        Feedback.org_id == org_id,
+                        (Feedback.project_id.isnot(None) & (ProjectCache.organisation_id == org_id)),
+                    )
+                )
             )
         result = await self.db.execute(q)
         return result.scalar_one_or_none()
@@ -321,6 +337,7 @@ class FeedbackRepository:
     async def list_escalation_requests(
         self,
         status:     Optional[str]       = "pending",
+        org_id:     Optional[uuid.UUID] = None,
         project_id: Optional[uuid.UUID] = None,
         skip:  int = 0,
         limit: int = 50,
@@ -328,9 +345,23 @@ class FeedbackRepository:
         q = select(EscalationRequest)
         if status:
             q = q.where(EscalationRequest.status == status)
-        if project_id:
-            q = q.join(Feedback, EscalationRequest.feedback_id == Feedback.id) \
-                 .where(Feedback.project_id == project_id)
+        if org_id or project_id:
+            # Always join Feedback when we need to scope by org or project.
+            q = q.join(Feedback, EscalationRequest.feedback_id == Feedback.id)
+            if project_id:
+                q = q.where(Feedback.project_id == project_id)
+            elif org_id:
+                # Match feedback owned directly by the org OR via a project that
+                # belongs to the org (mirrors the same OR logic used in list()).
+                q = (
+                    q.outerjoin(ProjectCache, Feedback.project_id == ProjectCache.id)
+                    .where(
+                        or_(
+                            Feedback.org_id == org_id,
+                            (Feedback.project_id.isnot(None) & (ProjectCache.organisation_id == org_id)),
+                        )
+                    )
+                )
         q = q.order_by(EscalationRequest.requested_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(q)
         return list(result.scalars().all())

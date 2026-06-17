@@ -2,13 +2,33 @@
 from __future__ import annotations
 import uuid
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from core.dependencies import AuthDep, DbDep, StaffDep
 from events.producer import get_producer
 from models.payment import Currency, PaymentProvider, PaymentStatus, PaymentType
 from services.payment_service import PaymentService
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
+
+_PLATFORM_ADMIN_ROLES = {"super_admin", "admin"}
+
+
+def _is_platform_admin(token) -> bool:
+    return token.platform_role in _PLATFORM_ADMIN_ROLES
+
+
+def _assert_payment_access(payment, token) -> None:
+    """Raise 403 if the caller does not own this payment."""
+    if _is_platform_admin(token):
+        return
+    # If payment is org-scoped, caller must belong to the same org.
+    if payment.org_id:
+        if payment.org_id != token.org_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+    else:
+        # Unscoped payment — must be the payer.
+        if payment.payer_user_id != token.sub:
+            raise HTTPException(status_code=403, detail="Access denied")
 
 def _svc(db, producer=None): return PaymentService(db=db, producer=producer)
 
@@ -72,11 +92,26 @@ async def list_payments(
     payment_type:  Optional[str]       = Query(default=None),
     skip: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
-    is_staff = token.org_role in ("owner","admin","manager") or \
-               token.platform_role in ("super_admin","admin","moderator")
-    effective_payer = payer_user_id if is_staff else token.sub
+    is_platform_admin = _is_platform_admin(token)
+    is_org_staff = token.org_role in ("owner", "admin", "manager")
+    is_staff = is_org_staff or token.platform_role in ("super_admin", "admin", "moderator")
+
+    if is_platform_admin:
+        # Platform admins may query any org; respect the query param as-is.
+        effective_org_id   = org_id
+        effective_payer    = payer_user_id
+    elif is_org_staff:
+        # Org-level staff are always scoped to their own org; ignore any
+        # caller-supplied org_id that would widen the scope.
+        effective_org_id   = token.org_id
+        effective_payer    = payer_user_id
+    else:
+        # Regular users see only their own payments.
+        effective_org_id   = org_id
+        effective_payer    = token.sub
+
     items = await _svc(db).list_payments(
-        payer_user_id=effective_payer, org_id=org_id, project_id=project_id,
+        payer_user_id=effective_payer, org_id=effective_org_id, project_id=project_id,
         reference_id=reference_id, status=status_, payment_type=payment_type,
         skip=skip, limit=limit,
     )
@@ -87,6 +122,7 @@ async def list_payments(
 async def get_payment(payment_id: uuid.UUID, db: DbDep, token: AuthDep) -> dict:
     svc     = _svc(db)
     payment = await svc.get_payment(payment_id)
+    _assert_payment_access(payment, token)
     txns    = await svc.list_transactions(payment_id)
     return {**_p(payment), "transactions": [_t(t) for t in txns]}
 
@@ -101,6 +137,9 @@ async def initiate_payment(payment_id: uuid.UUID, body: Dict[str, Any], db: DbDe
     selcom   → Tigo Pesa, TTCL Pesa, Halotel
     mpesa    → Vodacom M-Pesa TZ (direct)
     """
+    svc      = _svc(db)
+    payment  = await svc.get_payment(payment_id)
+    _assert_payment_access(payment, token)
     provider = PaymentProvider(body.get("provider", "azampay"))
     producer = await get_producer()
     txn      = await _svc(db, producer).initiate(payment_id, provider)
@@ -121,7 +160,9 @@ async def initiate_payment(payment_id: uuid.UUID, body: Dict[str, Any], db: DbDe
 
 @router.post("/{payment_id}/verify", summary="Poll provider for latest status")
 async def verify_payment(payment_id: uuid.UUID, db: DbDep, token: AuthDep) -> dict:
-    svc = _svc(db)
+    svc     = _svc(db)
+    payment = await svc.get_payment(payment_id)
+    _assert_payment_access(payment, token)
     txn = await svc.get_latest_transaction(payment_id)
     if not txn:
         from core.exceptions import PaymentNotFoundError
@@ -130,7 +171,10 @@ async def verify_payment(payment_id: uuid.UUID, db: DbDep, token: AuthDep) -> di
 
 
 @router.post("/{payment_id}/refund", summary="Refund a paid payment [staff]")
-async def refund_payment(payment_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
+async def refund_payment(payment_id: uuid.UUID, db: DbDep, token: StaffDep) -> dict:
+    svc     = _svc(db)
+    payment = await svc.get_payment(payment_id)
+    _assert_payment_access(payment, token)
     producer = await get_producer()
     txn      = await _svc(db, producer).refund(payment_id)
     return {**_t(txn), "message": "Refund initiated."}
@@ -138,11 +182,17 @@ async def refund_payment(payment_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
 
 @router.delete("/{payment_id}", summary="Cancel a PENDING payment")
 async def cancel_payment(payment_id: uuid.UUID, db: DbDep, token: AuthDep) -> dict:
-    payment = await _svc(db).cancel(payment_id)
+    svc     = _svc(db)
+    payment = await svc.get_payment(payment_id)
+    _assert_payment_access(payment, token)
+    payment = await svc.cancel(payment_id)
     return {"message": "Payment cancelled.", "payment_id": str(payment.id)}
 
 
 @router.get("/{payment_id}/transactions", summary="List transactions for a payment")
 async def list_transactions(payment_id: uuid.UUID, db: DbDep, token: AuthDep) -> dict:
-    items = await _svc(db).list_transactions(payment_id)
+    svc     = _svc(db)
+    payment = await svc.get_payment(payment_id)
+    _assert_payment_access(payment, token)
+    items = await svc.list_transactions(payment_id)
     return {"items": [_t(t) for t in items], "count": len(items)}

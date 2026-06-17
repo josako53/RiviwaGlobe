@@ -234,12 +234,14 @@ async def consumer_add_comment(feedback_id: uuid.UUID, body: ConsumerComment, db
 
 @router.get("/escalation-requests", status_code=status.HTTP_200_OK, summary="[Staff] List Consumer escalation requests")
 async def list_escalation_requests(
-    db: DbDep, kafka: KafkaDep, _: StaffDep,
+    db: DbDep, kafka: KafkaDep, token: StaffDep,
     project_id: Optional[uuid.UUID] = Query(default=None),
     status_: Optional[str] = Query(default="pending", alias="status"),
     skip: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
-    items = await _svc(db, kafka).list_escalation_requests(status=status_, project_id=project_id, skip=skip, limit=limit)
+    items = await _svc(db, kafka).list_escalation_requests(
+        status=status_, org_id=token.org_id, project_id=project_id, skip=skip, limit=limit
+    )
     return {"items": [escalation_request_out(er) for er in items], "count": len(items)}
 
 @router.post("/escalation-requests/{request_id}/approve", status_code=status.HTTP_200_OK, summary="[Staff] Approve a Consumer escalation request")

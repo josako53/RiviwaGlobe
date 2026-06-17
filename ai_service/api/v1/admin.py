@@ -4,23 +4,47 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, status
-from core.dependencies import DbDep, StaffDep
+from core.dependencies import DbDep, StaffDep, TokenClaims
 from models.conversation import ConversationStatus
 from repositories.conversation_repo import ConversationRepository
+
+_PLATFORM_ADMINS = {"super_admin", "admin"}
+
+
+def _caller_org_id(claims: TokenClaims) -> Optional[uuid.UUID]:
+    """Return org_id for scoping, or None if the caller is a platform admin (sees all)."""
+    if claims.platform_role in _PLATFORM_ADMINS:
+        return None
+    return claims.org_id
+
+
+def _check_org_ownership(conv_org_id: Optional[uuid.UUID], caller_org_id: Optional[uuid.UUID]) -> None:
+    """Raise 403 if caller_org_id is set and does not match the conversation's org."""
+    if caller_org_id is not None and conv_org_id != caller_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this conversation.",
+        )
 
 router = APIRouter(prefix="/ai/admin", tags=["AI Admin"])
 
 
 @router.get("/conversations", summary="List all AI conversations (staff only)")
 async def list_conversations(
-    db: DbDep, _: StaffDep,
+    db: DbDep, claims: StaffDep,
     status_: Optional[str] = Query(default=None, alias="status"),
     channel: Optional[str] = Query(default=None),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
     repo  = ConversationRepository(db)
-    items = await repo.list(status=status_, channel=channel, skip=skip, limit=limit)
+    items = await repo.list(
+        status=status_,
+        channel=channel,
+        org_id=_caller_org_id(claims),
+        skip=skip,
+        limit=limit,
+    )
     return {
         "items": [
             {
@@ -44,9 +68,10 @@ async def list_conversations(
 
 
 @router.get("/conversations/{conversation_id}", summary="Conversation detail with full transcript")
-async def get_conversation_admin(conversation_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
+async def get_conversation_admin(conversation_id: uuid.UUID, db: DbDep, claims: StaffDep) -> dict:
     repo = ConversationRepository(db)
     conv = await repo.get_or_404(conversation_id)
+    _check_org_ownership(conv.organisation_id, _caller_org_id(claims))
     extracted = conv.get_extracted()
     return {
         "conversation_id": str(conv.id),
@@ -80,10 +105,11 @@ async def get_conversation_admin(conversation_id: uuid.UUID, db: DbDep, _: Staff
     summary="Force-submit feedback from current extracted data (staff override)",
     status_code=status.HTTP_200_OK,
 )
-async def force_submit(conversation_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
+async def force_submit(conversation_id: uuid.UUID, db: DbDep, claims: StaffDep) -> dict:
     from services.conversation_service import ConversationService
     svc  = ConversationService(db=db)
     conv = await svc.conv_repo.get_or_404(conversation_id)
+    _check_org_ownership(conv.organisation_id, _caller_org_id(claims))
     submitted, results = await svc._submit_feedback(conv)
     if submitted:
         from models.conversation import ConversationStatus, ConversationStage
@@ -166,7 +192,7 @@ async def update_conversation(
     conversation_id: uuid.UUID,
     body: dict,
     db: DbDep,
-    _: StaffDep,
+    claims: StaffDep,
 ) -> dict:
     """
     Update mutable metadata on a conversation.
@@ -180,6 +206,7 @@ async def update_conversation(
     """
     repo = ConversationRepository(db)
     conv = await repo.get_or_404(conversation_id)
+    _check_org_ownership(conv.organisation_id, _caller_org_id(claims))
 
     allowed = {"is_urgent", "incharge_name", "incharge_phone", "language"}
     for field in allowed:
@@ -218,7 +245,7 @@ async def update_conversation(
 async def archive_conversation(
     conversation_id: uuid.UUID,
     db: DbDep,
-    _: StaffDep,
+    claims: StaffDep,
 ) -> dict:
     """
     Soft-deletes a conversation by setting status to ARCHIVED.
@@ -229,6 +256,7 @@ async def archive_conversation(
     """
     repo = ConversationRepository(db)
     conv = await repo.get_or_404(conversation_id)
+    _check_org_ownership(conv.organisation_id, _caller_org_id(claims))
 
     if conv.status == ConversationStatus.ARCHIVED:
         return {"message": "Conversation already archived.", "conversation_id": str(conv.id)}

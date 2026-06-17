@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.feedback import (
@@ -21,6 +21,7 @@ from models.feedback import (
     FeedbackStatus,
     FeedbackType,
 )
+from models.project import ProjectCache
 
 
 class ReportRepository:
@@ -38,8 +39,9 @@ class ReportRepository:
         lga:      Optional[str] = None,
         ward:     Optional[str] = None,
         mtaa:     Optional[str] = None,
+        org_id:   Optional[uuid.UUID] = None,
     ):
-        """Base query with date range and Tanzania admin hierarchy location filters."""
+        """Base query with date range, Tanzania admin hierarchy location filters, and org scoping."""
         q = select(Feedback)
         if project_id: q = q.where(Feedback.project_id    == project_id)
         if from_dt:    q = q.where(Feedback.submitted_at  >= from_dt)
@@ -50,6 +52,22 @@ class ReportRepository:
         if lga:      q = q.where(Feedback.issue_lga.ilike(f"%{lga}%"))
         if ward:     q = q.where(Feedback.issue_ward.ilike(f"%{ward}%"))
         if mtaa:     q = q.where(Feedback.issue_mtaa.ilike(f"%{mtaa}%"))
+        # Org scoping: match direct org_id OR feedback whose project belongs to the org
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(
+                    ProjectCache.id == Feedback.project_id,
+                    ProjectCache.organisation_id == org_id,
+                )
+                .exists()
+            )
+            q = q.where(
+                or_(
+                    Feedback.org_id == org_id,
+                    and_(Feedback.project_id.isnot(None), project_subq),
+                )
+            )
         return q
 
     async def list_all_for_project(
@@ -62,10 +80,12 @@ class ReportRepository:
         lga:        Optional[str]       = None,
         ward:       Optional[str]       = None,
         mtaa:       Optional[str]       = None,
+        org_id:     Optional[uuid.UUID] = None,
     ) -> list[Feedback]:
         result = await self.db.execute(
             self._base(project_id, from_dt, to_dt, region=region,
-                       district=district, lga=lga, ward=ward, mtaa=mtaa)
+                       district=district, lga=lga, ward=ward, mtaa=mtaa,
+                       org_id=org_id)
             .order_by(Feedback.submitted_at.desc())
         )
         return list(result.scalars().all())
@@ -75,17 +95,32 @@ class ReportRepository:
         project_id: Optional[uuid.UUID] = None,
         from_dt:    Optional[datetime]  = None,
         to_dt:      Optional[datetime]  = None,
+        org_id:     Optional[uuid.UUID] = None,
     ) -> tuple[list, list]:
         q = select(Feedback.feedback_type, func.count(Feedback.id))
         if project_id: q = q.where(Feedback.project_id == project_id)
         if from_dt:    q = q.where(Feedback.submitted_at >= from_dt)
         if to_dt:      q = q.where(Feedback.submitted_at <= to_dt)
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
         by_type = await self.db.execute(q.group_by(Feedback.feedback_type))
 
         q2 = select(Feedback.feedback_type, Feedback.status, func.count(Feedback.id))
         if project_id: q2 = q2.where(Feedback.project_id == project_id)
         if from_dt:    q2 = q2.where(Feedback.submitted_at >= from_dt)
         if to_dt:      q2 = q2.where(Feedback.submitted_at <= to_dt)
+        if org_id:
+            project_subq2 = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q2 = q2.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq2)))
         by_status = await self.db.execute(
             q2.group_by(Feedback.feedback_type, Feedback.status)
         )
@@ -97,6 +132,7 @@ class ReportRepository:
         feedback_type: Optional[str]       = None,
         from_dt:       Optional[datetime]  = None,
         to_dt:         Optional[datetime]  = None,
+        org_id:        Optional[uuid.UUID] = None,
     ) -> int:
         open_statuses = [
             FeedbackStatus.SUBMITTED, FeedbackStatus.ACKNOWLEDGED,
@@ -107,6 +143,13 @@ class ReportRepository:
         if feedback_type: q = q.where(Feedback.feedback_type == feedback_type)
         if from_dt:       q = q.where(Feedback.submitted_at  >= from_dt)
         if to_dt:         q = q.where(Feedback.submitted_at  <= to_dt)
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
         return await self.db.scalar(q) or 0
 
     async def list_grievances(
@@ -119,10 +162,12 @@ class ReportRepository:
         lga:        Optional[str]       = None,
         ward:       Optional[str]       = None,
         mtaa:       Optional[str]       = None,
+        org_id:     Optional[uuid.UUID] = None,
     ) -> list[Feedback]:
         result = await self.db.execute(
             self._base(project_id, from_dt, to_dt, region=region,
-                       district=district, lga=lga, ward=ward, mtaa=mtaa)
+                       district=district, lga=lga, ward=ward, mtaa=mtaa,
+                       org_id=org_id)
             .where(Feedback.feedback_type == FeedbackType.GRIEVANCE)
             .order_by(Feedback.submitted_at.desc())
         )
@@ -138,10 +183,12 @@ class ReportRepository:
         lga:        Optional[str]       = None,
         ward:       Optional[str]       = None,
         mtaa:       Optional[str]       = None,
+        org_id:     Optional[uuid.UUID] = None,
     ) -> list[Feedback]:
         result = await self.db.execute(
             self._base(project_id, from_dt, to_dt, region=region,
-                       district=district, lga=lga, ward=ward, mtaa=mtaa)
+                       district=district, lga=lga, ward=ward, mtaa=mtaa,
+                       org_id=org_id)
             .where(Feedback.feedback_type == FeedbackType.SUGGESTION)
             .order_by(Feedback.submitted_at.desc())
         )
@@ -157,10 +204,12 @@ class ReportRepository:
         lga:        Optional[str]       = None,
         ward:       Optional[str]       = None,
         mtaa:       Optional[str]       = None,
+        org_id:     Optional[uuid.UUID] = None,
     ) -> list[Feedback]:
         result = await self.db.execute(
             self._base(project_id, from_dt, to_dt, region=region,
-                       district=district, lga=lga, ward=ward, mtaa=mtaa)
+                       district=district, lga=lga, ward=ward, mtaa=mtaa,
+                       org_id=org_id)
             .where(Feedback.feedback_type == FeedbackType.APPLAUSE)
             .order_by(Feedback.submitted_at.desc())
         )
@@ -170,6 +219,7 @@ class ReportRepository:
         self,
         project_id: Optional[uuid.UUID] = None,
         as_of:      Optional[datetime]  = None,
+        org_id:     Optional[uuid.UUID] = None,
     ) -> list[Feedback]:
         from datetime import timezone
         now = as_of or datetime.now(timezone.utc)
@@ -180,6 +230,13 @@ class ReportRepository:
         )
         if project_id:
             q = q.where(Feedback.project_id == project_id)
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
         result = await self.db.execute(q.order_by(Feedback.target_resolution_date))
         return list(result.scalars().all())
 
@@ -197,6 +254,7 @@ class ReportRepository:
         district:      Optional[str]       = None,
         ward:          Optional[str]       = None,
         category:      Optional[str]       = None,
+        org_id:        Optional[uuid.UUID] = None,
     ) -> list[dict]:
         """
         Count of suggestions submitted per calendar day in the date range.
@@ -229,6 +287,13 @@ class ReportRepository:
         if region:        q = q.where(Feedback.issue_region.ilike(f"%{region}%"))
         if district:      q = q.where(Feedback.issue_district.ilike(f"%{district}%"))
         if ward:          q = q.where(Feedback.issue_ward.ilike(f"%{ward}%"))
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
         rows = await self.db.execute(q)
         return [
             {"date": str(r.day), "total": r.total, "actioned": r.actioned, "noted": r.noted}
@@ -244,6 +309,7 @@ class ReportRepository:
         stage_id:      Optional[uuid.UUID] = None,
         lga:           Optional[str]       = None,
         region:        Optional[str]       = None,
+        org_id:        Optional[uuid.UUID] = None,
     ) -> list[dict]:
         """
         Count of suggestions per category (legacy enum + dynamic category_def_id).
@@ -274,6 +340,13 @@ class ReportRepository:
         if stage_id:      q = q.where(Feedback.stage_id      == stage_id)
         if lga:           q = q.where(Feedback.issue_lga.ilike(f"%{lga}%"))
         if region:        q = q.where(Feedback.issue_region.ilike(f"%{region}%"))
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
         rows = await self.db.execute(q)
         return [
             {
@@ -294,6 +367,7 @@ class ReportRepository:
         group_by:      str = "lga",   # "region" | "district" | "lga" | "ward" | "mtaa"
         subproject_id: Optional[uuid.UUID] = None,
         stage_id:      Optional[uuid.UUID] = None,
+        org_id:        Optional[uuid.UUID] = None,
     ) -> list[dict]:
         """
         Suggestion rate grouped by a geographic level.
@@ -332,6 +406,13 @@ class ReportRepository:
         if project_id:    q = q.where(Feedback.project_id    == project_id)
         if subproject_id: q = q.where(Feedback.subproject_id == subproject_id)
         if stage_id:      q = q.where(Feedback.stage_id      == stage_id)
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
         rows = await self.db.execute(q)
         return [
             {
@@ -352,6 +433,7 @@ class ReportRepository:
         subproject_id: Optional[uuid.UUID] = None,
         stage_id:      Optional[uuid.UUID] = None,
         top_n:         int = 20,
+        org_id:        Optional[uuid.UUID] = None,
     ) -> list[dict]:
         """
         Suggestions per stakeholder (submitted_by_stakeholder_id).
@@ -386,6 +468,13 @@ class ReportRepository:
         if project_id:    q = q.where(Feedback.project_id    == project_id)
         if subproject_id: q = q.where(Feedback.subproject_id == subproject_id)
         if stage_id:      q = q.where(Feedback.stage_id      == stage_id)
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
         rows = await self.db.execute(q)
         return [
             {
@@ -409,6 +498,7 @@ class ReportRepository:
         category:      Optional[str]        = None,
         lga:           Optional[str]        = None,
         region:        Optional[str]        = None,
+        org_id:        Optional[uuid.UUID]  = None,
     ) -> dict:
         """
         Implementation timing analytics for implemented (ACTIONED) suggestions:
@@ -450,6 +540,13 @@ class ReportRepository:
         if category:        q = q.where(Feedback.category.cast(str).ilike(f"%{category}%"))
         if lga:             q = q.where(Feedback.issue_lga.ilike(f"%{lga}%"))
         if region:          q = q.where(Feedback.issue_region.ilike(f"%{region}%"))
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
 
         rows = await self.db.execute(q)
         results = rows.all()
@@ -511,6 +608,7 @@ class ReportRepository:
         lga:            Optional[str]       = None,
         ward:           Optional[str]       = None,
         mtaa:           Optional[str]       = None,
+        org_id:         Optional[uuid.UUID] = None,
     ) -> list[dict]:
         """
         Count of applause submissions per calendar day.
@@ -539,6 +637,13 @@ class ReportRepository:
         if lga:            q = q.where(Feedback.issue_lga.ilike(f"%{lga}%"))
         if ward:           q = q.where(Feedback.issue_ward.ilike(f"%{ward}%"))
         if mtaa:           q = q.where(Feedback.issue_mtaa.ilike(f"%{mtaa}%"))
+        if org_id:
+            project_subq = (
+                select(ProjectCache.id)
+                .where(ProjectCache.id == Feedback.project_id, ProjectCache.organisation_id == org_id)
+                .exists()
+            )
+            q = q.where(or_(Feedback.org_id == org_id, and_(Feedback.project_id.isnot(None), project_subq)))
         rows = await self.db.execute(q)
         return [{"date": str(r.day), "count": r.count} for r in rows.all()]
 
@@ -554,6 +659,7 @@ class ReportRepository:
         lga:           Optional[str]       = None,
         ward:          Optional[str]       = None,
         mtaa:          Optional[str]       = None,
+        org_id:        Optional[uuid.UUID] = None,
     ) -> list[dict]:
         """
         Count of applause per category.
@@ -561,7 +667,8 @@ class ReportRepository:
         """
         q = (
             self._base(project_id, from_dt, to_dt,
-                       region=region, district=district, lga=lga, ward=ward, mtaa=mtaa)
+                       region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+                       org_id=org_id)
             .where(Feedback.feedback_type == FeedbackType.APPLAUSE)
         )
         if stage_id:      q = q.where(Feedback.stage_id      == stage_id)
@@ -603,13 +710,15 @@ class ReportRepository:
         lga:           Optional[str]       = None,
         ward:          Optional[str]       = None,
         mtaa:          Optional[str]       = None,
+        org_id:        Optional[uuid.UUID] = None,
     ) -> list[dict]:
         """
         Per-stakeholder: how many applause they submitted + avg time to acknowledgement.
         """
         q = (
             self._base(project_id, from_dt, to_dt,
-                       region=region, district=district, lga=lga, ward=ward, mtaa=mtaa)
+                       region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+                       org_id=org_id)
             .where(Feedback.feedback_type == FeedbackType.APPLAUSE)
         )
         if stage_id:      q = q.where(Feedback.stage_id      == stage_id)
@@ -653,6 +762,7 @@ class ReportRepository:
         lga:           Optional[str]       = None,
         ward:          Optional[str]       = None,
         mtaa:          Optional[str]       = None,
+        org_id:        Optional[uuid.UUID] = None,
     ) -> dict:
         """
         Detailed acknowledgement time stats for applause items that have been acknowledged.
@@ -660,7 +770,8 @@ class ReportRepository:
         """
         q = (
             self._base(project_id, from_dt, to_dt,
-                       region=region, district=district, lga=lga, ward=ward, mtaa=mtaa)
+                       region=region, district=district, lga=lga, ward=ward, mtaa=mtaa,
+                       org_id=org_id)
             .where(
                 Feedback.feedback_type     == FeedbackType.APPLAUSE,
                 Feedback.acknowledged_at.isnot(None),

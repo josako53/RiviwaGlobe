@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,15 +24,21 @@ async def get_stats(
     _claims = JWTDep,
 ) -> dict:
     """Aggregate verification statistics — counts by result and fake report breakdown."""
+    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+    if caller_org_id is None:
+        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
+    if organisation_id is not None and organisation_id != caller_org_id:
+        raise HTTPException(status_code=403, detail={"error": "FORBIDDEN"})
+    effective_org_id = caller_org_id
+
     from_dt = datetime.fromisoformat(from_date) if from_date else datetime.utcnow() - timedelta(days=30)
     to_dt   = datetime.fromisoformat(to_date)   if to_date   else datetime.utcnow()
 
     q = select(VerificationEvent.result, func.count(VerificationEvent.id)).where(
         VerificationEvent.verified_at >= from_dt,
         VerificationEvent.verified_at <= to_dt,
+        VerificationEvent.organisation_id == effective_org_id,
     )
-    if organisation_id:
-        q = q.where(VerificationEvent.organisation_id == organisation_id)
     q = q.group_by(VerificationEvent.result)
     rows = (await db.execute(q)).all()
 
@@ -42,9 +48,9 @@ async def get_stats(
     total = sum(counts.values())
 
     # Fake report breakdown
-    rq = select(FakeSuspectReport.status, func.count(FakeSuspectReport.id)).group_by(FakeSuspectReport.status)
-    if organisation_id:
-        rq = rq.where(FakeSuspectReport.organisation_id == organisation_id)
+    rq = select(FakeSuspectReport.status, func.count(FakeSuspectReport.id)).where(
+        FakeSuspectReport.organisation_id == effective_org_id
+    ).group_by(FakeSuspectReport.status)
     report_rows = (await db.execute(rq)).all()
 
     return {
@@ -69,7 +75,17 @@ async def get_heatmap(
     """
     Returns GPS points and cluster cells for all UNRECOGNIZED scans.
     Use this to visualise where suspected counterfeit products are circulating.
+
+    Note: UnrecognizedScanHeatmap has no organisation_id column yet (pending
+    schema migration). Data returned is currently global, but callers are still
+    restricted to request only their own org's heatmap via JWT enforcement.
     """
+    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+    if caller_org_id is None:
+        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
+    if organisation_id is not None and organisation_id != caller_org_id:
+        raise HTTPException(status_code=403, detail={"error": "FORBIDDEN"})
+
     from_dt = datetime.fromisoformat(from_date) if from_date else datetime.utcnow() - timedelta(days=30)
     to_dt   = datetime.fromisoformat(to_date)   if to_date   else datetime.utcnow()
 

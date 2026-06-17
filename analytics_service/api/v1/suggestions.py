@@ -11,7 +11,7 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Query
 
-from core.dependencies import FeedbackDbDep, StaffDep, assert_org_access
+from core.dependencies import FeedbackDbDep, StaffDep, assert_org_access, assert_project_org_access
 from core.exceptions import ValidationError as AppValidationError
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
@@ -44,6 +44,7 @@ async def get_implementation_time(
     Returns avg/min/max/median stats and per-item details.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_suggestion_implementation_time(project_id)
 
     items = [
@@ -94,6 +95,7 @@ async def get_suggestion_frequency(
     repo = FeedbackAnalyticsRepository(fb_db)
 
     if project_id:
+        assert_project_org_access(_token, await repo.get_project_org_id(project_id))
         project_ids = [project_id]
     else:
         assert_org_access(_token, org_id)
@@ -142,6 +144,7 @@ async def get_suggestions_by_location(
     Suggestion counts grouped by region/LGA/ward with implementation rates.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_suggestion_by_location(project_id)
 
     total = sum(int(r.get("count", 0)) for r in rows)
@@ -172,6 +175,7 @@ async def get_unread_suggestions(
     Includes days since submission.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_unread_suggestions(project_id)
 
     items = [
@@ -201,6 +205,7 @@ async def get_implemented_today(
     Suggestions that were marked as 'actioned' today.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_suggestions_implemented_today(project_id)
 
     items = [
@@ -229,6 +234,7 @@ async def get_implemented_this_week(
     Suggestions that were marked as 'actioned' in the current week.
     """
     repo = FeedbackAnalyticsRepository(fb_db)
+    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
     rows = await repo.get_suggestions_implemented_this_week(project_id)
 
     items = [
