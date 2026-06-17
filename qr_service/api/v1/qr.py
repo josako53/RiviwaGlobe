@@ -18,6 +18,33 @@ from services.bulk_service import run_bulk_job
 from services.qr_service import get_org_sms_code, make_qr_png, upload_qr_png
 
 log = structlog.get_logger(__name__)
+
+_PLATFORM_ADMINS = {"super_admin", "admin"}
+
+
+def _is_platform_admin(claims: dict) -> bool:
+    return claims.get("platform_role") in _PLATFORM_ADMINS
+
+
+def _effective_org(claims: dict, requested: Optional[uuid.UUID]) -> uuid.UUID:
+    """Return the org_id to use for scoped queries.
+
+    Non-platform-admins always see their JWT org, ignoring any requested value.
+    Platform-admins may pass an explicit org; falls back to their JWT org.
+    Raises 400 if no org context can be resolved.
+    """
+    if not _is_platform_admin(claims):
+        raw = claims.get("org_id")
+        if not raw:
+            raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
+        return uuid.UUID(str(raw))
+    # Platform admin path
+    if requested:
+        return requested
+    raw = claims.get("org_id")
+    if raw:
+        return uuid.UUID(str(raw))
+    raise HTTPException(status_code=400, detail={"error": "organisation_id required"})
 router = APIRouter(prefix="/api/v1/qr", tags=["QR Codes"])
 
 
@@ -140,7 +167,7 @@ async def _generate_and_upload_png(qr_id: str, short_code: str, redirect_url: st
 @router.get("", status_code=200,
             summary="List QR codes — filter by product, service, branch, department, project, type")
 async def list_qr_codes(
-    organisation_id: uuid.UUID,
+    organisation_id: Optional[uuid.UUID] = Query(default=None),
     qr_type:         Optional[str]       = Query(default=None, description="LOCATION | SERVICE | PRODUCT | RECEIPT"),
     product_id:      Optional[uuid.UUID] = Query(default=None, description="Filter by product"),
     service_id:      Optional[uuid.UUID] = Query(default=None, description="Filter by service"),
@@ -154,9 +181,10 @@ async def list_qr_codes(
     db:              AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
+    effective_org = _effective_org(_claims, organisation_id)
     repo = QRRepository(db)
     items, total = await repo.list_by_org(
-        org_id=organisation_id,
+        org_id=effective_org,
         qr_type=qr_type,
         product_id=product_id,
         service_id=service_id,
@@ -176,12 +204,13 @@ async def list_qr_codes(
 @router.get("/analytics/scans", status_code=200,
             summary="Org-wide scan analytics — totals, unique scanners, conversion rate")
 async def get_scan_analytics(
-    organisation_id: uuid.UUID,
+    organisation_id: Optional[uuid.UUID] = Query(default=None),
     db:              AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
+    effective_org = _effective_org(_claims, organisation_id)
     repo = QRRepository(db)
-    return await repo.scan_analytics(organisation_id)
+    return await repo.scan_analytics(effective_org)
 
 
 # ── List bulk batches ─────────────────────────────────────────────────────────
@@ -190,7 +219,7 @@ async def get_scan_analytics(
 @router.get("/bulk", status_code=200,
             summary="List bulk generation batches for an org")
 async def list_batches(
-    organisation_id: uuid.UUID,
+    organisation_id: Optional[uuid.UUID] = Query(default=None),
     qr_type:         Optional[str] = Query(default=None, description="PRODUCT | LOCATION | SERVICE"),
     status:          Optional[str] = Query(default=None, description="PENDING | GENERATING | READY | FAILED"),
     page:            int = Query(default=1, ge=1),
@@ -198,9 +227,10 @@ async def list_batches(
     db:              AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
+    effective_org = _effective_org(_claims, organisation_id)
     repo = QRRepository(db)
     items, total = await repo.list_batches(
-        org_id=organisation_id, qr_type=qr_type, status=status, page=page, size=size,
+        org_id=effective_org, qr_type=qr_type, status=status, page=page, size=size,
     )
     return {"total": total, "page": page, "size": size, "items": [_batch_out(b) for b in items]}
 
@@ -214,13 +244,14 @@ async def get_batch_status(
     db:       AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
-    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     batch = await repo.get_batch(batch_id)
     if not batch:
         raise HTTPException(status_code=404, detail={"error": "BATCH_NOT_FOUND"})
-    if batch.organisation_id and str(batch.organisation_id) != caller_org_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _is_platform_admin(_claims):
+        caller_org_id = _claims.get("org_id")
+        if batch.organisation_id and str(batch.organisation_id) != str(caller_org_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     return _batch_out(batch)
 
 
@@ -324,13 +355,14 @@ async def get_qr_code(
     db:    AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
-    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     qr   = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
-    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _is_platform_admin(_claims):
+        caller_org_id = _claims.get("org_id")
+        if qr.organisation_id and str(qr.organisation_id) != str(caller_org_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     return _qr_out(qr)
 
 
@@ -346,13 +378,14 @@ async def list_qr_scans(
     db:                 AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
-    caller_org_id = str(_claims["org_id"])
     repo   = QRRepository(db)
     qr     = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
-    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _is_platform_admin(_claims):
+        caller_org_id = _claims.get("org_id")
+        if qr.organisation_id and str(qr.organisation_id) != str(caller_org_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     items, total = await repo.list_scans(
         qr_id=qr_id, feedback_submitted=feedback_submitted, page=page, size=size,
     )
@@ -383,13 +416,14 @@ async def get_qr_analytics(
     db:    AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
-    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     qr   = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
-    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _is_platform_admin(_claims):
+        caller_org_id = _claims.get("org_id")
+        if qr.organisation_id and str(qr.organisation_id) != str(caller_org_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     stats = await repo.scan_analytics_for_qr(qr_id)
     return {"qr_id": str(qr_id), "short_code": qr.short_code, **stats}
 
@@ -411,13 +445,14 @@ async def update_qr_code(
     All fields are optional — send only what you want to change.
     Unknown fields are silently ignored.
     """
-    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     qr   = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
-    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _is_platform_admin(_claims):
+        caller_org_id = _claims.get("org_id")
+        if qr.organisation_id and str(qr.organisation_id) != str(caller_org_id):
+            raise HTTPException(status_code=403, detail="Access denied")
 
     # Cast UUID string fields to UUID objects
     for uuid_field in ("product_id", "service_id", "project_id", "branch_id", "department_id"):
@@ -441,13 +476,14 @@ async def deactivate_qr_code(
     db:    AsyncSession = Depends(get_async_session),
     _claims=JWTDep,
 ) -> dict:
-    caller_org_id = str(_claims["org_id"])
     repo = QRRepository(db)
     qr   = await repo.get_by_id(qr_id)
     if not qr:
         raise HTTPException(status_code=404, detail={"error": "QR_NOT_FOUND"})
-    if qr.organisation_id and str(qr.organisation_id) != caller_org_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not _is_platform_admin(_claims):
+        caller_org_id = _claims.get("org_id")
+        if qr.organisation_id and str(qr.organisation_id) != str(caller_org_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     await repo.deactivate(qr)
     await db.commit()
     return {"message": "QR code deactivated.", "short_code": qr.short_code}
