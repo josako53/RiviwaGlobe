@@ -32,9 +32,14 @@ async def start_consumer() -> None:
         enable_auto_commit=True,
         value_deserializer=lambda b: json.loads(b.decode("utf-8")),
     )
-    await _consumer.start()
-    log.info("subscription.consumer.started", topic=PAYMENT_TOPIC)
-    asyncio.ensure_future(_consume_loop())
+    try:
+        await _consumer.start()
+        log.info("subscription.consumer.started", topic=PAYMENT_TOPIC)
+        asyncio.ensure_future(_consume_loop())
+    except Exception as exc:
+        log.warning("subscription.consumer.start_failed", error=str(exc),
+                    detail="payment events will not be consumed until restart")
+        _consumer = None
 
 
 async def stop_consumer() -> None:

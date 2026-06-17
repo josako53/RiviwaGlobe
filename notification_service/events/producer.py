@@ -57,7 +57,7 @@ _producer: Optional[AIOKafkaProducer] = None
 async def start_producer() -> None:
     """Start the Kafka producer. Called once at app startup."""
     global _producer
-    _producer = AIOKafkaProducer(
+    p = AIOKafkaProducer(
         bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
         value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
         key_serializer=lambda k: k.encode("utf-8") if k else None,
@@ -67,9 +67,14 @@ async def start_producer() -> None:
         max_batch_size=16384,
         linger_ms=5,                  # small batch window for throughput
     )
-    await _producer.start()
-    log.info("notification_producer.started",
-             brokers=settings.KAFKA_BOOTSTRAP_SERVERS)
+    try:
+        await p.start()
+        _producer = p
+        log.info("notification_producer.started",
+                 brokers=settings.KAFKA_BOOTSTRAP_SERVERS)
+    except Exception as exc:
+        log.warning("notification_producer.start_failed", error=str(exc),
+                    detail="delivery receipt events will be skipped until restart")
 
 
 async def stop_producer() -> None:

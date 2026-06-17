@@ -34,17 +34,22 @@ def _envelope(event_type: str, payload: Dict[str, Any]) -> bytes:
     }, default=_serialize).encode()
 
 
-async def get_producer() -> AIOKafkaProducer:
+async def get_producer() -> Optional[AIOKafkaProducer]:
     global _producer
     async with _lock:
         if _producer is None:
-            _producer = AIOKafkaProducer(
+            p = AIOKafkaProducer(
                 bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
                 acks="all", enable_idempotence=True,
                 compression_type="zstd", linger_ms=5,
             )
-            await _producer.start()
-            log.info("subscription.kafka_producer.started")
+            try:
+                await p.start()
+                _producer = p
+                log.info("subscription.kafka_producer.started")
+            except Exception as exc:
+                log.warning("subscription.kafka_producer.start_failed", error=str(exc))
+                return None
     return _producer
 
 
@@ -57,8 +62,14 @@ async def stop_producer() -> None:
 
 def _fire(event_type: str, payload: Dict[str, Any], key: str) -> None:
     async def _send():
-        p = await get_producer()
-        await p.send(SUBSCRIPTION_TOPIC, value=_envelope(event_type, payload), key=key.encode())
+        try:
+            p = await get_producer()
+            if p is None:
+                log.warning("subscription.kafka.unavailable", event_type=event_type)
+                return
+            await p.send(SUBSCRIPTION_TOPIC, value=_envelope(event_type, payload), key=key.encode())
+        except Exception as exc:
+            log.error("subscription.kafka.publish_failed", event_type=event_type, error=str(exc))
     asyncio.ensure_future(_send())
 
 
