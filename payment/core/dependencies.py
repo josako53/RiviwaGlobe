@@ -40,7 +40,7 @@ async def get_current_token(
         return TokenClaims(
             sub          = uuid.UUID(payload["sub"]),
             org_id       = uuid.UUID(payload["org_id"]) if payload.get("org_id") else None,
-            org_role     = payload.get("org_role"),
+            org_role     = (payload.get("org_role") or "").lower() or None,
             platform_role = payload.get("platform_role"),
         )
     except Exception:

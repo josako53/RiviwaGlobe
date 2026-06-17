@@ -39,7 +39,7 @@ def _decode(raw: str) -> TokenClaims:
             jti           = uuid.UUID(p.get("jti", str(uuid.uuid4()))),
             exp           = int(p["exp"]),
             org_id        = uuid.UUID(p["org_id"]) if p.get("org_id") else None,
-            org_role      = p.get("org_role"),
+            org_role      = (p.get("org_role") or "").lower() or None,
             platform_role = p.get("platform_role"),
         )
     except (KeyError, ValueError):
