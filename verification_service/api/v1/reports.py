@@ -57,12 +57,22 @@ async def list_reports(
     db: AsyncSession = Depends(get_async_session),
     _claims = JWTDep,
 ) -> dict:
-    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
-    if caller_org_id is None:
-        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
-    # Always scope to the caller's org; ignore any requested organisation_id
-    effective_org_id = caller_org_id
-    q = select(FakeSuspectReport).where(FakeSuspectReport.organisation_id == effective_org_id)
+    _PLATFORM_ADMINS = {"super_admin", "admin"}
+    is_platform_admin = _claims.get("platform_role") in _PLATFORM_ADMINS
+
+    if is_platform_admin:
+        # Platform admin: use query param as an optional filter; None = all orgs
+        effective_org_id = organisation_id
+    else:
+        # Org member: always scoped to JWT org, query param ignored
+        caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+        if caller_org_id is None:
+            raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
+        effective_org_id = caller_org_id
+
+    q = select(FakeSuspectReport)
+    if effective_org_id:
+        q = q.where(FakeSuspectReport.organisation_id == effective_org_id)
     if report_status:
         q = q.where(FakeSuspectReport.status == report_status.upper())
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
@@ -174,11 +184,18 @@ async def list_agents(
     db: AsyncSession = Depends(get_async_session),
     _claims = JWTDep,
 ) -> dict:
-    caller_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
-    if caller_org_id is None:
-        raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
-    # Always scope to the caller's org
-    q = select(FieldAgent).where(FieldAgent.organisation_id == caller_org_id)
+    _PLATFORM_ADMINS = {"super_admin", "admin"}
+    is_platform_admin = _claims.get("platform_role") in _PLATFORM_ADMINS
+    if is_platform_admin:
+        effective_org_id = organisation_id  # optional filter; None = all orgs
+    else:
+        effective_org_id = uuid.UUID(_claims["org_id"]) if _claims.get("org_id") else None
+        if effective_org_id is None:
+            raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
+
+    q = select(FieldAgent)
+    if effective_org_id:
+        q = q.where(FieldAgent.organisation_id == effective_org_id)
     if is_active is not None:
         q = q.where(FieldAgent.is_active == is_active)
     items = (await db.execute(q.order_by(FieldAgent.name))).scalars().all()

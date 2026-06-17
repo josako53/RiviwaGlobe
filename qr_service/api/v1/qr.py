@@ -26,25 +26,23 @@ def _is_platform_admin(claims: dict) -> bool:
     return claims.get("platform_role") in _PLATFORM_ADMINS
 
 
-def _effective_org(claims: dict, requested: Optional[uuid.UUID]) -> uuid.UUID:
-    """Return the org_id to use for scoped queries.
+def _effective_org(claims: dict, requested: Optional[uuid.UUID]) -> Optional[uuid.UUID]:
+    """Return the org_id filter to apply, or None meaning 'all organisations'.
 
-    Non-platform-admins always see their JWT org, ignoring any requested value.
-    Platform-admins may pass an explicit org; falls back to their JWT org.
-    Raises 400 if no org context can be resolved.
+    Industry-standard multi-tenant pattern:
+      - Org members   → always their JWT org; requested param is ignored.
+      - Platform admin → requested param if provided; None (all orgs) if omitted.
+
+    This mirrors Stripe, Auth0, Twilio: superusers see everything by default
+    and can optionally narrow by tenant/org.
     """
     if not _is_platform_admin(claims):
         raw = claims.get("org_id")
         if not raw:
             raise HTTPException(status_code=403, detail={"error": "NO_ORG_CONTEXT"})
         return uuid.UUID(str(raw))
-    # Platform admin path
-    if requested:
-        return requested
-    raw = claims.get("org_id")
-    if raw:
-        return uuid.UUID(str(raw))
-    raise HTTPException(status_code=400, detail={"error": "organisation_id required"})
+    # Platform admin: optional filter — None means return all orgs
+    return requested  # may be None → no WHERE clause → all organisations
 router = APIRouter(prefix="/api/v1/qr", tags=["QR Codes"])
 
 

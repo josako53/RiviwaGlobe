@@ -76,7 +76,7 @@ class QRRepository:
 
     async def list_by_org(
         self,
-        org_id:        uuid.UUID,
+        org_id:        Optional[uuid.UUID] = None,
         qr_type:       Optional[str]       = None,
         product_id:    Optional[uuid.UUID] = None,
         service_id:    Optional[uuid.UUID] = None,
@@ -88,7 +88,9 @@ class QRRepository:
         page:          int = 1,
         size:          int = 20,
     ) -> Tuple[List[QRCode], int]:
-        q = select(QRCode).where(QRCode.organisation_id == org_id)
+        q = select(QRCode)
+        if org_id:
+            q = q.where(QRCode.organisation_id == org_id)
         if is_active is not None:
             q = q.where(QRCode.is_active == is_active)
         if qr_type:
@@ -225,10 +227,11 @@ class QRRepository:
 
     # ── Scan analytics ────────────────────────────────────────────────────────
 
-    async def scan_analytics(self, org_id: uuid.UUID) -> dict:
-        qr_ids = (await self.db.execute(
-            select(QRCode.id).where(QRCode.organisation_id == org_id)
-        )).scalars().all()
+    async def scan_analytics(self, org_id: Optional[uuid.UUID] = None) -> dict:
+        q = select(QRCode.id)
+        if org_id:
+            q = q.where(QRCode.organisation_id == org_id)
+        qr_ids = (await self.db.execute(q)).scalars().all()
         if not qr_ids:
             return {"total_scans": 0, "unique_scanners": 0, "converted": 0, "conversion_rate": 0.0}
         return await self._scan_stats(QRScan.qr_code_id.in_(qr_ids))
@@ -294,13 +297,15 @@ class QRRepository:
 
     async def list_batches(
         self,
-        org_id:  uuid.UUID,
+        org_id:  Optional[uuid.UUID] = None,
         qr_type: Optional[str] = None,
         status:  Optional[str] = None,
         page:    int = 1,
         size:    int = 20,
     ) -> Tuple[List[QRBatch], int]:
-        q = select(QRBatch).where(QRBatch.organisation_id == org_id)
+        q = select(QRBatch)
+        if org_id:
+            q = q.where(QRBatch.organisation_id == org_id)
         if qr_type:
             q = q.where(QRBatch.qr_type == qr_type.upper())
         if status:
