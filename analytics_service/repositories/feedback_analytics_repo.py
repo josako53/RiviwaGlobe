@@ -287,24 +287,45 @@ class FeedbackAnalyticsRepository:
 
     # ── Feedback: Processed Today ─────────────────────────────────────────────
 
-    async def get_processed_today(self, project_id: uuid.UUID) -> List[Dict[str, Any]]:
+    async def get_processed_today(
+        self,
+        project_id: Optional[uuid.UUID] = None,
+        org_id: Optional[uuid.UUID] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Feedbacks where DATE(updated_at) = today AND status = 'in_review'.
+        Accepts either project_id (specific project) or org_id (all projects in org).
         """
-        sql = """
-            SELECT
-                f.id          AS feedback_id,
-                f.unique_ref,
-                f.priority::text,
-                f.category::text,
-                f.updated_at  AS processed_at
-            FROM feedbacks f
-            WHERE f.project_id = :project_id
-              AND f.status::text = 'IN_REVIEW'
-              AND DATE(f.updated_at AT TIME ZONE 'UTC') = CURRENT_DATE
-            ORDER BY f.updated_at DESC
-        """
-        return await self._fetchall(sql, {"project_id": str(project_id)})
+        if project_id:
+            sql = """
+                SELECT
+                    f.id          AS feedback_id,
+                    f.unique_ref,
+                    f.priority::text,
+                    f.category::text,
+                    f.updated_at  AS processed_at
+                FROM feedbacks f
+                WHERE f.project_id = :project_id
+                  AND f.status::text = 'IN_REVIEW'
+                  AND DATE(f.updated_at AT TIME ZONE 'UTC') = CURRENT_DATE
+                ORDER BY f.updated_at DESC
+            """
+            return await self._fetchall(sql, {"project_id": str(project_id)})
+        else:
+            sql = """
+                SELECT
+                    f.id          AS feedback_id,
+                    f.unique_ref,
+                    f.priority::text,
+                    f.category::text,
+                    f.updated_at  AS processed_at
+                FROM feedbacks f
+                WHERE f.org_id = :org_id
+                  AND f.status::text = 'IN_REVIEW'
+                  AND DATE(f.updated_at AT TIME ZONE 'UTC') = CURRENT_DATE
+                ORDER BY f.updated_at DESC
+            """
+            return await self._fetchall(sql, {"org_id": str(org_id)})
 
     # ── Feedback: Resolved Today ──────────────────────────────────────────────
 

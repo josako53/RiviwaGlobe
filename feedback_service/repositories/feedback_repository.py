@@ -193,6 +193,36 @@ class FeedbackRepository:
             select(func.count(Feedback.id)).where(Feedback.feedback_type == feedback_type)
         ) or 0
 
+    async def get_counts(
+        self,
+        org_id: Optional[uuid.UUID] = None,
+        project_id: Optional[uuid.UUID] = None,
+    ) -> dict:
+        """Aggregate counts by feedback_type and status, scoped to org or project."""
+        q = select(
+            Feedback.feedback_type,
+            Feedback.status,
+            func.count(Feedback.id).label("n"),
+        )
+        if project_id:
+            q = q.where(Feedback.project_id == project_id)
+        elif org_id:
+            q = q.where(Feedback.org_id == org_id)
+        q = q.group_by(Feedback.feedback_type, Feedback.status)
+        rows = (await self.db.execute(q)).all()
+
+        by_type: dict = {}
+        by_status: dict = {}
+        total = 0
+        for row in rows:
+            ft = row.feedback_type.value if hasattr(row.feedback_type, "value") else str(row.feedback_type)
+            st = row.status.value if hasattr(row.status, "value") else str(row.status)
+            n = row.n
+            total += n
+            by_type[ft] = by_type.get(ft, 0) + n
+            by_status[st] = by_status.get(st, 0) + n
+        return {"total": total, "by_type": by_type, "by_status": by_status}
+
     async def next_ref_sequence(self, prefix: str, year: int) -> int:
         """
         Return the next unique sequence number for a ref like GRV-2026-NNNN.

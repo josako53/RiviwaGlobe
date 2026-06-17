@@ -129,6 +129,16 @@ async def list_feedback(
     )
     return {"items": [feedback_out(f) for f in items], "count": len(items)}
 
+@router.get("/counts", summary="Aggregate feedback counts [staff — org-scoped]")
+async def get_feedback_counts(
+    db: DbDep, kafka: KafkaDep, token: StaffDep,
+    project_id: Optional[uuid.UUID] = Query(default=None),
+) -> dict:
+    from core.dependencies import _is_platform_admin
+    from repositories.feedback_repository import FeedbackRepository
+    org_id = None if _is_platform_admin(token) else token.org_id
+    return await FeedbackRepository(db).get_counts(org_id=org_id, project_id=project_id)
+
 @router.get("/{feedback_id}", summary="Feedback detail with full history")
 async def get_feedback(feedback_id: uuid.UUID, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
     from core.dependencies import _is_platform_admin

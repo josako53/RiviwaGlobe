@@ -41,7 +41,7 @@ class ProductProducer:
         self._producer: Optional[AIOKafkaProducer] = None
 
     async def start(self) -> None:
-        self._producer = AIOKafkaProducer(
+        p = AIOKafkaProducer(
             bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
             acks="all",
             enable_idempotence=True,
@@ -49,8 +49,12 @@ class ProductProducer:
             linger_ms=5,
             request_timeout_ms=15_000,
         )
-        await self._producer.start()
-        log.info("product.kafka_producer.started")
+        try:
+            await p.start()
+            self._producer = p
+            log.info("product.kafka_producer.started")
+        except Exception as exc:
+            log.warning("product.kafka_producer.start_failed", error=str(exc))
 
     async def stop(self) -> None:
         if self._producer:

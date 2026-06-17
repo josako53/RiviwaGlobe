@@ -229,16 +229,24 @@ async def get_not_processed_feedback(
 
 @router.get("/processed-today", response_model=ProcessedTodayResponse)
 async def get_processed_today(
-    project_id: UUID = Query(...),
     _token: StaffDep = None,
     fb_db:  FeedbackDbDep = None,
+    project_id: Optional[UUID] = Query(default=None),
+    org_id: Optional[UUID] = Query(default=None),
 ) -> ProcessedTodayResponse:
     """
     Feedbacks that moved to 'in_review' status today.
+    Pass either project_id (project scope) or org_id (org scope).
     """
     repo = FeedbackAnalyticsRepository(fb_db)
-    assert_project_org_access(_token, await repo.get_project_org_id(project_id))
-    rows = await repo.get_processed_today(project_id)
+    if project_id:
+        assert_project_org_access(_token, await repo.get_project_org_id(project_id))
+        rows = await repo.get_processed_today(project_id=project_id)
+    elif org_id:
+        assert_org_access(_token, org_id)
+        rows = await repo.get_processed_today(org_id=org_id)
+    else:
+        rows = []
 
     items = [
         ProcessedTodayItem(
