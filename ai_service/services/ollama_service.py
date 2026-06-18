@@ -112,7 +112,7 @@ class OllamaService:
                     "model": settings.GROQ_MODEL,
                     "messages": [{"role": "system", "content": system}] + messages,
                     "temperature": temperature,
-                    "max_tokens": 512,
+                    "max_tokens": 1500,
                     "response_format": {"type": "json_object"},
                 },
             )
@@ -149,8 +149,8 @@ class OllamaService:
                     "stream": False,
                     "options": {
                         "temperature": temperature,
-                        "num_predict": 512,
-                        "num_ctx": 2048,
+                        "num_predict": 1500,
+                        "num_ctx": 4096,
                     },
                     "format": "json",
                 }
