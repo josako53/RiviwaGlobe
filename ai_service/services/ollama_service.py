@@ -1,5 +1,6 @@
 """services/ollama_service.py — Ollama LLM client."""
 from __future__ import annotations
+import asyncio
 import json
 from typing import Any, Dict, List, Optional
 import httpx
@@ -163,24 +164,33 @@ class OllamaService:
     async def _groq_chat(
         self, system: str, messages: List[Dict[str, str]], temperature: float
     ) -> str:
-        """Call Groq OpenAI-compatible API. Returns raw content string."""
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.post(
-                f"{settings.GROQ_BASE_URL}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.GROQ_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": settings.GROQ_MODEL,
-                    "messages": [{"role": "system", "content": system}] + messages,
-                    "temperature": temperature,
-                    "max_tokens": 1500,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-            r.raise_for_status()
-            return r.json()["choices"][0]["message"]["content"]
+        """Call Groq OpenAI-compatible API with retry on 429. Returns raw content string."""
+        payload = {
+            "model": settings.GROQ_MODEL,
+            "messages": [{"role": "system", "content": system}] + messages,
+            "temperature": temperature,
+            "max_tokens": 1500,
+            "response_format": {"type": "json_object"},
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        for attempt in range(3):
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.post(
+                    f"{settings.GROQ_BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                if r.status_code == 429 and attempt < 2:
+                    retry_after = float(r.headers.get("retry-after", 5 + attempt * 5))
+                    log.warning("groq.rate_limited", attempt=attempt + 1, retry_after=retry_after)
+                    await asyncio.sleep(retry_after)
+                    continue
+                r.raise_for_status()
+                return r.json()["choices"][0]["message"]["content"]
+        raise OllamaUnavailableError()
 
     async def chat(
         self,
