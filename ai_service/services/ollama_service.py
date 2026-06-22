@@ -185,6 +185,9 @@ class OllamaService:
                 )
                 if r.status_code == 429 and attempt < 2:
                     retry_after = float(r.headers.get("retry-after", 5 + attempt * 5))
+                    if retry_after > 30:
+                        log.warning("groq.rate_limited_quota", retry_after=retry_after)
+                        raise OllamaUnavailableError()
                     log.warning("groq.rate_limited", attempt=attempt + 1, retry_after=retry_after)
                     await asyncio.sleep(retry_after)
                     continue
