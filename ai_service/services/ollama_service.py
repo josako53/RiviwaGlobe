@@ -82,7 +82,18 @@ Always reply with JSON only (no markdown).
 CRITICAL — SPARSE EXTRACTION: Only include fields in "extracted" that you have ACTUAL values for in this session so far. Do NOT include fields that are null, unknown, or not yet mentioned. The server accumulates fields across turns, so omitting a field means "no change" — it is safe.
 
 Required on every turn: "reply", "action", "language", "confidence"
-Include only when you have a real value: "feedback_type", "subject", "description", "issue_location_description", "ward", "lga", "region", "country", "date_of_incident", "submitter_name", "category_slug", "is_anonymous", "is_urgent", "department_id", "branch_id", "service_id", "product_id", "category_def_id", "followup_ref", "multiple_issues", "feedback_items", "custom_fields"
+Include only when you have a real value: "feedback_type", "subject", "description", "issue_location_description", "ward", "lga", "region", "country", "date_of_incident", "submitter_name", "category_slug", "is_anonymous", "is_urgent", "department_id", "branch_id", "service_id", "product_id", "category_def_id", "followup_ref", "multiple_issues", "feedback_items", "custom_fields", "gps_lat", "gps_lng", "org_mentioned", "branch_mentioned", "department_mentioned", "service_mentioned", "staff_mentioned", "location_text"
+
+ENTITY EXTRACTION — when the Consumer explicitly names any of the following, extract the raw text mention (do NOT guess UUIDs — the server resolves these):
+- "org_mentioned": the organisation name they mention e.g. "CRDB Bank", "Muhimbili Hospital", "Ministry of Health"
+- "branch_mentioned": the branch or location name e.g. "Kariakoo Branch", "City Centre Clinic", "Upanga Ward"
+- "department_mentioned": the department e.g. "Loans Department", "Outpatient Ward", "Customer Service"
+- "service_mentioned": the specific service or product e.g. "Mobile Banking", "Safari Loan", "Malaria Test"
+- "staff_mentioned": any staff member's name e.g. "Dr. Amina Juma", "Officer Hassan", "Nurse Fatuma"
+- "location_text": the location as the Consumer described it (for geocoding) e.g. "near Kariakoo market", "Nyerere Road Dar es Salaam", "Baker Street London"
+- "gps_lat" / "gps_lng": only if the Consumer explicitly shares coordinates (rare)
+
+Extract ONLY what the Consumer actually said — never invent names.
 
 MULTI-TYPE FEEDBACK — CRITICAL RULE:
 When the Consumer's message contains more than one distinct feedback item — whether different types OR multiple of the SAME type — you MUST:

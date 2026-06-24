@@ -52,8 +52,13 @@ class Settings(BaseSettings):
     # ── Embedding model ───────────────────────────────────────────────────────
     EMBEDDING_MODEL: str = Field(default="all-MiniLM-L6-v2")
     EMBEDDING_MODEL_PATH: str = Field(default="/models/sentence-transformers")
-    QDRANT_COLLECTION_PROJECTS: str = Field(default="ai_projects")
-    QDRANT_COLLECTION_FEEDBACK: str = Field(default="ai_feedback_kb")
+    QDRANT_COLLECTION_PROJECTS:    str = Field(default="ai_projects")
+    QDRANT_COLLECTION_FEEDBACK:    str = Field(default="ai_feedback_kb")
+    QDRANT_COLLECTION_ORGS:        str = Field(default="riviwa_orgs")
+    QDRANT_COLLECTION_BRANCHES:    str = Field(default="riviwa_branches")
+    QDRANT_COLLECTION_DEPARTMENTS: str = Field(default="riviwa_departments")
+    QDRANT_COLLECTION_SERVICES:    str = Field(default="riviwa_services")
+    QDRANT_COLLECTION_STAFF:       str = Field(default="riviwa_staff")
 
     # ── Conversation settings ─────────────────────────────────────────────────
     AUTO_SUBMIT_CONFIDENCE: float = Field(default=0.80,
@@ -96,6 +101,20 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_KNOWLEDGE: str = Field(default="riviwa_knowledge")
     RAG_CHUNK_SIZE_WORDS: int = Field(default=300)
     RAG_TOP_K: int = Field(default=3)
+
+    # ── Redis ─────────────────────────────────────────────────────────────────
+    REDIS_HOST:        str = Field(default="redis")
+    REDIS_PORT:        int = Field(default=6379)
+    REDIS_LOCATION_DB: int = Field(default=4, description="Redis DB for location geocode cache")
+
+    # ── Nominatim (OpenStreetMap geocoding) ───────────────────────────────────
+    NOMINATIM_BASE_URL:  str = Field(default="https://nominatim.openstreetmap.org")
+    NOMINATIM_USER_AGENT: str = Field(default="Riviwa/1.0 (contact@riviwa.com)")
+    LOCATION_CACHE_TTL:  int = Field(default=86400, description="Geocode cache TTL in seconds (24h)")
+    LOCATION_RADIUS_KM: float = Field(default=2.0,  description="Max radius for nearest-branch lookup")
+
+    # ── Staff service ─────────────────────────────────────────────────────────
+    STAFF_SERVICE_URL: str = Field(default="http://staff_service:8135")
 
     # ── STT (Speech-to-Text for voice notes) ─────────────────────────────────
     OPENAI_API_KEY: str = Field(default="", description="OpenAI Whisper API key")

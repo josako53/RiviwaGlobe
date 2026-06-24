@@ -183,6 +183,92 @@ async def index_vault(_: StaffDep) -> dict:
     return {"chunks_indexed": chunks}
 
 
+@router.post(
+    "/reindex/{entity_type}",
+    summary="Bulk-reindex entity collection into Qdrant (staff only)",
+    status_code=status.HTTP_200_OK,
+)
+async def reindex_entities(entity_type: str, _: StaffDep) -> dict:
+    """
+    Pulls all entities of the given type from the source service and re-indexes
+    them into the appropriate Qdrant collection.
+
+    entity_type: orgs | branches | departments | services | staff
+    """
+    import httpx as _httpx
+    from core.config import settings as _cfg
+    from services.rag_service import get_rag as _get_rag
+
+    _INTERNAL = {
+        "X-Service-Key": _cfg.INTERNAL_SERVICE_KEY,
+        "X-Service-Name": "ai_service",
+    }
+    rag = _get_rag()
+    indexed = 0
+    failed  = 0
+
+    async def _fetch(url: str, params: dict | None = None) -> list:
+        async with _httpx.AsyncClient(timeout=30) as c:
+            r = await c.get(url, params=params or {}, headers=_INTERNAL)
+            if r.status_code != 200:
+                return []
+            data = r.json()
+            return data.get("items", data) if isinstance(data, dict) else data
+
+    if entity_type == "orgs":
+        items = await _fetch(f"{_cfg.AUTH_SERVICE_URL}/api/v1/internal/organisations", {"limit": 500})
+        for item in items:
+            eid = item.get("id")
+            if eid and rag.index_org(str(eid), item):
+                indexed += 1
+            else:
+                failed += 1
+
+    elif entity_type == "branches":
+        items = await _fetch(f"{_cfg.AUTH_SERVICE_URL}/api/v1/internal/branches", {"limit": 1000})
+        for item in items:
+            eid = item.get("id")
+            if eid and rag.index_branch(str(eid), item):
+                indexed += 1
+            else:
+                failed += 1
+
+    elif entity_type == "departments":
+        items = await _fetch(f"{_cfg.AUTH_SERVICE_URL}/api/v1/internal/departments", {"limit": 1000})
+        for item in items:
+            eid = item.get("id")
+            if eid and rag.index_department(str(eid), item):
+                indexed += 1
+            else:
+                failed += 1
+
+    elif entity_type == "services":
+        items = await _fetch(f"{_cfg.AUTH_SERVICE_URL}/api/v1/internal/services", {"limit": 1000})
+        for item in items:
+            eid = item.get("id")
+            if eid and rag.index_service(str(eid), item):
+                indexed += 1
+            else:
+                failed += 1
+
+    elif entity_type == "staff":
+        items = await _fetch(f"{_cfg.STAFF_SERVICE_URL}/api/v1/internal/staff", {"limit": 1000})
+        for item in items:
+            eid = item.get("id")
+            if eid and rag.index_staff(str(eid), item):
+                indexed += 1
+            else:
+                failed += 1
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unknown entity_type '{entity_type}'. Valid: orgs, branches, departments, services, staff",
+        )
+
+    return {"entity_type": entity_type, "indexed": indexed, "failed": failed, "total": indexed + failed}
+
+
 @router.patch(
     "/conversations/{conversation_id}",
     summary="Update conversation metadata (staff only)",

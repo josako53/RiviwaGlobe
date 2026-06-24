@@ -185,8 +185,10 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     ForeignKey, Column,
+    BigInteger,
     DateTime,
     Enum as SAEnum,
+    String,
     Text,
     UniqueConstraint,
     text,
@@ -345,7 +347,7 @@ class OrgLocation(SQLModel, table=True):
     )
 
     label:        Optional[str] = Field(default=None, max_length=100, nullable=True,
-                                        description="Human label e.g. 'Rome HQ', 'North Wing'")
+                                        description="Human label e.g. 'Rome HQ', 'North Wing', 'Kariakoo Branch'")
     line1:        str           = Field(max_length=200, nullable=False)
     line2:        Optional[str] = Field(default=None, max_length=200, nullable=True)
     city:         str           = Field(max_length=100, nullable=False)
@@ -353,10 +355,69 @@ class OrgLocation(SQLModel, table=True):
     postal_code:  Optional[str] = Field(default=None, max_length=20,  nullable=True)
     country_code: str           = Field(max_length=2,  nullable=False)
     region:       Optional[str] = Field(default=None, max_length=150, nullable=True,
-                                        description="Named region e.g. 'Lazio', 'Northern Italy'")
+                                        description="State/province/region e.g. 'Dar es Salaam', 'England', 'California'")
+
+    # ── Sub-city locality (globally applicable) ───────────────────────────────
+    # Maps to: neighborhood (USA), suburb (UK/AU), estate/area (KE),
+    #          mtaa/sub-ward (TZ), quartier (FR), barrio (ES)
+    suburb:       Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(150), nullable=True, index=True),
+        description="Sub-city area: neighborhood/suburb/estate/mtaa depending on country",
+    )
+
     latitude:     Optional[float] = Field(default=None, nullable=True)
     longitude:    Optional[float] = Field(default=None, nullable=True)
     is_primary:   bool            = Field(default=False, nullable=False)
+
+    # ── Geocoding provenance ──────────────────────────────────────────────────
+    source: str = Field(
+        default="manual",
+        sa_column=Column(String(10), nullable=False, server_default=text("'manual'")),
+        description="How this address was geocoded: 'osm' | 'gps' | 'manual'",
+    )
+
+    # ── Full display address (OSM / formatted) ────────────────────────────────
+    display_name: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+        description=(
+            "Full formatted address string from Nominatim or manual entry. "
+            "E.g. 'Muhimbili National Hospital, Upanga West, Ilala, Dar es Salaam, Tanzania' "
+            "or '10 Downing Street, Westminster, London SW1A 2AA, United Kingdom'"
+        ),
+    )
+
+    # ── Country-specific address components (JSONB — globally flexible) ───────
+    # Nominatim returns country-specific fields that don't fit into standard columns.
+    # All extra hierarchy goes here:
+    #   TZ:  {"district": "Ilala", "lga": "Ilala MC", "ward": "Upanga West", "mtaa": "Upanga Mjini"}
+    #   UK:  {"county": "Greater London", "city_district": "London Borough of Hackney"}
+    #   USA: {"county": "Travis County", "neighbourhood": "Hyde Park"}
+    #   KE:  {"county": "Nairobi County", "sub_county": "Westlands", "ward": "Parklands"}
+    #   IN:  {"state_district": "South Delhi", "suburb": "Greater Kailash"}
+    address_components: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="Raw Nominatim address dict — all country-specific fields (ward, county, lga, etc.)",
+    )
+
+    # ── OpenStreetMap metadata (populated when source='osm') ─────────────────
+    osm_id:   Optional[int] = Field(
+        default=None,
+        sa_column=Column(BigInteger, nullable=True),
+        description="OSM node/way/relation ID",
+    )
+    osm_type: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(10), nullable=True),
+        description="OSM element type: 'node' | 'way' | 'relation'",
+    )
+    place_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(BigInteger, nullable=True, index=True),
+        description="Nominatim internal place_id — used for fast lookup and deduplication",
+    )
 
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)

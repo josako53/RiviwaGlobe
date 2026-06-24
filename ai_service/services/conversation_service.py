@@ -292,6 +292,9 @@ class ConversationService:
             if extracted_new.get("language"):
                 conv.language = extracted_new["language"]
 
+        # Resolve entity mentions (org/branch/dept/service/staff) + location
+        await self._resolve_entities(conv, extracted_new or {})
+
         # Auto-identify project via RAG if not yet set
         await self._identify_project(conv)
 
@@ -451,6 +454,88 @@ class ConversationService:
             conv.user_id       = uuid.UUID(user["id"])
             conv.merge_extracted({"user_id": str(conv.user_id)})
             log.info("conversation.consumer_registered", conv_id=str(conv.id), phone=conv.phone_number)
+
+    async def _resolve_entities(self, conv: AIConversation, extracted_new: dict) -> None:
+        """
+        Resolve raw entity text mentions to UUIDs and location to coordinates.
+        Runs after each LLM turn. Merges results back into conversation extracted data.
+        Only runs when the LLM returned at least one mentionable field.
+        """
+        mention_fields = {
+            "org_mentioned", "branch_mentioned", "department_mentioned",
+            "service_mentioned", "staff_mentioned", "location_text",
+            "gps_lat", "gps_lng",
+        }
+        if not any(extracted_new.get(f) for f in mention_fields):
+            return
+
+        existing   = conv.get_extracted()
+        org_id     = existing.get("org_id") or None
+        enrichment: dict = {}
+
+        # ── Entity resolution ─────────────────────────────────────────────────
+        mentions = {k: extracted_new.get(k) for k in (
+            "org_mentioned", "branch_mentioned", "department_mentioned",
+            "service_mentioned", "staff_mentioned",
+        )}
+        if any(mentions.values()):
+            try:
+                from services.entity_resolution_service import resolve_all
+                resolved = resolve_all(mentions, org_id=org_id)
+                for field in ("org_id", "branch_id", "department_id", "service_id", "staff_id"):
+                    if resolved.get(field) and not existing.get(field):
+                        enrichment[field] = resolved[field]
+                if resolved.get("org_name") and not existing.get("org_name"):
+                    enrichment["org_name"] = resolved["org_name"]
+                if resolved.get("branch_name") and not existing.get("branch_name"):
+                    enrichment["branch_name"] = resolved["branch_name"]
+                log.debug("conversation.entities_resolved", conv_id=str(conv.id),
+                          resolved={k: v for k, v in resolved.items() if v and k != "confidence"})
+            except Exception as exc:
+                log.warning("conversation.entity_resolution_error", conv_id=str(conv.id), error=str(exc))
+
+        # ── Location resolution ───────────────────────────────────────────────
+        gps_lat      = extracted_new.get("gps_lat")
+        gps_lng      = extracted_new.get("gps_lng")
+        location_text = extracted_new.get("location_text")
+
+        if gps_lat or gps_lng or location_text:
+            try:
+                from services.location_service import resolve_location
+                resolved_loc = await resolve_location(
+                    gps_lat=float(gps_lat) if gps_lat else None,
+                    gps_lng=float(gps_lng) if gps_lng else None,
+                    location_text=location_text,
+                    org_id=enrichment.get("org_id") or org_id,
+                )
+                if resolved_loc.get("city") and not existing.get("issue_location_description"):
+                    enrichment["issue_location_description"] = resolved_loc["display_name"] or resolved_loc["city"]
+                if resolved_loc.get("region") and not existing.get("region"):
+                    enrichment["region"] = resolved_loc["region"]
+                if resolved_loc.get("country_code") and not existing.get("country"):
+                    enrichment["country"] = resolved_loc["country_code"]
+                if resolved_loc.get("address_components"):
+                    ac = resolved_loc["address_components"]
+                    # Pull Tanzania-specific fields into standard slots if present
+                    if ac.get("ward") and not existing.get("ward"):
+                        enrichment["ward"] = ac["ward"]
+                    if ac.get("lga") and not existing.get("lga"):
+                        enrichment["lga"] = ac["lga"]
+                    enrichment["address_components"] = ac
+                if resolved_loc.get("latitude"):
+                    enrichment["gps_lat"] = resolved_loc["latitude"]
+                if resolved_loc.get("longitude"):
+                    enrichment["gps_lng"] = resolved_loc["longitude"]
+                # Nearest branch from GPS (only set if not already set)
+                if resolved_loc.get("branch_id") and not existing.get("branch_id") and not enrichment.get("branch_id"):
+                    enrichment["branch_id"] = resolved_loc["branch_id"]
+                log.debug("conversation.location_resolved", conv_id=str(conv.id),
+                          display=resolved_loc.get("display_name", "")[:80])
+            except Exception as exc:
+                log.warning("conversation.location_resolution_error", conv_id=str(conv.id), error=str(exc))
+
+        if enrichment:
+            conv.merge_extracted(enrichment)
 
     async def _identify_project(self, conv: AIConversation) -> None:
         """Use RAG to identify the project from extracted location/description."""

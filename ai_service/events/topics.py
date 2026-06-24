@@ -19,6 +19,7 @@ class KafkaTopics:
     USER_EVENTS        = "riviwa.user.events"
     STAKEHOLDER_EVENTS = "riviwa.stakeholder.events"
     FEEDBACK_EVENTS    = "riviwa.feedback.events"
+    STAFF_EVENTS       = "riviwa.staff.events"
     NOTIFICATIONS      = "riviwa.notifications"
 
 
@@ -49,6 +50,28 @@ class FeedbackEvents:
     SUBMITTED    = "feedback.submitted"
     ACKNOWLEDGED = "feedback.acknowledged"
     RESOLVED     = "feedback.resolved"
+
+
+class OrgEntityEvents:
+    """Org/branch/dept/service entity lifecycle — published on riviwa.organisation.events."""
+    ORG_CREATED        = "organisation.created"
+    ORG_UPDATED        = "organisation.updated"
+    BRANCH_CREATED     = "org_branch.created"
+    BRANCH_UPDATED     = "org_branch.updated"
+    BRANCH_CLOSED      = "org_branch.closed"
+    DEPT_CREATED       = "org_department.created"
+    DEPT_UPDATED       = "org_department.updated"
+    SERVICE_PUBLISHED  = "org_service.published"
+    SERVICE_UPDATED    = "org_service.updated"
+    SERVICE_CLOSED     = "org_service.closed"
+
+
+class StaffProfileEvents:
+    """Staff lifecycle — published on riviwa.staff.events."""
+    CREATED    = "staff.profile.created"
+    UPDATED    = "staff.profile.updated"
+    SUSPENDED  = "staff.profile.suspended"
+    TERMINATED = "staff.profile.terminated"
 
 
 class NotificationEvents:

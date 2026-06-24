@@ -19,7 +19,12 @@ from aiokafka import AIOKafkaConsumer
 
 from core.config import settings
 from db.session import AsyncSessionLocal
-from events.topics import KafkaTopics, OrgProjectEvents, OrgProjectStageEvents, StakeholderEvents, FeedbackEvents
+from events.topics import (
+    KafkaTopics,
+    OrgProjectEvents, OrgProjectStageEvents,
+    StakeholderEvents, FeedbackEvents,
+    OrgEntityEvents, StaffProfileEvents,
+)
 from repositories.conversation_repo import ProjectKBRepository, StakeholderCacheRepository
 from services.rag_service import get_rag
 
@@ -150,6 +155,99 @@ async def _upsert_stakeholder(payload: dict) -> None:
              name=payload.get("name"), is_incharge=is_incharge)
 
 
+# ── Entity indexing helpers ───────────────────────────────────────────────────
+
+async def _index_org(payload: dict) -> None:
+    rag = get_rag()
+    org_id = payload.get("id") or payload.get("org_id")
+    if not org_id:
+        return
+    ok = rag.index_org(str(org_id), {
+        "legal_name":   payload.get("legal_name") or payload.get("name", ""),
+        "display_name": payload.get("display_name", ""),
+        "slug":         payload.get("slug", ""),
+        "sms_code":     payload.get("sms_code", ""),
+        "org_type":     payload.get("org_type", ""),
+        "country_code": payload.get("country_code", ""),
+        "status":       payload.get("status", ""),
+    })
+    log.info("ai.consumer.org_indexed", org_id=org_id, ok=ok)
+
+
+async def _index_branch(payload: dict) -> None:
+    rag = get_rag()
+    branch_id = payload.get("id") or payload.get("branch_id")
+    if not branch_id:
+        return
+    ok = rag.index_branch(str(branch_id), {
+        "org_id":       payload.get("organisation_id") or payload.get("org_id", ""),
+        "name":         payload.get("name", ""),
+        "code":         payload.get("code", ""),
+        "branch_type":  payload.get("branch_type", ""),
+        "status":       payload.get("status", ""),
+        "latitude":     payload.get("latitude"),
+        "longitude":    payload.get("longitude"),
+        "city":         payload.get("city", ""),
+        "region":       payload.get("region", ""),
+        "display_name": payload.get("display_name", ""),
+    })
+    log.info("ai.consumer.branch_indexed", branch_id=branch_id, ok=ok)
+
+
+async def _index_department(payload: dict) -> None:
+    rag = get_rag()
+    dept_id = payload.get("id") or payload.get("department_id")
+    if not dept_id:
+        return
+    ok = rag.index_department(str(dept_id), {
+        "org_id":      payload.get("org_id", ""),
+        "branch_id":   payload.get("branch_id", ""),
+        "name":        payload.get("name", ""),
+        "code":        payload.get("code", ""),
+        "description": payload.get("description", "")[:200],
+    })
+    log.info("ai.consumer.department_indexed", dept_id=dept_id, ok=ok)
+
+
+async def _index_service(payload: dict) -> None:
+    rag = get_rag()
+    service_id = payload.get("id") or payload.get("org_service_id") or payload.get("service_id")
+    if not service_id:
+        return
+    ok = rag.index_service(str(service_id), {
+        "org_id":       payload.get("organisation_id") or payload.get("org_id", ""),
+        "branch_id":    payload.get("branch_id") or payload.get("org_branch_id", ""),
+        "title":        payload.get("title", ""),
+        "slug":         payload.get("slug", ""),
+        "service_type": payload.get("service_type", ""),
+        "status":       payload.get("status", ""),
+        "category":     payload.get("category", ""),
+        "subcategory":  payload.get("subcategory", ""),
+        "tags":         payload.get("tags", ""),
+        "summary":      payload.get("description") or payload.get("summary", ""),
+    })
+    log.info("ai.consumer.service_indexed", service_id=service_id, ok=ok)
+
+
+async def _index_staff(payload: dict) -> None:
+    rag = get_rag()
+    staff_id = payload.get("id") or payload.get("staff_id")
+    if not staff_id:
+        return
+    ok = rag.index_staff(str(staff_id), {
+        "org_id":       payload.get("org_id", ""),
+        "branch_id":    payload.get("branch_id", ""),
+        "first_name":   payload.get("first_name", ""),
+        "last_name":    payload.get("last_name", ""),
+        "display_name": payload.get("display_name", ""),
+        "position":     payload.get("position", ""),
+        "department":   payload.get("department", ""),
+        "branch_name":  payload.get("branch_name", ""),
+        "staff_code":   payload.get("staff_code", ""),
+    })
+    log.info("ai.consumer.staff_indexed", staff_id=staff_id, ok=ok)
+
+
 # ── Feedback auto-classification ──────────────────────────────────────────────
 
 _INTERNAL_HEADERS = {
@@ -206,6 +304,7 @@ async def _consume_loop() -> None:
         KafkaTopics.ORG_EVENTS,
         KafkaTopics.STAKEHOLDER_EVENTS,
         KafkaTopics.FEEDBACK_EVENTS,
+        KafkaTopics.STAFF_EVENTS,
         bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
         group_id="ai_service_group",
         auto_offset_reset="earliest",
@@ -221,8 +320,34 @@ async def _consume_loop() -> None:
                 event_type = envelope.get("event_type", "")
                 payload    = envelope.get("payload", {})
 
+                # ── Entity indexing events (org/branch/dept/service/staff) ───
+                if event_type in (OrgEntityEvents.ORG_CREATED, OrgEntityEvents.ORG_UPDATED):
+                    asyncio.create_task(_index_org(payload))
+                elif event_type in (OrgEntityEvents.BRANCH_CREATED, OrgEntityEvents.BRANCH_UPDATED):
+                    asyncio.create_task(_index_branch(payload))
+                elif event_type == OrgEntityEvents.BRANCH_CLOSED:
+                    eid = payload.get("id") or payload.get("branch_id")
+                    if eid:
+                        get_rag().remove_entity(str(eid), settings.QDRANT_COLLECTION_BRANCHES)
+                elif event_type in (OrgEntityEvents.DEPT_CREATED, OrgEntityEvents.DEPT_UPDATED):
+                    asyncio.create_task(_index_department(payload))
+                elif event_type in (OrgEntityEvents.SERVICE_PUBLISHED, OrgEntityEvents.SERVICE_UPDATED):
+                    asyncio.create_task(_index_service(payload))
+                elif event_type == OrgEntityEvents.SERVICE_CLOSED:
+                    eid = payload.get("id") or payload.get("org_service_id")
+                    if eid:
+                        get_rag().remove_entity(str(eid), settings.QDRANT_COLLECTION_SERVICES)
+
+                # ── Staff events ──────────────────────────────────────────────
+                elif event_type in (StaffProfileEvents.CREATED, StaffProfileEvents.UPDATED):
+                    asyncio.create_task(_index_staff(payload))
+                elif event_type in (StaffProfileEvents.SUSPENDED, StaffProfileEvents.TERMINATED):
+                    eid = payload.get("id") or payload.get("staff_id")
+                    if eid:
+                        get_rag().remove_entity(str(eid), settings.QDRANT_COLLECTION_STAFF)
+
                 # ── Organisation events ───────────────────────────────────────
-                if event_type == OrgProjectEvents.PUBLISHED:
+                elif event_type == OrgProjectEvents.PUBLISHED:
                     await _upsert_project(payload, "active")
                 elif event_type == OrgProjectEvents.UPDATED:
                     await _upsert_project(payload, payload.get("status", "active"))

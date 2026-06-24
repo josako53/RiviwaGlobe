@@ -146,6 +146,169 @@ class RAGService:
             log.error("rag.search_failed", error=str(exc))
             return []
 
+    # ── Generic entity collection helpers ────────────────────────────────────
+
+    def _ensure_entity_collection(self, collection: str) -> bool:
+        client = _get_qdrant()
+        if client is None:
+            return False
+        try:
+            from qdrant_client.models import Distance, VectorParams
+            existing = [c.name for c in client.get_collections().collections]
+            if collection not in existing:
+                client.create_collection(
+                    collection_name=collection,
+                    vectors_config=VectorParams(size=self.VECTOR_SIZE, distance=Distance.COSINE),
+                )
+                log.info("rag.entity_collection_created", name=collection)
+            return True
+        except Exception as exc:
+            log.error("rag.entity_collection_failed", name=collection, error=str(exc))
+            return False
+
+    def index_entity(self, entity_id: str, collection: str, searchable_text: str, payload: dict) -> bool:
+        """Upsert any entity (org/branch/dept/service/staff) into its Qdrant collection."""
+        vector = self._embed(searchable_text)
+        if vector is None:
+            return False
+        if not self._ensure_entity_collection(collection):
+            return False
+        try:
+            from qdrant_client.models import PointStruct
+            _get_qdrant().upsert(
+                collection_name=collection,
+                points=[PointStruct(id=entity_id, vector=vector, payload=payload)],
+            )
+            return True
+        except Exception as exc:
+            log.error("rag.index_entity_failed", entity_id=entity_id, collection=collection, error=str(exc))
+            return False
+
+    def remove_entity(self, entity_id: str, collection: str) -> None:
+        client = _get_qdrant()
+        if client is None:
+            return
+        try:
+            from qdrant_client.models import PointIdsList
+            client.delete(collection_name=collection,
+                          points_selector=PointIdsList(points=[entity_id]))
+        except Exception as exc:
+            log.warning("rag.remove_entity_failed", entity_id=entity_id, collection=collection, error=str(exc))
+
+    def search_entity(
+        self, query: str, collection: str, top_k: int = 3, score_threshold: float = 0.60
+    ) -> List[Tuple[str, float, dict]]:
+        """Semantic search across any entity collection."""
+        vector = self._embed(query)
+        if vector is None:
+            return []
+        client = _get_qdrant()
+        if client is None:
+            return []
+        if not self._ensure_entity_collection(collection):
+            return []
+        try:
+            results = client.search(
+                collection_name=collection,
+                query_vector=vector,
+                limit=top_k,
+                score_threshold=score_threshold,
+            )
+            return [(str(r.id), r.score, r.payload or {}) for r in results]
+        except Exception as exc:
+            log.error("rag.search_entity_failed", collection=collection, error=str(exc))
+            return []
+
+    # ── Convenience indexers (thin wrappers over index_entity) ───────────────
+
+    def index_org(self, org_id: str, org: dict) -> bool:
+        text = " ".join(filter(None, [
+            org.get("legal_name"), org.get("display_name"), org.get("slug"),
+            org.get("sms_code"), org.get("org_type"), org.get("description", "")[:200],
+        ]))
+        payload = {
+            "org_id":       org_id,
+            "legal_name":   org.get("legal_name", ""),
+            "display_name": org.get("display_name", ""),
+            "slug":         org.get("slug", ""),
+            "sms_code":     org.get("sms_code", ""),
+            "org_type":     org.get("org_type", ""),
+            "country_code": org.get("country_code", ""),
+            "status":       org.get("status", ""),
+        }
+        return self.index_entity(org_id, settings.QDRANT_COLLECTION_ORGS, text, payload)
+
+    def index_branch(self, branch_id: str, branch: dict) -> bool:
+        text = " ".join(filter(None, [
+            branch.get("name"), branch.get("code"), branch.get("branch_type"),
+            branch.get("description", "")[:200],
+            branch.get("city"), branch.get("region"),
+        ]))
+        payload = {
+            "branch_id":   branch_id,
+            "org_id":      branch.get("org_id", ""),
+            "name":        branch.get("name", ""),
+            "code":        branch.get("code", ""),
+            "branch_type": branch.get("branch_type", ""),
+            "status":      branch.get("status", ""),
+            "latitude":    branch.get("latitude"),
+            "longitude":   branch.get("longitude"),
+            "city":        branch.get("city", ""),
+            "region":      branch.get("region", ""),
+            "display_name": branch.get("display_name", ""),
+        }
+        return self.index_entity(branch_id, settings.QDRANT_COLLECTION_BRANCHES, text, payload)
+
+    def index_department(self, dept_id: str, dept: dict) -> bool:
+        text = " ".join(filter(None, [
+            dept.get("name"), dept.get("code"), dept.get("description", "")[:200],
+        ]))
+        payload = {
+            "dept_id":   dept_id,
+            "org_id":    dept.get("org_id", ""),
+            "branch_id": dept.get("branch_id", ""),
+            "name":      dept.get("name", ""),
+            "code":      dept.get("code", ""),
+        }
+        return self.index_entity(dept_id, settings.QDRANT_COLLECTION_DEPARTMENTS, text, payload)
+
+    def index_service(self, service_id: str, service: dict) -> bool:
+        text = " ".join(filter(None, [
+            service.get("title"), service.get("slug"), service.get("category"),
+            service.get("subcategory"), service.get("tags", ""),
+            service.get("summary", "")[:200],
+        ]))
+        payload = {
+            "service_id":   service_id,
+            "org_id":       service.get("org_id", ""),
+            "branch_id":    service.get("branch_id", ""),
+            "title":        service.get("title", ""),
+            "slug":         service.get("slug", ""),
+            "service_type": service.get("service_type", ""),
+            "status":       service.get("status", ""),
+            "category":     service.get("category", ""),
+        }
+        return self.index_entity(service_id, settings.QDRANT_COLLECTION_SERVICES, text, payload)
+
+    def index_staff(self, staff_id: str, staff: dict) -> bool:
+        text = " ".join(filter(None, [
+            staff.get("first_name"), staff.get("last_name"), staff.get("display_name"),
+            staff.get("position"), staff.get("department"), staff.get("branch_name"),
+        ]))
+        payload = {
+            "staff_id":    staff_id,
+            "org_id":      staff.get("org_id", ""),
+            "branch_id":   staff.get("branch_id", ""),
+            "first_name":  staff.get("first_name", ""),
+            "last_name":   staff.get("last_name", ""),
+            "display_name": staff.get("display_name", ""),
+            "position":    staff.get("position", ""),
+            "department":  staff.get("department", ""),
+            "branch_name": staff.get("branch_name", ""),
+            "staff_code":  staff.get("staff_code", ""),
+        }
+        return self.index_entity(staff_id, settings.QDRANT_COLLECTION_STAFF, text, payload)
+
     def build_project_context(self, projects_data: list) -> str:
         """
         Format project knowledge for injection into the Ollama system prompt.
