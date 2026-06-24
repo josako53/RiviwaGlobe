@@ -16,14 +16,14 @@ router = APIRouter(prefix="/internal", tags=["Internal"])
 @router.get(
     "/feedback/by-post/{post_id}",
     summary="Aggregate feedback for a CMS post (internal)",
-    dependencies=[InternalDep],
 )
 async def feedback_by_post(
-    post_id: uuid.UUID,
-    db:      DbDep,
-    limit:   int           = Query(default=20, ge=1, le=100),
-    skip:    int           = Query(default=0,  ge=0),
-    detail:  Optional[str] = Query(default=None),
+    post_id:   uuid.UUID,
+    db:        DbDep,
+    _auth:     InternalDep,
+    limit:     int           = Query(default=20, ge=1, le=100),
+    skip:      int           = Query(default=0,  ge=0),
+    detail:    Optional[str] = Query(default=None),
 ) -> dict:
     rows = (await db.execute(
         select(Feedback.feedback_type, func.count(Feedback.id).label("cnt"))
