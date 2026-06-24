@@ -71,11 +71,13 @@ def _category_slug(val: str | None) -> str:
     return val.lower().replace("_", "-")
 
 
-def _safe_category(val: str | None) -> FeedbackCategory:
+def _safe_category(val: str | None) -> Optional[FeedbackCategory]:
+    if not val:
+        return None  # category is now nullable; caller sets it only when provided
     try:
-        return FeedbackCategory(val or "other")
+        return FeedbackCategory(val)
     except ValueError:
-        return FeedbackCategory.OTHER
+        return None
 
 _LEVEL_ORDER = [
     GRMLevel.WARD, GRMLevel.LGA_GRM_UNIT, GRMLevel.COORDINATING_UNIT,

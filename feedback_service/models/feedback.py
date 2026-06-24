@@ -589,8 +589,10 @@ class Feedback(SQLModel, table=True):
     # Legacy: hardcoded enum category — kept for backward compatibility on existing rows.
     # New submissions should use category_def_id (dynamic category table).
     # Both may be set on the same row; category_def_id takes precedence for display.
-    category: FeedbackCategory = Field(
-        sa_column=Column(SAEnum(FeedbackCategory, name="feedback_category"), nullable=False, index=True)
+    # Nullable: unspecified submissions leave this null; category_def_id is authoritative.
+    category: Optional[FeedbackCategory] = Field(
+        default=None,
+        sa_column=Column(SAEnum(FeedbackCategory, name="feedback_category"), nullable=True, index=True),
     )
     # Dynamic category — FK to FeedbackCategoryDef (nullable for backward compat).
     # When set, this is the authoritative category for analytics and filtering.
@@ -623,14 +625,20 @@ class Feedback(SQLModel, table=True):
     )
     priority: FeedbackPriority = Field(
         default=FeedbackPriority.MEDIUM,
-        sa_column=Column(SAEnum(FeedbackPriority, name="feedback_priority"), nullable=False, index=True),
+        sa_column=Column(
+            SAEnum(FeedbackPriority, name="feedback_priority"),
+            nullable=False, index=True, server_default="MEDIUM",
+        ),
         description="Set by GRM Unit on acknowledgement. Drives response timeframe.",
     )
 
     # ── GRM context ────────────────────────────────────────────────────────────
     current_level: GRMLevel = Field(
         default=GRMLevel.WARD,
-        sa_column=Column(SAEnum(GRMLevel, name="grm_level"), nullable=False, index=True),
+        sa_column=Column(
+            SAEnum(GRMLevel, name="grm_level"),
+            nullable=False, index=True, server_default="WARD",
+        ),
         description=(
             "Legacy GRM level enum. Kept for backward compatibility with analytics "
             "and Spark jobs. Updated in sync with current_level_id when grm_level_ref "
