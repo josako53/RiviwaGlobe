@@ -20,7 +20,9 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+import math
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
@@ -296,3 +298,261 @@ async def get_org_owner_contact(
         "language":     "en",
         "org_name":     org["display_name"],
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bulk-list endpoints for AI entity reindex
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+@router.get(
+    "/organisations",
+    summary="[Internal] Bulk list all organisations for entity reindex",
+    dependencies=[Depends(_require_service_key)],
+)
+async def list_organisations_internal(
+    limit: int = Query(default=500, ge=1, le=2000),
+    skip:  int = Query(default=0, ge=0),
+    db:    AsyncSession = Depends(get_db),
+) -> dict:
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT id, legal_name, display_name, description, org_type,
+                   status, country_code, website_url, support_email, is_verified
+            FROM organisations
+            WHERE deleted_at IS NULL
+            ORDER BY created_at
+            LIMIT :limit OFFSET :skip
+        """),
+        {"limit": limit, "skip": skip},
+    )).mappings().all()
+    return {
+        "items": [
+            {
+                "id":           str(r["id"]),
+                "name":         r["display_name"] or r["legal_name"],
+                "legal_name":   r["legal_name"],
+                "description":  r["description"],
+                "org_type":     r["org_type"],
+                "status":       r["status"],
+                "country_code": r["country_code"],
+                "website_url":  r["website_url"],
+                "is_verified":  r["is_verified"],
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@router.get(
+    "/branches",
+    summary="[Internal] Bulk list all branches for entity reindex",
+    dependencies=[Depends(_require_service_key)],
+)
+async def list_branches_internal(
+    limit: int = Query(default=1000, ge=1, le=5000),
+    skip:  int = Query(default=0, ge=0),
+    db:    AsyncSession = Depends(get_db),
+) -> dict:
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT b.id, b.name, b.code, b.branch_type, b.status,
+                   b.organisation_id,
+                   ol.city, ol.region, ol.country_code,
+                   ol.latitude, ol.longitude, ol.suburb, ol.display_name AS address
+            FROM org_branches b
+            LEFT JOIN org_locations ol ON ol.branch_id = b.id
+            WHERE b.status != 'closed'
+            ORDER BY b.created_at
+            LIMIT :limit OFFSET :skip
+        """),
+        {"limit": limit, "skip": skip},
+    )).mappings().all()
+    return {
+        "items": [
+            {
+                "id":          str(r["id"]),
+                "name":        r["name"],
+                "code":        r["code"],
+                "branch_type": r["branch_type"],
+                "status":      r["status"],
+                "org_id":      str(r["organisation_id"]),
+                "city":        r["city"],
+                "region":      r["region"],
+                "country":     r["country_code"],
+                "address":     r["address"],
+                "suburb":      r["suburb"],
+                "latitude":    float(r["latitude"]) if r["latitude"] is not None else None,
+                "longitude":   float(r["longitude"]) if r["longitude"] is not None else None,
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@router.get(
+    "/departments",
+    summary="[Internal] Bulk list all departments for entity reindex",
+    dependencies=[Depends(_require_service_key)],
+)
+async def list_departments_internal(
+    limit: int = Query(default=1000, ge=1, le=5000),
+    skip:  int = Query(default=0, ge=0),
+    db:    AsyncSession = Depends(get_db),
+) -> dict:
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT id, name, code, description, org_id, branch_id, is_active
+            FROM org_departments
+            WHERE is_active = true
+            ORDER BY org_id, sort_order, name
+            LIMIT :limit OFFSET :skip
+        """),
+        {"limit": limit, "skip": skip},
+    )).mappings().all()
+    return {
+        "items": [
+            {
+                "id":        str(r["id"]),
+                "name":      r["name"],
+                "code":      r["code"],
+                "description": r["description"],
+                "org_id":    str(r["org_id"]),
+                "branch_id": str(r["branch_id"]) if r["branch_id"] else None,
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@router.get(
+    "/services",
+    summary="[Internal] Bulk list all org services for entity reindex",
+    dependencies=[Depends(_require_service_key)],
+)
+async def list_services_internal(
+    limit: int = Query(default=1000, ge=1, le=5000),
+    skip:  int = Query(default=0, ge=0),
+    db:    AsyncSession = Depends(get_db),
+) -> dict:
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT id, title, slug, service_type, status, summary, category,
+                   organisation_id
+            FROM org_services
+            WHERE status NOT IN ('archived', 'draft')
+            ORDER BY organisation_id, service_type, title
+            LIMIT :limit OFFSET :skip
+        """),
+        {"limit": limit, "skip": skip},
+    )).mappings().all()
+    return {
+        "items": [
+            {
+                "id":           str(r["id"]),
+                "title":        r["title"],
+                "service_type": r["service_type"],
+                "category":     r["category"],
+                "summary":      r["summary"],
+                "status":       r["status"],
+                "org_id":       str(r["organisation_id"]),
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@router.get(
+    "/locations/nearest",
+    summary="[Internal] Find nearest branch(es) within radius for GPS resolution",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_nearest_branches(
+    lat:       float = Query(..., description="Latitude of the consumer"),
+    lng:       float = Query(..., description="Longitude of the consumer"),
+    radius_km: float = Query(default=2.0, description="Search radius in km"),
+    org_id:    Optional[uuid.UUID] = Query(default=None),
+    db:        AsyncSession = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """
+    Returns branches with geocoded locations sorted by Haversine distance from
+    the given lat/lng.  Uses bounding-box pre-filter in SQL, exact Haversine in Python.
+    """
+    from sqlalchemy import text
+
+    deg = radius_km / 111.0  # ~1 degree latitude ≈ 111 km
+    params: dict = {
+        "lat_min": lat - deg,
+        "lat_max": lat + deg,
+        "lng_min": lng - deg,
+        "lng_max": lng + deg,
+    }
+    org_clause = ""
+    if org_id:
+        org_clause = "AND ob.organisation_id = :org_id"
+        params["org_id"] = str(org_id)
+
+    rows = (await db.execute(
+        text(f"""
+            SELECT
+                ol.branch_id,
+                ob.organisation_id AS org_id,
+                ob.name  AS branch_name,
+                ob.code  AS branch_code,
+                ob.branch_type,
+                ol.latitude,
+                ol.longitude,
+                ol.city,
+                ol.region,
+                ol.suburb,
+                ol.country_code,
+                ol.display_name
+            FROM org_locations ol
+            JOIN org_branches ob ON ob.id = ol.branch_id
+            WHERE ol.latitude  IS NOT NULL
+              AND ol.longitude IS NOT NULL
+              AND ob.status = 'active'
+              AND ol.latitude  BETWEEN :lat_min AND :lat_max
+              AND ol.longitude BETWEEN :lng_min AND :lng_max
+              {org_clause}
+        """),
+        params,
+    )).mappings().all()
+
+    results = []
+    for r in rows:
+        dist = _haversine_km(lat, lng, float(r["latitude"]), float(r["longitude"]))
+        if dist <= radius_km:
+            results.append({
+                "branch_id":   str(r["branch_id"]),
+                "org_id":      str(r["org_id"]),
+                "branch_name": r["branch_name"],
+                "branch_code": r["branch_code"],
+                "branch_type": r["branch_type"],
+                "latitude":    float(r["latitude"]),
+                "longitude":   float(r["longitude"]),
+                "city":        r["city"],
+                "region":      r["region"],
+                "suburb":      r["suburb"],
+                "country_code": r["country_code"],
+                "display_name": r["display_name"],
+                "distance_km":  round(dist, 3),
+            })
+
+    results.sort(key=lambda x: x["distance_km"])
+    return results
