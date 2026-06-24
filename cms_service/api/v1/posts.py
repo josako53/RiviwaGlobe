@@ -212,6 +212,7 @@ async def get_post(post_id: uuid.UUID, db: DbDep, claims: AuthDep) -> PostOut:
             .values(view_count=OrgPost.view_count + 1)
         )
         await db.commit()
+        await db.refresh(post)
 
     return _post_to_out(post, cats)
 
