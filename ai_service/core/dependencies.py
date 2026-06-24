@@ -87,6 +87,22 @@ async def require_staff(token: Annotated[TokenClaims, Depends(get_current_token)
     return token
 
 
-DbDep       = Annotated[AsyncSession, Depends(get_db)]
-StaffDep    = Annotated[TokenClaims,  Depends(require_staff)]
-OptTokenDep = Annotated[Optional[TokenClaims], Depends(get_optional_token)]
+async def require_staff_or_service_key(
+    request: Request,
+    creds: Annotated[Optional[HTTPAuthorizationCredentials], Depends(_bearer)],
+) -> None:
+    """Allow access with either a staff JWT or the internal service key (for scripts/admin tools)."""
+    svc_key = request.headers.get("X-Service-Key") or request.headers.get("X-Internal-Service-Key")
+    if svc_key and svc_key == settings.INTERNAL_SERVICE_KEY:
+        return
+    if not creds or not creds.credentials:
+        raise UnauthorisedError()
+    token = _decode(creds.credentials)
+    if not (_is_platform_admin(token) or token.org_role in ("owner", "admin", "manager")):
+        raise ForbiddenError(message="Staff access required.")
+
+
+DbDep           = Annotated[AsyncSession, Depends(get_db)]
+StaffDep        = Annotated[TokenClaims,  Depends(require_staff)]
+OptTokenDep     = Annotated[Optional[TokenClaims], Depends(get_optional_token)]
+AdminOrSvcDep   = Annotated[None, Depends(require_staff_or_service_key)]

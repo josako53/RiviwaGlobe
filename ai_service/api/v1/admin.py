@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, status
-from core.dependencies import DbDep, StaffDep, TokenClaims
+from core.dependencies import AdminOrSvcDep, DbDep, StaffDep, TokenClaims
 from models.conversation import ConversationStatus
 from repositories.conversation_repo import ConversationRepository
 
@@ -188,7 +188,7 @@ async def index_vault(_: StaffDep) -> dict:
     summary="Bulk-reindex entity collection into Qdrant (staff only)",
     status_code=status.HTTP_200_OK,
 )
-async def reindex_entities(entity_type: str, _: StaffDep) -> dict:
+async def reindex_entities(entity_type: str, _: AdminOrSvcDep) -> dict:
     """
     Pulls all entities of the given type from the source service and re-indexes
     them into the appropriate Qdrant collection.
