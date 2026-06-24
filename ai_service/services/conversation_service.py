@@ -785,7 +785,7 @@ class ConversationService:
             import httpx as _httpx
             async with _httpx.AsyncClient(timeout=4) as cl:
                 cr = await cl.get(
-                    f"{settings.FEEDBACK_SERVICE_URL}/internal/categories/ai-context",
+                    f"{settings.FEEDBACK_SERVICE_URL}/api/v1/internal/categories/ai-context",
                     params={"org_id": str(org_id)},
                     headers={"X-Internal-Service-Key": settings.INTERNAL_SERVICE_KEY},
                 )
