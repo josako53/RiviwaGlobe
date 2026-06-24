@@ -655,30 +655,6 @@ class ConversationService:
             custom_fields = await self._fetch_org_custom_fields(org_id)
             if custom_fields:
                 parts.append(custom_fields)
-
-            # 3. Projects — scoped to this org only
-            projects = await self.kb_repo.list_active(org_id=org_id)
-            if projects:
-                project_data = [
-                    {
-                        "project_id":           str(p.project_id),
-                        "name":                 p.name,
-                        "region":               p.region or "",
-                        "primary_lga":          p.primary_lga or "",
-                        "wards":                p.get_wards(),
-                        "active_stage_name":    p.active_stage_name or "",
-                        "status":               p.status,
-                        "sector":               p.sector or "",
-                        "category":             p.category or "",
-                        "description":          p.description or "",
-                        "objectives":           p.objectives or "",
-                        "location_description": p.location_description or "",
-                        "org_display_name":     p.org_display_name or "",
-                        "code":                 p.code or "",
-                    }
-                    for p in projects[:10]
-                ]
-                parts.append("ACTIVE PROJECTS:\n" + self.rag.build_project_context(project_data))
         else:
             # Anonymous conversation — no org bound yet.
             # Show all active projects so the AI can help the consumer identify theirs.
@@ -829,6 +805,29 @@ class ConversationService:
                         s += ")"
                         cat_parts.append(s)
                     lines.append("FEEDBACK CATEGORIES (resolve categories_mentioned to one of these IDs): " + "; ".join(cat_parts))
+        except Exception:
+            pass
+
+        # Projects belonging to this org
+        try:
+            org_projects = await self.kb_repo.list_active(org_id=org_id)
+            if org_projects:
+                proj_parts = []
+                for p in org_projects[:15]:
+                    s = f"{p.name} (id={p.project_id}"
+                    if p.active_stage_name:
+                        s += f", stage={p.active_stage_name}"
+                    if p.region:
+                        s += f", region={p.region}"
+                    if p.primary_lga:
+                        s += f", lga={p.primary_lga}"
+                    if p.sector:
+                        s += f", sector={p.sector}"
+                    if p.code:
+                        s += f", code={p.code}"
+                    s += ")"
+                    proj_parts.append(s)
+                lines.append("PROJECTS: " + "; ".join(proj_parts))
         except Exception:
             pass
 
