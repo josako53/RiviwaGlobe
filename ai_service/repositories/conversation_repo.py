@@ -121,10 +121,11 @@ class ProjectKBRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_active(self) -> List[ProjectKnowledgeBase]:
-        result = await self.db.execute(
-            select(ProjectKnowledgeBase).where(ProjectKnowledgeBase.status == "active")
-        )
+    async def list_active(self, org_id: Optional[uuid.UUID] = None) -> List[ProjectKnowledgeBase]:
+        q = select(ProjectKnowledgeBase).where(ProjectKnowledgeBase.status == "active")
+        if org_id:
+            q = q.where(ProjectKnowledgeBase.organisation_id == org_id)
+        result = await self.db.execute(q)
         return list(result.scalars().all())
 
     async def mark_vector_indexed(self, project_id: uuid.UUID) -> None:

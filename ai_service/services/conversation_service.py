@@ -215,8 +215,8 @@ class ConversationService:
             # Post-scoped conversation: build a post-aware greeting
             greeting = _build_post_greeting(language, post_title or post_slug or "this post")
         else:
-            # Standard greeting with active project suggestions
-            active_projects = await self.kb_repo.list_active()
+            # Scope project suggestions to this org only (or show all for anonymous)
+            active_projects = await self.kb_repo.list_active(org_id=org_id)
             greeting = _build_greeting(language, active_projects)
 
         # If project_id was pre-selected, look up its name
@@ -631,45 +631,81 @@ class ConversationService:
             log.info("conversation.project_identified_kw", conv_id=str(conv.id), project=p.name)
 
     async def _build_org_context(self, conv: AIConversation) -> str:
-        """Build full org context string (branches, depts, services, products, categories, hours, projects) for the system prompt."""
-        projects = await self.kb_repo.list_active()
-        if not projects:
-            return "No project-specific context (org may use departments, branches, services, or products instead)."
-        data = [
-            {
-                "project_id":        str(p.project_id),
-                "name":              p.name,
-                "region":            p.region or "",
-                "primary_lga":       p.primary_lga or "",
-                "wards":             p.get_wards(),
-                "active_stage_name": p.active_stage_name or "",
-                "status":            p.status,
-                "sector":            p.sector or "",
-                "category":          p.category or "",
-                "description":       p.description or "",
-                "objectives":        p.objectives or "",
-                "location_description": p.location_description or "",
-                "org_display_name":  p.org_display_name or "",
-                "code":              p.code or "",
-            }
-            for p in projects[:10]
-        ]
-        context = self.rag.build_project_context(data)
+        """
+        Build the full organisation context injected into the LLM system prompt.
 
-        # Append org structure (branches, departments, services, products with UUIDs)
-        # so the LLM can match Consumer mentions to real IDs without asking.
-        org_id = conv.org_id or (projects[0].organisation_id if projects else None)
+        Priority order (most specific → most general):
+          1. Org structure  — always first when org_id is known (branches, departments,
+                              services, products, categories, industries, hours)
+          2. Custom fields  — org-specific extra fields to collect during conversation
+          3. Projects       — secondary, appended only if this org has active projects
+          4. Anonymous      — no org_id: show all active projects across platform so the
+                              AI can at least suggest a project to the consumer
+        """
+        parts: List[str] = []
+        org_id = conv.org_id  # authoritative — never derive from projects
+
         if org_id:
+            # 1. Org structure: branches, depts, services/products with prices, categories, hours
             org_struct = await self._fetch_org_structure(org_id)
             if org_struct:
-                context += "\n\n" + org_struct
+                parts.append(org_struct)
 
-            # Append custom field definitions so the LLM knows what extra fields to collect.
-            custom_fields_section = await self._fetch_org_custom_fields(org_id)
-            if custom_fields_section:
-                context += "\n\n" + custom_fields_section
+            # 2. Custom field definitions
+            custom_fields = await self._fetch_org_custom_fields(org_id)
+            if custom_fields:
+                parts.append(custom_fields)
 
-        return context
+            # 3. Projects — scoped to this org only
+            projects = await self.kb_repo.list_active(org_id=org_id)
+            if projects:
+                project_data = [
+                    {
+                        "project_id":           str(p.project_id),
+                        "name":                 p.name,
+                        "region":               p.region or "",
+                        "primary_lga":          p.primary_lga or "",
+                        "wards":                p.get_wards(),
+                        "active_stage_name":    p.active_stage_name or "",
+                        "status":               p.status,
+                        "sector":               p.sector or "",
+                        "category":             p.category or "",
+                        "description":          p.description or "",
+                        "objectives":           p.objectives or "",
+                        "location_description": p.location_description or "",
+                        "org_display_name":     p.org_display_name or "",
+                        "code":                 p.code or "",
+                    }
+                    for p in projects[:10]
+                ]
+                parts.append("ACTIVE PROJECTS:\n" + self.rag.build_project_context(project_data))
+        else:
+            # Anonymous conversation — no org bound yet.
+            # Show all active projects so the AI can help the consumer identify theirs.
+            projects = await self.kb_repo.list_active()
+            if projects:
+                project_data = [
+                    {
+                        "project_id":           str(p.project_id),
+                        "name":                 p.name,
+                        "region":               p.region or "",
+                        "primary_lga":          p.primary_lga or "",
+                        "wards":                p.get_wards(),
+                        "active_stage_name":    p.active_stage_name or "",
+                        "status":               p.status,
+                        "sector":               p.sector or "",
+                        "category":             p.category or "",
+                        "description":          p.description or "",
+                        "objectives":           p.objectives or "",
+                        "location_description": p.location_description or "",
+                        "org_display_name":     p.org_display_name or "",
+                        "code":                 p.code or "",
+                    }
+                    for p in projects[:10]
+                ]
+                parts.append(self.rag.build_project_context(project_data))
+
+        return "\n\n".join(parts) if parts else "No organisation context available yet."
 
     async def _fetch_org_structure(self, org_id) -> str:
         """
