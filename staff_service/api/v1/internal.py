@@ -111,7 +111,7 @@ async def list_staff_internal(
                 sp.org_id,
                 oc.name AS org_name
             FROM staff_profiles sp
-            LEFT JOIN org_caches oc ON oc.org_id = sp.org_id
+            LEFT JOIN org_cache oc ON oc.org_id = sp.org_id
             WHERE sp.is_active = true
             ORDER BY sp.org_id, sp.display_name
             LIMIT :limit OFFSET :skip

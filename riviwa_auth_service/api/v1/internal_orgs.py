@@ -366,13 +366,13 @@ async def list_branches_internal(
     from sqlalchemy import text
     rows = (await db.execute(
         text("""
-            SELECT b.id, b.name, b.code, b.branch_type, b.status,
+            SELECT b.id, b.name, b.code, b.branch_type, b.status::text AS status,
                    b.organisation_id,
                    ol.city, ol.region, ol.country_code,
                    ol.latitude, ol.longitude, ol.suburb, ol.display_name AS address
             FROM org_branches b
             LEFT JOIN org_locations ol ON ol.branch_id = b.id
-            WHERE b.status != 'closed'
+            WHERE b.status::text != 'CLOSED'
             ORDER BY b.created_at
             LIMIT :limit OFFSET :skip
         """),
@@ -451,10 +451,10 @@ async def list_services_internal(
     from sqlalchemy import text
     rows = (await db.execute(
         text("""
-            SELECT id, title, slug, service_type, status, summary, category,
-                   organisation_id
+            SELECT id, title, slug, service_type, status::text AS status,
+                   summary, category, organisation_id
             FROM org_services
-            WHERE status NOT IN ('archived', 'draft')
+            WHERE status::text NOT IN ('ARCHIVED', 'DRAFT')
             ORDER BY organisation_id, service_type, title
             LIMIT :limit OFFSET :skip
         """),
@@ -526,7 +526,7 @@ async def get_nearest_branches(
             JOIN org_branches ob ON ob.id = ol.branch_id
             WHERE ol.latitude  IS NOT NULL
               AND ol.longitude IS NOT NULL
-              AND ob.status = 'active'
+              AND ob.status::text = 'ACTIVE'
               AND ol.latitude  BETWEEN :lat_min AND :lat_max
               AND ol.longitude BETWEEN :lng_min AND :lng_max
               {org_clause}
