@@ -306,7 +306,7 @@ class FeedbackService:
         await self.db.commit()
 
         await self.producer.feedback_submitted(
-            f.id, f.project_id, f.feedback_type.value, f.category.value,
+            f.id, f.project_id, f.feedback_type.value, f.category.value if f.category else "other",
             org_id=f.org_id,
             branch_id=f.branch_id,
             department_id=f.department_id,
@@ -496,7 +496,7 @@ class FeedbackService:
 
         # Publish feedback.submitted Kafka event (consumed by ai_service + stakeholder_service)
         await self.producer.feedback_submitted(
-            f.id, f.project_id, f.feedback_type.value, f.category.value,
+            f.id, f.project_id, f.feedback_type.value, f.category.value if f.category else "other",
             org_id=_project.organisation_id if _project else None,
             branch_id=f.branch_id,
             department_id=f.department_id,

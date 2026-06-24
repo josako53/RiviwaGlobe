@@ -150,7 +150,7 @@ class ReportService:
         return {
             "unique_ref":        f.unique_ref,
             "feedback_type":     f.feedback_type.value,
-            "category":          f.category.value,
+            "category":          f.category.value if f.category else None,
             "subject":           f.subject,
             "channel":           f.channel.value,
             "submission_method": f.submission_method.value if f.submission_method else None,

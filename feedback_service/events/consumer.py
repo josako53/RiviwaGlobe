@@ -261,7 +261,7 @@ async def _handle_concern_raised(payload: dict, db: AsyncSession) -> None:
     await producer.feedback_submitted(
         f.id, f.project_id,
         f.feedback_type.value,
-        f.category.value,
+        f.category.value if f.category else "other",
         stakeholder_engagement_id=f.stakeholder_engagement_id,
         distribution_id=f.distribution_id,
     )

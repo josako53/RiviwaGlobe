@@ -72,7 +72,7 @@ def _tracking_view(f, now):
                and f.resolution.grievant_satisfied is not True and f.appeal is None)
     return {
         "id": str(f.id), "unique_ref": f.unique_ref, "feedback_type": f.feedback_type.value,
-        "category": f.category.value, "subject": f.subject, "description": f.description,
+        "category": f.category.value if f.category else None, "subject": f.subject, "description": f.description,
         "channel": f.channel.value,
         "submission_method": f.submission_method.value if f.submission_method else None,
         "is_anonymous": f.is_anonymous, "project_id": str(f.project_id) if f.project_id else None,
@@ -113,7 +113,7 @@ async def my_feedback_list(
     return {
         "items": [{
             "id": str(f.id), "unique_ref": f.unique_ref,
-            "feedback_type": f.feedback_type.value, "category": f.category.value,
+            "feedback_type": f.feedback_type.value, "category": f.category.value if f.category else None,
             "subject": f.subject, "channel": f.channel.value, "status": f.status.value,
             "status_label": _status_label(f.status),
             "current_level": f.current_level.value if f.current_level else None,
