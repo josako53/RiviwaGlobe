@@ -121,7 +121,7 @@ async def get_org_ai_context(
                    ol.city, ol.region, ol.display_name AS address
             FROM org_branches b
             LEFT JOIN org_locations ol ON ol.branch_id = b.id
-            WHERE b.organisation_id = :org_id AND b.status = 'active'
+            WHERE b.organisation_id = :org_id AND b.status = 'ACTIVE'
             ORDER BY b.name
         """),
         {"org_id": org_id_str},
