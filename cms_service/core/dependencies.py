@@ -54,11 +54,13 @@ def _claims(payload: dict) -> TokenClaims:
 # ── Auth variants ──────────────────────────────────────────────────────────────
 
 def _is_platform_admin(payload: dict) -> bool:
-    return payload.get("platform_role") in ("super_admin", "admin")
+    role = (payload.get("platform_role") or "").lower()
+    return role in ("super_admin", "admin")
 
 
 def _is_org_staff(payload: dict) -> bool:
-    return payload.get("org_role") in ("owner", "admin", "manager", "editor")
+    role = (payload.get("org_role") or "").lower()
+    return role in ("owner", "admin", "manager", "editor")
 
 
 async def require_authenticated(

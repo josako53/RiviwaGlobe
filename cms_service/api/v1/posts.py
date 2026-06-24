@@ -102,7 +102,7 @@ async def list_posts(
     q = select(OrgPost).where(OrgPost.deleted_at.is_(None))
 
     # Scope: non-admins see only their org; admins can filter
-    is_admin = claims.platform_role in ("super_admin", "admin")
+    is_admin = (claims.platform_role or "").lower() in ("super_admin", "admin")
     if not is_admin:
         if not claims.org_id:
             return PostListOut(items=[], count=0, total=0, skip=skip, limit=limit)
@@ -116,7 +116,7 @@ async def list_posts(
         q = q.where(OrgPost.status == status_)
     else:
         # Default: staff sees DRAFT+IN_REVIEW+PUBLISHED; public sees PUBLISHED
-        is_staff = claims.org_role in ("owner", "admin", "manager", "editor") or is_admin
+        is_staff = (claims.org_role or "").lower() in ("owner", "admin", "manager", "editor") or is_admin
         if not is_staff:
             q = q.where(OrgPost.status == PostStatus.PUBLISHED, OrgPost.is_public == True)
     if tag:
