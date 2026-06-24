@@ -163,13 +163,19 @@ async def _index_org(payload: dict) -> None:
     if not org_id:
         return
     ok = rag.index_org(str(org_id), {
-        "legal_name":   payload.get("legal_name") or payload.get("name", ""),
-        "display_name": payload.get("display_name", ""),
-        "slug":         payload.get("slug", ""),
-        "sms_code":     payload.get("sms_code", ""),
-        "org_type":     payload.get("org_type", ""),
-        "country_code": payload.get("country_code", ""),
-        "status":       payload.get("status", ""),
+        "legal_name":    payload.get("legal_name") or payload.get("name", ""),
+        "display_name":  payload.get("display_name", ""),
+        "slug":          payload.get("slug", ""),
+        "sms_code":      payload.get("sms_code", ""),
+        "org_type":      payload.get("org_type", ""),
+        "country_code":  payload.get("country_code", ""),
+        "status":        payload.get("status", ""),
+        "description":   payload.get("description", ""),
+        "support_email": payload.get("support_email", ""),
+        "support_phone": payload.get("support_phone", ""),
+        "website_url":   payload.get("website_url", ""),
+        "is_verified":   payload.get("is_verified", False),
+        "timezone":      payload.get("timezone", ""),
     })
     log.info("ai.consumer.org_indexed", org_id=org_id, ok=ok)
 
@@ -189,7 +195,12 @@ async def _index_branch(payload: dict) -> None:
         "longitude":    payload.get("longitude"),
         "city":         payload.get("city", ""),
         "region":       payload.get("region", ""),
-        "display_name": payload.get("display_name", ""),
+        "suburb":       payload.get("suburb", ""),
+        "country":      payload.get("country_code") or payload.get("country", ""),
+        "address":      payload.get("display_name") or payload.get("address", ""),
+        "phone":        payload.get("phone", ""),
+        "email":        payload.get("email", ""),
+        "description":  payload.get("description", ""),
     })
     log.info("ai.consumer.branch_indexed", branch_id=branch_id, ok=ok)
 
@@ -204,7 +215,8 @@ async def _index_department(payload: dict) -> None:
         "branch_id":   payload.get("branch_id", ""),
         "name":        payload.get("name", ""),
         "code":        payload.get("code", ""),
-        "description": payload.get("description", "")[:200],
+        "description": payload.get("description", ""),
+        "is_active":   payload.get("is_active", True),
     })
     log.info("ai.consumer.department_indexed", dept_id=dept_id, ok=ok)
 
@@ -215,16 +227,21 @@ async def _index_service(payload: dict) -> None:
     if not service_id:
         return
     ok = rag.index_service(str(service_id), {
-        "org_id":       payload.get("organisation_id") or payload.get("org_id", ""),
-        "branch_id":    payload.get("branch_id") or payload.get("org_branch_id", ""),
-        "title":        payload.get("title", ""),
-        "slug":         payload.get("slug", ""),
-        "service_type": payload.get("service_type", ""),
-        "status":       payload.get("status", ""),
-        "category":     payload.get("category", ""),
-        "subcategory":  payload.get("subcategory", ""),
-        "tags":         payload.get("tags", ""),
-        "summary":      payload.get("description") or payload.get("summary", ""),
+        "org_id":          payload.get("organisation_id") or payload.get("org_id", ""),
+        "branch_id":       payload.get("branch_id") or payload.get("org_branch_id", ""),
+        "title":           payload.get("title", ""),
+        "slug":            payload.get("slug", ""),
+        "service_type":    payload.get("service_type", ""),
+        "status":          payload.get("status", ""),
+        "category":        payload.get("category", ""),
+        "subcategory":     payload.get("subcategory", ""),
+        "tags":            payload.get("tags", []),
+        "description":     payload.get("description") or payload.get("summary", ""),
+        "delivery_mode":   payload.get("delivery_mode", ""),
+        "product_format":  payload.get("product_format", ""),
+        "base_price":      payload.get("base_price"),
+        "currency_code":   payload.get("currency_code", ""),
+        "is_featured":     payload.get("is_featured", False),
     })
     log.info("ai.consumer.service_indexed", service_id=service_id, ok=ok)
 
@@ -235,15 +252,21 @@ async def _index_staff(payload: dict) -> None:
     if not staff_id:
         return
     ok = rag.index_staff(str(staff_id), {
-        "org_id":       payload.get("org_id", ""),
-        "branch_id":    payload.get("branch_id", ""),
-        "first_name":   payload.get("first_name", ""),
-        "last_name":    payload.get("last_name", ""),
-        "display_name": payload.get("display_name", ""),
-        "position":     payload.get("position", ""),
-        "department":   payload.get("department", ""),
-        "branch_name":  payload.get("branch_name", ""),
-        "staff_code":   payload.get("staff_code", ""),
+        "org_id":          payload.get("org_id", ""),
+        "branch_id":       payload.get("branch_id", ""),
+        "first_name":      payload.get("first_name", ""),
+        "last_name":       payload.get("last_name", ""),
+        "display_name":    payload.get("display_name", ""),
+        "staff_code":      payload.get("staff_code", ""),
+        "position":        payload.get("position", ""),
+        "department":      payload.get("department", ""),
+        "branch_name":     payload.get("branch_name", ""),
+        "employment_type": payload.get("employment_type", ""),
+        "is_verified":     payload.get("is_verified", False),
+        "phone":           payload.get("phone", ""),
+        "email":           payload.get("email", ""),
+        "org_name":        payload.get("org_name", ""),
+        "expertise":       payload.get("expertise", []),
     })
     log.info("ai.consumer.staff_indexed", staff_id=staff_id, ok=ok)
 

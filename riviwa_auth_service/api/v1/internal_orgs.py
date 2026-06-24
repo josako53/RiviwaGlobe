@@ -325,8 +325,9 @@ async def list_organisations_internal(
     from sqlalchemy import text
     rows = (await db.execute(
         text("""
-            SELECT id, legal_name, display_name, description, org_type,
-                   status, country_code, website_url, support_email, is_verified
+            SELECT id, legal_name, display_name, slug, sms_code, description,
+                   org_type, status, country_code, timezone, website_url,
+                   support_email, support_phone, is_verified
             FROM organisations
             WHERE deleted_at IS NULL
             ORDER BY created_at
@@ -337,15 +338,21 @@ async def list_organisations_internal(
     return {
         "items": [
             {
-                "id":           str(r["id"]),
-                "name":         r["display_name"] or r["legal_name"],
-                "legal_name":   r["legal_name"],
-                "description":  r["description"],
-                "org_type":     r["org_type"],
-                "status":       r["status"],
-                "country_code": r["country_code"],
-                "website_url":  r["website_url"],
-                "is_verified":  r["is_verified"],
+                "id":            str(r["id"]),
+                "name":          r["display_name"] or r["legal_name"],
+                "legal_name":    r["legal_name"],
+                "display_name":  r["display_name"],
+                "slug":          r["slug"],
+                "sms_code":      r["sms_code"],
+                "description":   r["description"],
+                "org_type":      r["org_type"],
+                "status":        r["status"],
+                "country_code":  r["country_code"],
+                "timezone":      r["timezone"],
+                "website_url":   r["website_url"],
+                "support_email": r["support_email"],
+                "support_phone": r["support_phone"],
+                "is_verified":   r["is_verified"],
             }
             for r in rows
         ],
@@ -366,7 +373,8 @@ async def list_branches_internal(
     from sqlalchemy import text
     rows = (await db.execute(
         text("""
-            SELECT b.id, b.name, b.code, b.branch_type, b.status::text AS status,
+            SELECT b.id, b.name, b.code, b.description, b.branch_type,
+                   b.status::text AS status, b.phone, b.email,
                    b.organisation_id,
                    ol.city, ol.region, ol.country_code,
                    ol.latitude, ol.longitude, ol.suburb, ol.display_name AS address
@@ -384,9 +392,12 @@ async def list_branches_internal(
                 "id":          str(r["id"]),
                 "name":        r["name"],
                 "code":        r["code"],
+                "description": r["description"],
                 "branch_type": r["branch_type"],
                 "status":      r["status"],
                 "org_id":      str(r["organisation_id"]),
+                "phone":       r["phone"],
+                "email":       r["email"],
                 "city":        r["city"],
                 "region":      r["region"],
                 "country":     r["country_code"],
@@ -414,7 +425,7 @@ async def list_departments_internal(
     from sqlalchemy import text
     rows = (await db.execute(
         text("""
-            SELECT id, name, code, description, org_id, branch_id, is_active
+            SELECT id, name, code, description, org_id, branch_id, is_active, sort_order
             FROM org_departments
             WHERE is_active = true
             ORDER BY org_id, sort_order, name
@@ -425,12 +436,14 @@ async def list_departments_internal(
     return {
         "items": [
             {
-                "id":        str(r["id"]),
-                "name":      r["name"],
-                "code":      r["code"],
+                "id":          str(r["id"]),
+                "name":        r["name"],
+                "code":        r["code"],
                 "description": r["description"],
-                "org_id":    str(r["org_id"]),
-                "branch_id": str(r["branch_id"]) if r["branch_id"] else None,
+                "org_id":      str(r["org_id"]),
+                "branch_id":   str(r["branch_id"]) if r["branch_id"] else None,
+                "is_active":   r["is_active"],
+                "sort_order":  r["sort_order"],
             }
             for r in rows
         ],
@@ -451,8 +464,13 @@ async def list_services_internal(
     from sqlalchemy import text
     rows = (await db.execute(
         text("""
-            SELECT id, title, slug, service_type, status::text AS status,
-                   summary, category, organisation_id
+            SELECT id, title, slug, service_type::text AS service_type,
+                   status::text AS status,
+                   summary, description, category, subcategory, tags,
+                   delivery_mode::text AS delivery_mode,
+                   product_format::text AS product_format,
+                   base_price, currency_code,
+                   is_featured, organisation_id, branch_id
             FROM org_services
             WHERE status::text NOT IN ('ARCHIVED', 'DRAFT')
             ORDER BY organisation_id, service_type, title
@@ -463,13 +481,22 @@ async def list_services_internal(
     return {
         "items": [
             {
-                "id":           str(r["id"]),
-                "title":        r["title"],
-                "service_type": r["service_type"],
-                "category":     r["category"],
-                "summary":      r["summary"],
-                "status":       r["status"],
-                "org_id":       str(r["organisation_id"]),
+                "id":             str(r["id"]),
+                "title":          r["title"],
+                "slug":           r["slug"],
+                "service_type":   r["service_type"],
+                "category":       r["category"],
+                "subcategory":    r["subcategory"],
+                "tags":           r["tags"] or [],
+                "description":    r["description"] or r["summary"],
+                "delivery_mode":  r["delivery_mode"],
+                "product_format": r["product_format"],
+                "base_price":     float(r["base_price"]) if r["base_price"] is not None else None,
+                "currency_code":  r["currency_code"],
+                "is_featured":    r["is_featured"],
+                "status":         r["status"],
+                "org_id":         str(r["organisation_id"]),
+                "branch_id":      str(r["branch_id"]) if r["branch_id"] else None,
             }
             for r in rows
         ],

@@ -222,90 +222,134 @@ class RAGService:
     # ── Convenience indexers (thin wrappers over index_entity) ───────────────
 
     def index_org(self, org_id: str, org: dict) -> bool:
+        desc = org.get("description", "") or ""
         text = " ".join(filter(None, [
             org.get("legal_name"), org.get("display_name"), org.get("slug"),
-            org.get("sms_code"), org.get("org_type"), org.get("description", "")[:200],
+            org.get("sms_code"), org.get("org_type"), desc[:300],
+            org.get("support_email"), org.get("support_phone"), org.get("website_url"),
+            org.get("country_code"),
         ]))
         payload = {
-            "org_id":       org_id,
-            "legal_name":   org.get("legal_name", ""),
-            "display_name": org.get("display_name", ""),
-            "slug":         org.get("slug", ""),
-            "sms_code":     org.get("sms_code", ""),
-            "org_type":     org.get("org_type", ""),
-            "country_code": org.get("country_code", ""),
-            "status":       org.get("status", ""),
+            "org_id":        org_id,
+            "legal_name":    org.get("legal_name", ""),
+            "display_name":  org.get("display_name", ""),
+            "slug":          org.get("slug", ""),
+            "sms_code":      org.get("sms_code", ""),
+            "org_type":      org.get("org_type", ""),
+            "country_code":  org.get("country_code", ""),
+            "status":        org.get("status", ""),
+            "description":   desc[:500],
+            "support_email": org.get("support_email", ""),
+            "support_phone": org.get("support_phone", ""),
+            "website_url":   org.get("website_url", ""),
+            "is_verified":   bool(org.get("is_verified", False)),
+            "timezone":      org.get("timezone", ""),
         }
         return self.index_entity(org_id, settings.QDRANT_COLLECTION_ORGS, text, payload)
 
     def index_branch(self, branch_id: str, branch: dict) -> bool:
+        desc = branch.get("description", "") or ""
         text = " ".join(filter(None, [
             branch.get("name"), branch.get("code"), branch.get("branch_type"),
-            branch.get("description", "")[:200],
-            branch.get("city"), branch.get("region"),
+            desc[:200], branch.get("city"), branch.get("region"), branch.get("suburb"),
+            branch.get("address") or branch.get("display_name"),
+            branch.get("phone"), branch.get("email"), branch.get("country"),
         ]))
         payload = {
-            "branch_id":   branch_id,
-            "org_id":      branch.get("org_id", ""),
-            "name":        branch.get("name", ""),
-            "code":        branch.get("code", ""),
-            "branch_type": branch.get("branch_type", ""),
-            "status":      branch.get("status", ""),
-            "latitude":    branch.get("latitude"),
-            "longitude":   branch.get("longitude"),
-            "city":        branch.get("city", ""),
-            "region":      branch.get("region", ""),
-            "display_name": branch.get("display_name", ""),
+            "branch_id":    branch_id,
+            "org_id":       branch.get("org_id", ""),
+            "name":         branch.get("name", ""),
+            "code":         branch.get("code", ""),
+            "branch_type":  branch.get("branch_type", ""),
+            "status":       branch.get("status", ""),
+            "latitude":     branch.get("latitude"),
+            "longitude":    branch.get("longitude"),
+            "city":         branch.get("city", ""),
+            "region":       branch.get("region", ""),
+            "suburb":       branch.get("suburb", ""),
+            "country":      branch.get("country", ""),
+            "address":      branch.get("address") or branch.get("display_name", ""),
+            "phone":        branch.get("phone", ""),
+            "email":        branch.get("email", ""),
+            "description":  desc[:300],
         }
         return self.index_entity(branch_id, settings.QDRANT_COLLECTION_BRANCHES, text, payload)
 
     def index_department(self, dept_id: str, dept: dict) -> bool:
+        desc = dept.get("description", "") or ""
         text = " ".join(filter(None, [
-            dept.get("name"), dept.get("code"), dept.get("description", "")[:200],
+            dept.get("name"), dept.get("code"), desc[:300],
         ]))
         payload = {
-            "dept_id":   dept_id,
-            "org_id":    dept.get("org_id", ""),
-            "branch_id": dept.get("branch_id", ""),
-            "name":      dept.get("name", ""),
-            "code":      dept.get("code", ""),
+            "dept_id":     dept_id,
+            "org_id":      dept.get("org_id", ""),
+            "branch_id":   dept.get("branch_id", ""),
+            "name":        dept.get("name", ""),
+            "code":        dept.get("code", ""),
+            "description": desc[:500],
+            "is_active":   bool(dept.get("is_active", True)),
         }
         return self.index_entity(dept_id, settings.QDRANT_COLLECTION_DEPARTMENTS, text, payload)
 
     def index_service(self, service_id: str, service: dict) -> bool:
+        tags = service.get("tags")
+        tags_text = " ".join(tags) if isinstance(tags, list) else (tags or "")
+        desc = service.get("description") or service.get("summary", "") or ""
         text = " ".join(filter(None, [
             service.get("title"), service.get("slug"), service.get("category"),
-            service.get("subcategory"), service.get("tags", ""),
-            service.get("summary", "")[:200],
+            service.get("subcategory"), tags_text, desc[:400],
+            service.get("delivery_mode"), service.get("product_format"),
+            service.get("service_type"),
         ]))
         payload = {
-            "service_id":   service_id,
-            "org_id":       service.get("org_id", ""),
-            "branch_id":    service.get("branch_id", ""),
-            "title":        service.get("title", ""),
-            "slug":         service.get("slug", ""),
-            "service_type": service.get("service_type", ""),
-            "status":       service.get("status", ""),
-            "category":     service.get("category", ""),
+            "service_id":     service_id,
+            "org_id":         service.get("org_id", ""),
+            "branch_id":      service.get("branch_id", ""),
+            "title":          service.get("title", ""),
+            "slug":           service.get("slug", ""),
+            "service_type":   service.get("service_type", ""),
+            "status":         service.get("status", ""),
+            "category":       service.get("category", ""),
+            "subcategory":    service.get("subcategory", ""),
+            "tags":           tags if isinstance(tags, list) else ([tags] if tags else []),
+            "description":    desc[:600],
+            "delivery_mode":  service.get("delivery_mode", ""),
+            "product_format": service.get("product_format", ""),
+            "base_price":     service.get("base_price"),
+            "currency_code":  service.get("currency_code", ""),
+            "is_featured":    bool(service.get("is_featured", False)),
         }
         return self.index_entity(service_id, settings.QDRANT_COLLECTION_SERVICES, text, payload)
 
     def index_staff(self, staff_id: str, staff: dict) -> bool:
+        expertise = staff.get("expertise")
+        if isinstance(expertise, list):
+            expertise_text = " ".join(str(e) for e in expertise)
+        elif isinstance(expertise, dict):
+            expertise_text = " ".join(str(v) for v in expertise.values())
+        else:
+            expertise_text = str(expertise) if expertise else ""
         text = " ".join(filter(None, [
             staff.get("first_name"), staff.get("last_name"), staff.get("display_name"),
-            staff.get("position"), staff.get("department"), staff.get("branch_name"),
+            staff.get("staff_code"), staff.get("position"), staff.get("department"),
+            staff.get("branch_name"), staff.get("employment_type"), expertise_text[:200],
         ]))
         payload = {
-            "staff_id":    staff_id,
-            "org_id":      staff.get("org_id", ""),
-            "branch_id":   staff.get("branch_id", ""),
-            "first_name":  staff.get("first_name", ""),
-            "last_name":   staff.get("last_name", ""),
-            "display_name": staff.get("display_name", ""),
-            "position":    staff.get("position", ""),
-            "department":  staff.get("department", ""),
-            "branch_name": staff.get("branch_name", ""),
-            "staff_code":  staff.get("staff_code", ""),
+            "staff_id":        staff_id,
+            "org_id":          staff.get("org_id", ""),
+            "branch_id":       staff.get("branch_id", ""),
+            "first_name":      staff.get("first_name", ""),
+            "last_name":       staff.get("last_name", ""),
+            "display_name":    staff.get("display_name", ""),
+            "staff_code":      staff.get("staff_code", ""),
+            "position":        staff.get("position", ""),
+            "department":      staff.get("department", ""),
+            "branch_name":     staff.get("branch_name", ""),
+            "employment_type": staff.get("employment_type", ""),
+            "is_verified":     bool(staff.get("is_verified", False)),
+            "phone":           staff.get("phone", ""),
+            "email":           staff.get("email", ""),
+            "org_name":        staff.get("org_name", ""),
         }
         return self.index_entity(staff_id, settings.QDRANT_COLLECTION_STAFF, text, payload)
 

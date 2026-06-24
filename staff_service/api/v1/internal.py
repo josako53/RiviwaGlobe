@@ -101,13 +101,19 @@ async def list_staff_internal(
             SELECT
                 sp.id,
                 sp.staff_code,
+                sp.first_name,
+                sp.last_name,
                 sp.display_name,
+                sp.phone,
+                sp.email,
                 sp.position,
                 sp.department,
+                sp.branch_id,
                 sp.branch_name,
                 sp.employment_type,
                 sp.is_verified,
                 sp.status,
+                sp.expertise,
                 sp.org_id,
                 oc.name AS org_name
             FROM staff_profiles sp
@@ -124,12 +130,18 @@ async def list_staff_internal(
             {
                 "id":              str(r["id"]),
                 "staff_code":      r["staff_code"],
+                "first_name":      r["first_name"],
+                "last_name":       r["last_name"],
                 "display_name":    r["display_name"],
+                "phone":           r["phone"],
+                "email":           r["email"],
                 "position":        r["position"],
                 "department":      r["department"],
+                "branch_id":       str(r["branch_id"]) if r["branch_id"] else None,
                 "branch_name":     r["branch_name"],
                 "employment_type": r["employment_type"],
                 "is_verified":     r["is_verified"],
+                "expertise":       r["expertise"] or [],
                 "org_id":          str(r["org_id"]),
                 "org_name":        r["org_name"],
             }
