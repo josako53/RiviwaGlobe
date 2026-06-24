@@ -134,15 +134,16 @@ class LocationResponse(BaseModel):
 
 class ContentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id:             uuid.UUID
-    org_id:         uuid.UUID
-    vision:         Optional[str] = None
-    mission:        Optional[str] = None
-    objectives:     Optional[str] = None
-    global_policy:  Optional[str] = None
-    terms_of_use:   Optional[str] = None
-    privacy_policy: Optional[str] = None
-    updated_at:     datetime
+    id:               uuid.UUID
+    org_id:           uuid.UUID
+    vision:           Optional[str]  = None
+    mission:          Optional[str]  = None
+    objectives:       Optional[str]  = None
+    functionalities:  Optional[list] = None
+    global_policy:    Optional[str]  = None
+    terms_of_use:     Optional[str]  = None
+    privacy_policy:   Optional[str]  = None
+    updated_at:       datetime
 
 
 class FAQResponse(BaseModel):
@@ -299,12 +300,16 @@ class UpdateLocationRequest(BaseModel):
 
 class UpsertContentRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
-    vision:         Optional[str] = None
-    mission:        Optional[str] = None
-    objectives:     Optional[str] = None
-    global_policy:  Optional[str] = None
-    terms_of_use:   Optional[str] = None
-    privacy_policy: Optional[str] = None
+    vision:          Optional[str]  = None
+    mission:         Optional[str]  = None
+    objectives:      Optional[str]  = None
+    functionalities: Optional[list] = Field(
+        default=None,
+        description="List of org capability strings e.g. ['Grievance intake', 'Clean water provision']",
+    )
+    global_policy:   Optional[str]  = None
+    terms_of_use:    Optional[str]  = None
+    privacy_policy:  Optional[str]  = None
 
 
 class CreateFAQRequest(BaseModel):

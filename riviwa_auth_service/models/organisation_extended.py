@@ -460,9 +460,14 @@ class OrgContent(SQLModel, table=True):
     ),
 )
 
-    vision:         Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    mission:        Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    objectives:     Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    vision:            Optional[str]  = Field(default=None, sa_column=Column(Text, nullable=True))
+    mission:           Optional[str]  = Field(default=None, sa_column=Column(Text, nullable=True))
+    objectives:        Optional[str]  = Field(default=None, sa_column=Column(Text, nullable=True))
+    functionalities:   Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="List of org capabilities e.g. ['Grievance intake', 'Clean water provision']",
+    )
     global_policy:  Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     terms_of_use:   Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     privacy_policy: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))

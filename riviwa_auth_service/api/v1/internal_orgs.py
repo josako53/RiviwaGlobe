@@ -328,7 +328,7 @@ async def list_organisations_internal(
             SELECT o.id, o.legal_name, o.display_name, o.slug, o.sms_code, o.description,
                    o.org_type, o.status, o.country_code, o.timezone, o.website_url,
                    o.support_email, o.support_phone, o.is_verified,
-                   oc.vision, oc.mission, oc.objectives,
+                   oc.vision, oc.mission, oc.objectives, oc.functionalities,
                    oc.global_policy, oc.terms_of_use, oc.privacy_policy,
                    -- FAQs
                    COALESCE(
@@ -441,6 +441,7 @@ async def list_organisations_internal(
                 "vision":               r["vision"],
                 "mission":              r["mission"],
                 "objectives":           r["objectives"],
+                "functionalities":      list(r["functionalities"]) if r["functionalities"] else [],
                 "global_policy":        r["global_policy"],
                 "terms_of_use":         r["terms_of_use"],
                 "privacy_policy":       r["privacy_policy"],

@@ -222,10 +222,14 @@ class RAGService:
     # ── Convenience indexers (thin wrappers over index_entity) ───────────────
 
     def index_org(self, org_id: str, org: dict) -> bool:
-        desc       = org.get("description", "") or ""
-        vision     = org.get("vision", "") or ""
-        mission    = org.get("mission", "") or ""
-        objectives = org.get("objectives", "") or ""
+        desc            = org.get("description", "") or ""
+        vision          = org.get("vision", "") or ""
+        mission         = org.get("mission", "") or ""
+        objectives      = org.get("objectives", "") or ""
+        functionalities = org.get("functionalities") or []
+        func_text       = " ".join(
+            str(f) for f in functionalities if isinstance(f, str)
+        )[:300]
         faqs       = org.get("faqs") or []
         faq_text   = " ".join(
             f"{f.get('question', '')} {f.get('answer', '')}"
@@ -250,7 +254,7 @@ class RAGService:
             org.get("sms_code"), org.get("org_type"), desc[:300],
             org.get("support_email"), org.get("support_phone"), org.get("website_url"),
             org.get("country_code"), industries_text,
-            vision[:200], mission[:200], objectives[:200],
+            vision[:200], mission[:200], objectives[:200], func_text,
             faq_text, leadership_text, hours_summary,
         ]))
         payload = {
@@ -271,6 +275,7 @@ class RAGService:
             "vision":               vision[:1000],
             "mission":              mission[:1000],
             "objectives":           objectives[:1000],
+            "functionalities":      functionalities[:50],
             "global_policy":        (org.get("global_policy", "") or "")[:500],
             "terms_of_use":         (org.get("terms_of_use", "") or "")[:500],
             "privacy_policy":       (org.get("privacy_policy", "") or "")[:500],
