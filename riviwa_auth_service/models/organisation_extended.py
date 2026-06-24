@@ -368,6 +368,14 @@ class OrgLocation(SQLModel, table=True):
 
     latitude:     Optional[float] = Field(default=None, nullable=True)
     longitude:    Optional[float] = Field(default=None, nullable=True)
+    geofence_radius_m: Optional[int] = Field(
+        default=None, nullable=True,
+        description=(
+            "Radius in metres around (latitude, longitude) that counts as 'on premises'. "
+            "Used by feedback_service to set physically_verified=true when a submitter's GPS "
+            "falls within this boundary. NULL means no geofence defined for this location."
+        ),
+    )
     is_primary:   bool            = Field(default=False, nullable=False)
 
     # ── Geocoding provenance ──────────────────────────────────────────────────

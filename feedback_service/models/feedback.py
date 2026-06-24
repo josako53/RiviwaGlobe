@@ -870,6 +870,22 @@ class Feedback(SQLModel, table=True):
         default=None, nullable=True,
         description="Decimal degrees longitude of the issue location. Annex 6: GPS Coordinates.",
     )
+    issue_gps_accuracy_m: Optional[int] = Field(
+        default=None, nullable=True,
+        description="Device-reported GPS accuracy in metres at submission time. Lower = more precise.",
+    )
+    physically_verified: Optional[bool] = Field(
+        default=None, nullable=True,
+        description=(
+            "True when the submitter's GPS coordinate was inside the org branch geofence at submission time. "
+            "False when GPS was provided but outside the geofence. "
+            "NULL when no GPS was provided (e.g. SMS channel) — cannot be verified."
+        ),
+    )
+    poi_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description="Resolved Point of Interest (room/desk/counter) from GPS coordinate at submission time.",
+    )
 
     # ── Timeline ───────────────────────────────────────────────────────────────
     date_of_incident: Optional[datetime] = Field(
