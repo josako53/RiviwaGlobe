@@ -145,7 +145,7 @@ async def get_org_ai_context(
                    category, subcategory, base_price, currency_code, delivery_mode
             FROM org_services
             WHERE organisation_id = :org_id
-              AND status NOT IN ('archived', 'draft')
+              AND status NOT IN ('ARCHIVED', 'DRAFT')
             ORDER BY service_type, title
         """),
         {"org_id": org_id_str},
