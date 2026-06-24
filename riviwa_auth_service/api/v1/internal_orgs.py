@@ -325,12 +325,23 @@ async def list_organisations_internal(
     from sqlalchemy import text
     rows = (await db.execute(
         text("""
-            SELECT id, legal_name, display_name, slug, sms_code, description,
-                   org_type, status, country_code, timezone, website_url,
-                   support_email, support_phone, is_verified
-            FROM organisations
-            WHERE deleted_at IS NULL
-            ORDER BY created_at
+            SELECT o.id, o.legal_name, o.display_name, o.slug, o.sms_code, o.description,
+                   o.org_type, o.status, o.country_code, o.timezone, o.website_url,
+                   o.support_email, o.support_phone, o.is_verified,
+                   oc.vision, oc.mission, oc.objectives,
+                   oc.global_policy, oc.terms_of_use, oc.privacy_policy,
+                   COALESCE(
+                       (SELECT jsonb_agg(
+                               jsonb_build_object('question', f.question, 'answer', f.answer)
+                               ORDER BY f.display_order)
+                        FROM org_faqs f
+                        WHERE f.org_id = o.id AND f.is_published = true),
+                       '[]'::jsonb
+                   ) AS faqs
+            FROM organisations o
+            LEFT JOIN org_content oc ON oc.org_id = o.id
+            WHERE o.deleted_at IS NULL
+            ORDER BY o.created_at
             LIMIT :limit OFFSET :skip
         """),
         {"limit": limit, "skip": skip},
@@ -338,21 +349,28 @@ async def list_organisations_internal(
     return {
         "items": [
             {
-                "id":            str(r["id"]),
-                "name":          r["display_name"] or r["legal_name"],
-                "legal_name":    r["legal_name"],
-                "display_name":  r["display_name"],
-                "slug":          r["slug"],
-                "sms_code":      r["sms_code"],
-                "description":   r["description"],
-                "org_type":      r["org_type"],
-                "status":        r["status"],
-                "country_code":  r["country_code"],
-                "timezone":      r["timezone"],
-                "website_url":   r["website_url"],
-                "support_email": r["support_email"],
-                "support_phone": r["support_phone"],
-                "is_verified":   r["is_verified"],
+                "id":             str(r["id"]),
+                "name":           r["display_name"] or r["legal_name"],
+                "legal_name":     r["legal_name"],
+                "display_name":   r["display_name"],
+                "slug":           r["slug"],
+                "sms_code":       r["sms_code"],
+                "description":    r["description"],
+                "org_type":       r["org_type"],
+                "status":         r["status"],
+                "country_code":   r["country_code"],
+                "timezone":       r["timezone"],
+                "website_url":    r["website_url"],
+                "support_email":  r["support_email"],
+                "support_phone":  r["support_phone"],
+                "is_verified":    r["is_verified"],
+                "vision":         r["vision"],
+                "mission":        r["mission"],
+                "objectives":     r["objectives"],
+                "global_policy":  r["global_policy"],
+                "terms_of_use":   r["terms_of_use"],
+                "privacy_policy": r["privacy_policy"],
+                "faqs":           list(r["faqs"]) if r["faqs"] else [],
             }
             for r in rows
         ],
@@ -464,16 +482,49 @@ async def list_services_internal(
     from sqlalchemy import text
     rows = (await db.execute(
         text("""
-            SELECT id, title, slug, service_type::text AS service_type,
-                   status::text AS status,
-                   summary, description, category, subcategory, tags,
-                   delivery_mode::text AS delivery_mode,
-                   product_format::text AS product_format,
-                   base_price, currency_code,
-                   is_featured, organisation_id, branch_id
-            FROM org_services
-            WHERE status::text NOT IN ('ARCHIVED', 'DRAFT')
-            ORDER BY organisation_id, service_type, title
+            SELECT s.id, s.title, s.slug, s.service_type::text AS service_type,
+                   s.status::text AS status,
+                   s.summary, s.description, s.category, s.subcategory, s.tags,
+                   s.delivery_mode::text AS delivery_mode,
+                   s.product_format::text AS product_format,
+                   s.base_price, s.currency_code,
+                   s.is_featured, s.organisation_id, s.branch_id,
+                   COALESCE(
+                       (SELECT jsonb_agg(jsonb_build_object(
+                           'is_virtual',       sl.is_virtual,
+                           'virtual_platform', sl.virtual_platform,
+                           'virtual_url',      sl.virtual_url,
+                           'operating_hours',  sl.operating_hours,
+                           'contact_phone',    sl.contact_phone,
+                           'contact_email',    sl.contact_email,
+                           'notes',            sl.notes,
+                           'status',           sl.status::text
+                        ))
+                        FROM org_service_locations sl
+                        WHERE sl.service_id = s.id AND sl.status::text = 'ACTIVE'),
+                       '[]'::jsonb
+                   ) AS locations,
+                   COALESCE(
+                       (SELECT jsonb_agg(jsonb_build_object(
+                           'user_id',         sp.user_id::text,
+                           'personnel_role',  sp.personnel_role::text,
+                           'personnel_title', sp.personnel_title,
+                           'is_primary',      sp.is_primary
+                        ))
+                        FROM org_service_personnel sp WHERE sp.service_id = s.id),
+                       '[]'::jsonb
+                   ) AS personnel,
+                   COALESCE(
+                       (SELECT jsonb_agg(
+                               jsonb_build_object('question', sf.question, 'answer', sf.answer)
+                               ORDER BY sf.display_order)
+                        FROM org_service_faqs sf
+                        WHERE sf.service_id = s.id AND sf.is_published = true),
+                       '[]'::jsonb
+                   ) AS faqs
+            FROM org_services s
+            WHERE s.status::text NOT IN ('ARCHIVED', 'DRAFT')
+            ORDER BY s.organisation_id, s.service_type, s.title
             LIMIT :limit OFFSET :skip
         """),
         {"limit": limit, "skip": skip},
@@ -497,6 +548,9 @@ async def list_services_internal(
                 "status":         r["status"],
                 "org_id":         str(r["organisation_id"]),
                 "branch_id":      str(r["branch_id"]) if r["branch_id"] else None,
+                "locations":      list(r["locations"]) if r["locations"] else [],
+                "personnel":      list(r["personnel"]) if r["personnel"] else [],
+                "faqs":           list(r["faqs"]) if r["faqs"] else [],
             }
             for r in rows
         ],

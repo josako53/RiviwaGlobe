@@ -222,28 +222,44 @@ class RAGService:
     # ── Convenience indexers (thin wrappers over index_entity) ───────────────
 
     def index_org(self, org_id: str, org: dict) -> bool:
-        desc = org.get("description", "") or ""
+        desc       = org.get("description", "") or ""
+        vision     = org.get("vision", "") or ""
+        mission    = org.get("mission", "") or ""
+        objectives = org.get("objectives", "") or ""
+        faqs       = org.get("faqs") or []
+        faq_text   = " ".join(
+            f"{f.get('question', '')} {f.get('answer', '')}"
+            for f in faqs if isinstance(f, dict)
+        )[:500]
         text = " ".join(filter(None, [
             org.get("legal_name"), org.get("display_name"), org.get("slug"),
             org.get("sms_code"), org.get("org_type"), desc[:300],
             org.get("support_email"), org.get("support_phone"), org.get("website_url"),
             org.get("country_code"),
+            vision[:200], mission[:200], objectives[:200], faq_text,
         ]))
         payload = {
-            "org_id":        org_id,
-            "legal_name":    org.get("legal_name", ""),
-            "display_name":  org.get("display_name", ""),
-            "slug":          org.get("slug", ""),
-            "sms_code":      org.get("sms_code", ""),
-            "org_type":      org.get("org_type", ""),
-            "country_code":  org.get("country_code", ""),
-            "status":        org.get("status", ""),
-            "description":   desc[:500],
-            "support_email": org.get("support_email", ""),
-            "support_phone": org.get("support_phone", ""),
-            "website_url":   org.get("website_url", ""),
-            "is_verified":   bool(org.get("is_verified", False)),
-            "timezone":      org.get("timezone", ""),
+            "org_id":         org_id,
+            "legal_name":     org.get("legal_name", ""),
+            "display_name":   org.get("display_name", ""),
+            "slug":           org.get("slug", ""),
+            "sms_code":       org.get("sms_code", ""),
+            "org_type":       org.get("org_type", ""),
+            "country_code":   org.get("country_code", ""),
+            "status":         org.get("status", ""),
+            "description":    desc[:500],
+            "support_email":  org.get("support_email", ""),
+            "support_phone":  org.get("support_phone", ""),
+            "website_url":    org.get("website_url", ""),
+            "is_verified":    bool(org.get("is_verified", False)),
+            "timezone":       org.get("timezone", ""),
+            "vision":         vision[:1000],
+            "mission":        mission[:1000],
+            "objectives":     objectives[:1000],
+            "global_policy":  (org.get("global_policy", "") or "")[:500],
+            "terms_of_use":   (org.get("terms_of_use", "") or "")[:500],
+            "privacy_policy": (org.get("privacy_policy", "") or "")[:500],
+            "faqs":           faqs[:20],
         }
         return self.index_entity(org_id, settings.QDRANT_COLLECTION_ORGS, text, payload)
 
@@ -292,14 +308,38 @@ class RAGService:
         return self.index_entity(dept_id, settings.QDRANT_COLLECTION_DEPARTMENTS, text, payload)
 
     def index_service(self, service_id: str, service: dict) -> bool:
-        tags = service.get("tags")
+        tags      = service.get("tags")
         tags_text = " ".join(tags) if isinstance(tags, list) else (tags or "")
-        desc = service.get("description") or service.get("summary", "") or ""
+        desc      = service.get("description") or service.get("summary", "") or ""
+
+        locations = service.get("locations") or []
+        loc_parts = []
+        for loc in locations:
+            if isinstance(loc, dict):
+                for field in ("operating_hours", "virtual_platform", "notes"):
+                    val = loc.get(field, "")
+                    if val:
+                        loc_parts.append(str(val)[:100])
+        locations_text = " ".join(loc_parts)[:300]
+
+        personnel     = service.get("personnel") or []
+        personnel_text = " ".join(
+            f"{p.get('personnel_title', '')} {p.get('personnel_role', '')}"
+            for p in personnel if isinstance(p, dict)
+        )[:200]
+
+        faqs     = service.get("faqs") or []
+        faq_text = " ".join(
+            f"{f.get('question', '')} {f.get('answer', '')}"
+            for f in faqs if isinstance(f, dict)
+        )[:400]
+
         text = " ".join(filter(None, [
             service.get("title"), service.get("slug"), service.get("category"),
             service.get("subcategory"), tags_text, desc[:400],
             service.get("delivery_mode"), service.get("product_format"),
             service.get("service_type"),
+            locations_text, personnel_text, faq_text,
         ]))
         payload = {
             "service_id":     service_id,
@@ -318,6 +358,9 @@ class RAGService:
             "base_price":     service.get("base_price"),
             "currency_code":  service.get("currency_code", ""),
             "is_featured":    bool(service.get("is_featured", False)),
+            "locations":      locations[:10],
+            "personnel":      personnel[:10],
+            "faqs":           faqs[:20],
         }
         return self.index_entity(service_id, settings.QDRANT_COLLECTION_SERVICES, text, payload)
 
