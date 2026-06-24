@@ -514,7 +514,7 @@ class ConversationService:
         mention_fields = {
             "org_mentioned", "branch_mentioned", "department_mentioned",
             "service_mentioned", "staff_mentioned", "location_text",
-            "gps_lat", "gps_lng",
+            "gps_lat", "gps_lng", "categories_mentioned",
         }
         if not any(extracted_new.get(f) for f in mention_fields):
             return
@@ -526,19 +526,21 @@ class ConversationService:
         # ── Entity resolution ─────────────────────────────────────────────────
         mentions = {k: extracted_new.get(k) for k in (
             "org_mentioned", "branch_mentioned", "department_mentioned",
-            "service_mentioned", "staff_mentioned",
+            "service_mentioned", "staff_mentioned", "categories_mentioned",
         )}
         if any(mentions.values()):
             try:
                 from services.entity_resolution_service import resolve_all
                 resolved = resolve_all(mentions, org_id=org_id)
-                for field in ("org_id", "branch_id", "department_id", "service_id", "staff_id"):
+                for field in ("org_id", "branch_id", "department_id", "service_id", "product_id", "staff_id", "category_def_id"):
                     if resolved.get(field) and not existing.get(field):
                         enrichment[field] = resolved[field]
                 if resolved.get("org_name") and not existing.get("org_name"):
                     enrichment["org_name"] = resolved["org_name"]
                 if resolved.get("branch_name") and not existing.get("branch_name"):
                     enrichment["branch_name"] = resolved["branch_name"]
+                if resolved.get("additional_category_ids") and not existing.get("additional_category_ids"):
+                    enrichment["additional_category_ids"] = resolved["additional_category_ids"]
                 log.debug("conversation.entities_resolved", conv_id=str(conv.id),
                           resolved={k: v for k, v in resolved.items() if v and k != "confidence"})
             except Exception as exc:
@@ -691,28 +693,109 @@ class ConversationService:
         except Exception:
             return ""
 
-        lines = ["ORG STRUCTURE (use these UUIDs when Consumer mentions a branch/dept/service/product):"]
+        lines = ["ORG STRUCTURE — use these exact UUIDs when Consumer mentions any branch, department, service, or product:"]
+
+        # Org identity
+        org_name = raw.get("display_name") or raw.get("legal_name") or ""
+        org_type = raw.get("org_type") or ""
+        if org_name or org_type:
+            lines.append(f"ORG: {org_name}" + (f" ({org_type})" if org_type else ""))
+
+        # Industries
+        industries = raw.get("industries") or []
+        if industries:
+            primary = [i["name"] for i in industries if i.get("is_primary")]
+            others  = [i["name"] for i in industries if not i.get("is_primary")]
+            ind_str = ", ".join(primary)
+            if others:
+                ind_str += "; also: " + ", ".join(others[:5])
+            lines.append(f"INDUSTRIES: {ind_str}")
+
+        # Operating hours
+        hours = raw.get("operating_hours") or []
+        open_days = [
+            f"{h['day'].capitalize()} {h['open']}-{h['close']}"
+            for h in hours
+            if h.get("is_open") and h.get("open") and h.get("close")
+        ]
+        if open_days:
+            lines.append("OPEN HOURS: " + ", ".join(open_days))
+
+        # Branches
         branches = raw.get("branches", [])
         if branches:
-            lines.append("BRANCHES: " + "; ".join(
-                f"{b['name']} (id={b['id']})" for b in branches[:15]
-            ))
+            parts = []
+            for b in branches[:15]:
+                s = f"{b['name']} (id={b['id']}"
+                geo = ", ".join(filter(None, [b.get("city"), b.get("region")]))
+                if geo:
+                    s += f", {geo}"
+                if b.get("phone"):
+                    s += f", tel={b['phone']}"
+                s += ")"
+                parts.append(s)
+            lines.append("BRANCHES: " + "; ".join(parts))
+
+        # Departments
         depts = raw.get("departments", [])
         if depts:
             lines.append("DEPARTMENTS: " + "; ".join(
                 f"{d['name']} (id={d['id']})" for d in depts[:20]
             ))
+
+        # Services and Products (with price if available)
         all_svcs = raw.get("services", [])
-        services = [s for s in all_svcs if s.get("service_type", "").upper() != "PRODUCT"]
-        products = [s for s in all_svcs if s.get("service_type", "").upper() == "PRODUCT"]
+        services = [s for s in all_svcs if (s.get("service_type") or "").upper() != "PRODUCT"]
+        products = [s for s in all_svcs if (s.get("service_type") or "").upper() == "PRODUCT"]
+
+        def _svc_label(s: dict) -> str:
+            label = f"{s['title']} (id={s['id']}"
+            price = s.get("base_price")
+            currency = s.get("currency_code") or "TZS"
+            if price is not None:
+                label += f", price={currency} {price:,.0f}"
+            mode = s.get("delivery_mode")
+            if mode:
+                label += f", mode={mode}"
+            summary = (s.get("summary") or "")[:80]
+            if summary:
+                label += f", desc={summary}"
+            label += ")"
+            return label
+
         if services:
-            lines.append("SERVICES: " + "; ".join(
-                f"{s['title']} (id={s['id']})" for s in services[:20]
-            ))
+            lines.append("SERVICES: " + "; ".join(_svc_label(s) for s in services[:20]))
         if products:
-            lines.append("PRODUCTS: " + "; ".join(
-                f"{p['title']} (id={p['id']})" for p in products[:20]
-            ))
+            lines.append("PRODUCTS: " + "; ".join(_svc_label(p) for p in products[:20]))
+
+        # Feedback categories (fetched from feedback_service)
+        try:
+            import httpx as _httpx
+            async with _httpx.AsyncClient(timeout=4) as cl:
+                cr = await cl.get(
+                    f"{settings.FEEDBACK_SERVICE_URL}/internal/categories/ai-context",
+                    params={"org_id": str(org_id)},
+                    headers={"X-Internal-Service-Key": settings.INTERNAL_SERVICE_KEY},
+                )
+            if cr.status_code == 200:
+                cats = cr.json().get("categories") or []
+                if cats:
+                    cat_parts = []
+                    for c in cats[:30]:
+                        slug = c.get("slug") or c.get("name", "").lower().replace(" ", "_")
+                        fbt  = ", ".join(c.get("feedback_types") or [])
+                        s = f"{c['name']} (id={c['id']}, slug={slug}"
+                        if fbt:
+                            s += f", types={fbt}"
+                        desc = (c.get("description") or "")[:60]
+                        if desc:
+                            s += f", desc={desc}"
+                        s += ")"
+                        cat_parts.append(s)
+                    lines.append("FEEDBACK CATEGORIES (resolve categories_mentioned to one of these IDs): " + "; ".join(cat_parts))
+        except Exception:
+            pass
+
         return "\n".join(lines) if len(lines) > 1 else ""
 
     async def _fetch_org_custom_fields(self, org_id) -> str:
@@ -813,6 +896,10 @@ class ConversationService:
             "service_id":          extracted.get("service_id") or _sid(conv.service_id),
             "product_id":          extracted.get("product_id") or _sid(conv.product_id),
             "service_location_id": extracted.get("service_location_id") or _sid(conv.service_location_id),
+            # Category context
+            "category_def_id":          extracted.get("category_def_id"),
+            "additional_category_ids":  extracted.get("additional_category_ids") or [],
+            "suggested_category_names": extracted.get("suggested_category_names") or [],
             # Conversation meta
             "phone_number":        conv.phone_number or conv.whatsapp_id,
             "user_id":             _sid(conv.user_id),

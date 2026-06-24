@@ -69,3 +69,62 @@ async def feedback_by_post(
         "by_type": by_type,
         "recent":  recent,
     }
+
+
+@router.get(
+    "/categories/ai-context",
+    summary="Active feedback categories for AI context injection (internal)",
+)
+async def categories_ai_context(
+    db:      DbDep,
+    _auth:   InternalDep,
+    org_id:  Optional[uuid.UUID] = None,
+) -> dict:
+    from models.feedback import FeedbackCategoryDef
+    from models.project import ProjectCache
+    from sqlalchemy import or_
+
+    q = select(
+        FeedbackCategoryDef.id,
+        FeedbackCategoryDef.name,
+        FeedbackCategoryDef.slug,
+        FeedbackCategoryDef.description,
+        FeedbackCategoryDef.source,
+        FeedbackCategoryDef.status,
+        FeedbackCategoryDef.project_id,
+        FeedbackCategoryDef.applicable_types,
+        FeedbackCategoryDef.merged_into_id,
+    ).where(
+        FeedbackCategoryDef.status.in_(["active", "pending_review"]),
+        FeedbackCategoryDef.merged_into_id.is_(None),
+    )
+
+    if org_id:
+        sub = select(ProjectCache.id).where(
+            ProjectCache.organisation_id == org_id,
+        ).scalar_subquery()
+        q = q.where(
+            or_(
+                FeedbackCategoryDef.project_id.is_(None),
+                FeedbackCategoryDef.project_id.in_(sub),
+            )
+        )
+
+    rows = (await db.execute(q.order_by(FeedbackCategoryDef.name).limit(100))).all()
+
+    return {
+        "categories": [
+            {
+                "id":             str(r.id),
+                "name":           r.name,
+                "slug":           r.slug,
+                "description":    r.description,
+                "source":         r.source.value if hasattr(r.source, "value") else str(r.source),
+                "status":         r.status.value if hasattr(r.status, "value") else str(r.status),
+                "project_id":     str(r.project_id) if r.project_id else None,
+                "feedback_types": (r.applicable_types or {}).get("types") or [],
+                "aliases":        [],
+            }
+            for r in rows
+        ]
+    }

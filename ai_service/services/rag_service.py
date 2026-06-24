@@ -420,6 +420,29 @@ class RAGService:
         }
         return self.index_entity(staff_id, settings.QDRANT_COLLECTION_STAFF, text, payload)
 
+    def index_category(self, category_id: str, category: dict) -> bool:
+        aliases = category.get("aliases") or []
+        aliases_text = " ".join(str(a) for a in aliases if isinstance(a, str))
+        desc = (category.get("description") or "")
+        text = " ".join(filter(None, [
+            category.get("name"), category.get("slug"),
+            desc[:300], aliases_text,
+            " ".join(category.get("feedback_types") or []),
+        ]))
+        payload = {
+            "category_id":    category_id,
+            "org_id":         category.get("org_id") or "",
+            "project_id":     category.get("project_id") or "",
+            "name":           category.get("name", ""),
+            "slug":           category.get("slug", ""),
+            "source":         category.get("source", ""),
+            "status":         category.get("status", ""),
+            "description":    desc[:500],
+            "aliases":        aliases[:10],
+            "feedback_types": (category.get("feedback_types") or [])[:10],
+        }
+        return self.index_entity(category_id, settings.QDRANT_COLLECTION_CATEGORIES, text, payload)
+
     def build_project_context(self, projects_data: list) -> str:
         """
         Format project knowledge for injection into the Ollama system prompt.

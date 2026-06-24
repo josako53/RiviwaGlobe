@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_DEPARTMENTS: str = Field(default="riviwa_departments")
     QDRANT_COLLECTION_SERVICES:    str = Field(default="riviwa_services")
     QDRANT_COLLECTION_STAFF:       str = Field(default="riviwa_staff")
+    QDRANT_COLLECTION_CATEGORIES:  str = Field(default="riviwa_categories")
 
     # ── Conversation settings ─────────────────────────────────────────────────
     AUTO_SUBMIT_CONFIDENCE: float = Field(default=0.80,

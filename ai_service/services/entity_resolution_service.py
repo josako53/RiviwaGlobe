@@ -37,6 +37,7 @@ _THRESHOLDS = {
     "department": 0.60,
     "service":    0.65,
     "staff":      0.70,
+    "category":   0.62,
 }
 
 
@@ -120,6 +121,14 @@ def resolve_staff(mention: str, org_id: Optional[str] = None) -> Tuple[Optional[
     return _resolve("staff", settings.QDRANT_COLLECTION_STAFF, mention, org_id=org_id)
 
 
+def resolve_category(mention: str, org_id: Optional[str] = None) -> Tuple[Optional[str], float, dict]:
+    """
+    Resolve a category text mention to category_def_id.
+    E.g. "compensation" → (cat_id_uuid, 0.78, {"name": "Compensation", "slug": "compensation", ...})
+    """
+    return _resolve("category", settings.QDRANT_COLLECTION_CATEGORIES, mention, org_id=org_id)
+
+
 def resolve_all(
     mentions: dict,
     org_id: Optional[str] = None,
@@ -134,38 +143,44 @@ def resolve_all(
             "department_mentioned": str|None,
             "service_mentioned":    str|None,
             "staff_mentioned":      str|None,
+            "categories_mentioned": list[str]|None,
         }
         org_id: Already-resolved org_id (used to scope branch/dept/service/staff)
 
     Returns:
         {
-            "org_id":        str|None,
-            "branch_id":     str|None,
-            "department_id": str|None,
-            "service_id":    str|None,
-            "staff_id":      str|None,
-            "org_name":      str|None,   # payload display name for confirmation
-            "branch_name":   str|None,
-            "confidence":    dict,        # per-entity confidence scores
+            "org_id":               str|None,
+            "branch_id":            str|None,
+            "department_id":        str|None,
+            "service_id":           str|None,
+            "product_id":           str|None,
+            "staff_id":             str|None,
+            "category_def_id":      str|None,   # primary resolved category
+            "additional_category_ids": list,    # secondary categories (if any)
+            "org_name":             str|None,
+            "branch_name":          str|None,
+            "confidence":           dict,
         }
     """
     resolved: dict = {
-        "org_id":        None,
-        "branch_id":     None,
-        "department_id": None,
-        "service_id":    None,
-        "staff_id":      None,
-        "org_name":      None,
-        "branch_name":   None,
-        "confidence":    {},
+        "org_id":         None,
+        "branch_id":      None,
+        "department_id":  None,
+        "service_id":     None,
+        "product_id":     None,
+        "staff_id":       None,
+        "category_def_id": None,
+        "org_name":       None,
+        "branch_name":    None,
+        "confidence":     {},
     }
 
     # Resolve org first (needed to scope everything else)
     if mentions.get("org_mentioned") and not org_id:
         eid, score, payload = resolve_org(mentions["org_mentioned"])
         if eid:
-            resolved["org_id"]    = eid
-            resolved["org_name"]  = payload.get("display_name") or payload.get("legal_name")
+            resolved["org_id"]   = eid
+            resolved["org_name"] = payload.get("display_name") or payload.get("legal_name")
             resolved["confidence"]["org"] = round(score, 3)
             org_id = eid
 
@@ -187,15 +202,35 @@ def resolve_all(
             resolved["confidence"]["department"] = round(score, 3)
 
     if mentions.get("service_mentioned"):
-        eid, score, _ = resolve_service(mentions["service_mentioned"], org_id=org_id)
+        eid, score, payload = resolve_service(mentions["service_mentioned"], org_id=org_id)
         if eid:
-            resolved["service_id"] = eid
-            resolved["confidence"]["service"] = round(score, 3)
+            stype = (payload.get("service_type") or "").upper()
+            if stype == "PRODUCT":
+                resolved["product_id"] = eid
+                resolved["confidence"]["product"] = round(score, 3)
+            else:
+                resolved["service_id"] = eid
+                resolved["confidence"]["service"] = round(score, 3)
 
     if mentions.get("staff_mentioned"):
         eid, score, _ = resolve_staff(mentions["staff_mentioned"], org_id=org_id)
         if eid:
             resolved["staff_id"] = eid
             resolved["confidence"]["staff"] = round(score, 3)
+
+    # Resolve category mentions (list of text names → primary category_def_id)
+    cat_names = mentions.get("categories_mentioned")
+    if not cat_names and mentions.get("category_mentioned"):
+        cat_names = [mentions["category_mentioned"]]
+    if isinstance(cat_names, list) and cat_names:
+        resolved_cat_ids: list = []
+        for name in cat_names[:5]:
+            eid, score, _ = resolve_category(str(name), org_id=org_id)
+            if eid and eid not in resolved_cat_ids:
+                resolved_cat_ids.append(eid)
+                resolved["confidence"].setdefault("categories", {})[name] = round(score, 3)
+        if resolved_cat_ids:
+            resolved["category_def_id"] = resolved_cat_ids[0]
+            resolved["additional_category_ids"] = resolved_cat_ids[1:]
 
     return resolved

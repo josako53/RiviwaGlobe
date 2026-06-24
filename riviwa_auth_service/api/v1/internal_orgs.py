@@ -76,6 +76,32 @@ async def get_org_ai_context(
     if not org_row:
         raise HTTPException(status_code=404, detail="Organisation not found.")
 
+    # ── Industries ────────────────────────────────────────────────────────────
+    industry_rows = (await db.execute(
+        text("""
+            SELECT i.id, i.name, i.slug, oi.is_primary
+            FROM organisation_industries oi
+            JOIN industries i ON i.id = oi.industry_id
+            WHERE oi.org_id = :org_id AND i.is_active = true
+            ORDER BY oi.is_primary DESC, i.name
+        """),
+        {"org_id": org_id_str},
+    )).mappings().all()
+
+    # ── Operating hours ───────────────────────────────────────────────────────
+    hours_rows = (await db.execute(
+        text("""
+            SELECT day_of_week, is_open, open_time, close_time, timezone, notes
+            FROM org_operating_hours
+            WHERE org_id = :org_id AND branch_id IS NULL
+            ORDER BY CASE day_of_week::text
+                WHEN 'MONDAY' THEN 1 WHEN 'TUESDAY' THEN 2 WHEN 'WEDNESDAY' THEN 3
+                WHEN 'THURSDAY' THEN 4 WHEN 'FRIDAY' THEN 5 WHEN 'SATURDAY' THEN 6
+                WHEN 'SUNDAY' THEN 7 END
+        """),
+        {"org_id": org_id_str},
+    )).mappings().all()
+
     # ── Published FAQs ────────────────────────────────────────────────────────
     faq_rows = (await db.execute(
         text("""
@@ -90,10 +116,13 @@ async def get_org_ai_context(
     # ── Active branches ───────────────────────────────────────────────────────
     branch_rows = (await db.execute(
         text("""
-            SELECT id, name, code, branch_type, status, parent_branch_id
-            FROM org_branches
-            WHERE organisation_id = :org_id AND status = 'active'
-            ORDER BY name
+            SELECT b.id, b.name, b.code, b.branch_type, b.status, b.parent_branch_id,
+                   b.phone, b.email,
+                   ol.city, ol.region, ol.display_name AS address
+            FROM org_branches b
+            LEFT JOIN org_locations ol ON ol.branch_id = b.id
+            WHERE b.organisation_id = :org_id AND b.status = 'active'
+            ORDER BY b.name
         """),
         {"org_id": org_id_str},
     )).mappings().all()
@@ -109,10 +138,11 @@ async def get_org_ai_context(
         {"org_id": org_id_str},
     )).mappings().all()
 
-    # ── Services & Products ───────────────────────────────────────────────────
+    # ── Services & Products (with price and description) ──────────────────────
     service_rows = (await db.execute(
         text("""
-            SELECT id, title, slug, service_type, status, summary, category
+            SELECT id, title, slug, service_type, status, summary, description,
+                   category, subcategory, base_price, currency_code, delivery_mode
             FROM org_services
             WHERE organisation_id = :org_id
               AND status NOT IN ('archived', 'draft')
@@ -122,7 +152,7 @@ async def get_org_ai_context(
     )).mappings().all()
 
     return {
-        "org_id": str(org_row["id"]),
+        "org_id":        str(org_row["id"]),
         "legal_name":    org_row["legal_name"],
         "display_name":  org_row["display_name"],
         "description":   org_row["description"],
@@ -132,11 +162,28 @@ async def get_org_ai_context(
         "website_url":   org_row["website_url"],
         "support_email": org_row["support_email"],
         "is_verified":   org_row["is_verified"],
-        "faqs": [
+        "industries": [
             {
-                "question": r["question"],
-                "answer":   r["answer"],
+                "id":         str(r["id"]),
+                "name":       r["name"],
+                "slug":       r["slug"],
+                "is_primary": r["is_primary"],
             }
+            for r in industry_rows
+        ],
+        "operating_hours": [
+            {
+                "day":      r["day_of_week"],
+                "is_open":  r["is_open"],
+                "open":     str(r["open_time"]) if r["open_time"] else None,
+                "close":    str(r["close_time"]) if r["close_time"] else None,
+                "timezone": r["timezone"],
+                "notes":    r["notes"],
+            }
+            for r in hours_rows
+        ],
+        "faqs": [
+            {"question": r["question"], "answer": r["answer"]}
             for r in faq_rows
         ],
         "branches": [
@@ -146,6 +193,11 @@ async def get_org_ai_context(
                 "code":        r["code"],
                 "branch_type": r["branch_type"],
                 "is_root":     r["parent_branch_id"] is None,
+                "phone":       r["phone"],
+                "email":       r["email"],
+                "city":        r["city"],
+                "region":      r["region"],
+                "address":     r["address"],
             }
             for r in branch_rows
         ],
@@ -159,11 +211,16 @@ async def get_org_ai_context(
         ],
         "services": [
             {
-                "id":           str(r["id"]),
-                "title":        r["title"],
-                "service_type": r["service_type"],
-                "category":     r["category"],
-                "summary":      r["summary"],
+                "id":            str(r["id"]),
+                "title":         r["title"],
+                "slug":          r["slug"],
+                "service_type":  r["service_type"],
+                "category":      r["category"],
+                "subcategory":   r["subcategory"],
+                "summary":       r["summary"] or r["description"],
+                "base_price":    float(r["base_price"]) if r["base_price"] is not None else None,
+                "currency_code": r["currency_code"],
+                "delivery_mode": r["delivery_mode"],
             }
             for r in service_rows
         ],
