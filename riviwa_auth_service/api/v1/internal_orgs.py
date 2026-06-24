@@ -695,6 +695,42 @@ async def list_services_internal(
 
 
 @router.get(
+    "/branches/{branch_id}/location",
+    summary="[Internal] Get branch location and geofence for physically_verified check",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_branch_location(
+    branch_id: uuid.UUID,
+    db:        AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns the GPS coordinates and geofence radius for a single branch.
+    Called by feedback_service at submission time to compute physically_verified:
+    true when the submitter's GPS is within geofence_radius_m of the branch.
+    """
+    from sqlalchemy import text
+
+    row = (await db.execute(
+        text("""
+            SELECT ol.latitude, ol.longitude, ol.geofence_radius_m
+            FROM org_locations ol
+            WHERE ol.branch_id = :branch_id
+        """),
+        {"branch_id": str(branch_id)},
+    )).mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="No location record for this branch.")
+
+    return {
+        "branch_id":         str(branch_id),
+        "latitude":          float(row["latitude"])         if row["latitude"]         is not None else None,
+        "longitude":         float(row["longitude"])        if row["longitude"]        is not None else None,
+        "geofence_radius_m": int(row["geofence_radius_m"]) if row["geofence_radius_m"] is not None else None,
+    }
+
+
+@router.get(
     "/locations/nearest",
     summary="[Internal] Find nearest branch(es) within radius for GPS resolution",
     dependencies=[Depends(_require_service_key)],

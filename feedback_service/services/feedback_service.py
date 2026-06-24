@@ -7,6 +7,7 @@ Also handles: action logging, escalation request review (staff).
 """
 from __future__ import annotations
 
+import math
 import re
 import uuid
 from datetime import datetime, timezone
@@ -83,6 +84,54 @@ _LEVEL_ORDER = [
     GRMLevel.WARD, GRMLevel.LGA_GRM_UNIT, GRMLevel.COORDINATING_UNIT,
     GRMLevel.TARURA_WBCU, GRMLevel.TANROADS, GRMLevel.WORLD_BANK,
 ]
+
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Distance in metres between two WGS-84 coordinates."""
+    R = 6_371_000.0
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2)
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+async def _check_geofence(branch_id: uuid.UUID, lat: float, lng: float) -> Optional[bool]:
+    """
+    Returns True  — submitter GPS is inside the branch geofence.
+    Returns False — submitter GPS is outside the branch geofence.
+    Returns None  — no geofence configured for this branch, or branch has no GPS location.
+    Never raises.
+    """
+    import httpx
+    from core.config import settings
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/branches/{branch_id}/location",
+                headers={
+                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                    "X-Service-Name": "feedback_service",
+                },
+            )
+            if r.status_code != 200:
+                log.warning("feedback.geofence_lookup_failed", branch=str(branch_id), status=r.status_code)
+                return None
+            loc = r.json()
+            radius_m   = loc.get("geofence_radius_m")
+            branch_lat = loc.get("latitude")
+            branch_lng = loc.get("longitude")
+            if radius_m is None or branch_lat is None or branch_lng is None:
+                return None
+            dist_m = _haversine_m(lat, lng, branch_lat, branch_lng)
+            result = dist_m <= radius_m
+            log.info("feedback.geofence_check", branch=str(branch_id),
+                     dist_m=round(dist_m), radius_m=radius_m, inside=result)
+            return result
+    except Exception as exc:
+        log.warning("feedback.geofence_unreachable", branch=str(branch_id), error=str(exc))
+        return None
 
 
 async def _resolve_branch_id(department_id: uuid.UUID) -> uuid.UUID | None:
@@ -283,6 +332,7 @@ class FeedbackService:
             issue_mtaa                   = data.get("issue_mtaa"),
             issue_gps_lat                = float(data["issue_gps_lat"]) if data.get("issue_gps_lat") else None,
             issue_gps_lng                = float(data["issue_gps_lng"]) if data.get("issue_gps_lng") else None,
+            issue_gps_accuracy_m         = int(data["issue_gps_accuracy_m"]) if data.get("issue_gps_accuracy_m") else None,
             date_of_incident             = datetime.fromisoformat(data["date_of_incident"]) if data.get("date_of_incident") else None,
         )
         # Backdate support: staff can set submitted_at for historical records
@@ -293,6 +343,10 @@ class FeedbackService:
         # Resolve branch_id from department when not explicitly provided
         if f.department_id and not f.branch_id:
             f.branch_id = await _resolve_branch_id(f.department_id)
+
+        # Geofence check: set physically_verified from GPS vs branch boundary
+        if f.issue_gps_lat is not None and f.issue_gps_lng is not None and f.branch_id:
+            f.physically_verified = await _check_geofence(f.branch_id, f.issue_gps_lat, f.issue_gps_lng)
 
         # Auto-link to dynamic FeedbackCategoryDef by slug
         slug = _category_slug(data.get("category"))
@@ -467,12 +521,17 @@ class FeedbackService:
             issue_ward          = data.get("issue_ward"),
             issue_gps_lat       = float(data["issue_gps_lat"]) if data.get("issue_gps_lat") else None,
             issue_gps_lng       = float(data["issue_gps_lng"]) if data.get("issue_gps_lng") else None,
+            issue_gps_accuracy_m = int(data["issue_gps_accuracy_m"]) if data.get("issue_gps_accuracy_m") else None,
             date_of_incident    = datetime.fromisoformat(data["date_of_incident"]) if data.get("date_of_incident") else None,
             submitter_name      = None if is_anon else data.get("submitter_name"),
             submitter_phone     = None if is_anon else data.get("submitter_phone"),
             media_urls          = data.get("media_urls"),
         )
         f = await self.repo.create(f)
+
+        # Geofence check: set physically_verified from GPS vs branch boundary
+        if f.issue_gps_lat is not None and f.issue_gps_lng is not None and f.branch_id:
+            f.physically_verified = await _check_geofence(f.branch_id, f.issue_gps_lat, f.issue_gps_lng)
 
         # Auto-link category_def_id: prefer AI pre-resolved ID, else slug lookup
         if data.get("category_def_id"):
