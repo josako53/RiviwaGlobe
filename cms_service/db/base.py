@@ -11,5 +11,4 @@ from models.post import (          # noqa: F401, E402
     OrgPostCategory,
     OrgPostCategoryLink,
     OrgPostRevision,
-    OrgPostComment,
 )
