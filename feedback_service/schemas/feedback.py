@@ -90,6 +90,7 @@ class ConsumerSubmitFeedback(BaseModel):
     )
     issue_gps_lat: Optional[float] = Field(default=None, ge=-90, le=90)
     issue_gps_lng: Optional[float] = Field(default=None, ge=-180, le=180)
+    issue_gps_accuracy_m: Optional[int] = Field(default=None, ge=0, description="Device-reported GPS accuracy in metres")
 
     qr_short_code: Optional[str] = Field(
         default=None, max_length=20,
@@ -235,6 +236,7 @@ class StaffSubmitFeedback(BaseModel):
     issue_mtaa: Optional[str] = Field(default=None, description="Mtaa / sub-ward")
     issue_gps_lat: Optional[float] = Field(default=None, ge=-90, le=90, description="GPS latitude")
     issue_gps_lng: Optional[float] = Field(default=None, ge=-180, le=180, description="GPS longitude")
+    issue_gps_accuracy_m: Optional[int] = Field(default=None, ge=0, description="Device-reported GPS accuracy in metres")
 
     # ── SECTION E — Dates (Annex 5: Date of Action Causing Complaint) ─────────
     date_of_incident: Optional[str] = Field(default=None, description="When the issue happened (YYYY-MM-DD)")
