@@ -113,6 +113,9 @@ class FeedbackClient:
             "service_id":      str(data["service_id"]) if data.get("service_id") else None,
             "product_id":      str(data["product_id"]) if data.get("product_id") else None,
             "category_def_id": str(data["category_def_id"]) if data.get("category_def_id") else None,
+            # CMS post linkage
+            "post_id":         str(data["post_id"]) if data.get("post_id") else None,
+            "post_slug":       data.get("post_slug"),
         }
 
         # Submitter identity

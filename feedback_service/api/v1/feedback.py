@@ -569,6 +569,8 @@ async def ai_submit_feedback(request: Request, db: DbDep, kafka: KafkaDep) -> di
         "date_of_incident":          body.get("date_of_incident"),
         "media_urls":                body.get("media_urls"),
         "custom_fields":             body.get("custom_fields"),
+        "post_id":                   body.get("post_id"),
+        "post_slug":                 body.get("post_slug"),
         "submission_method":         "ai_conversation",
     }
     data = {k: v for k, v in data.items() if v is not None}
