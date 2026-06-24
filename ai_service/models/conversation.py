@@ -74,10 +74,16 @@ class AIConversation(SQLModel, table=True):
     submitted_feedback: Optional[List[Any]] = Field(default=None, sa_column=Column(JSONB))
 
     # ── Organisation + Project context ───────────────────────────────────────
-    org_id:       Optional[uuid.UUID] = Field(default=None, index=True,
-                                              description="Bound organisation — set on start, never changed")
-    project_id:   Optional[uuid.UUID] = Field(default=None)
-    project_name: Optional[str]       = Field(default=None, max_length=300)
+    org_id:              Optional[uuid.UUID] = Field(default=None, index=True,
+                                                     description="Bound organisation — set on start, never changed")
+    project_id:          Optional[uuid.UUID] = Field(default=None)
+    project_name:        Optional[str]       = Field(default=None, max_length=300)
+    subproject_id:       Optional[uuid.UUID] = Field(default=None, description="Pre-bound sub-project (work package)")
+    branch_id:           Optional[uuid.UUID] = Field(default=None, description="Pre-bound org branch")
+    department_id:       Optional[uuid.UUID] = Field(default=None, description="Pre-bound department")
+    service_id:          Optional[uuid.UUID] = Field(default=None, description="Pre-bound org service")
+    product_id:          Optional[uuid.UUID] = Field(default=None, description="Pre-bound product")
+    service_location_id: Optional[uuid.UUID] = Field(default=None, description="Pre-bound service location")
 
     # ── CMS post context (set when conversation is started from a post) ───────
     post_id:    Optional[uuid.UUID] = Field(default=None, index=True)

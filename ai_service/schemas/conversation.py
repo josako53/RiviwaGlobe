@@ -25,6 +25,30 @@ class StartConversation(BaseModel):
         default=None,
         description="Pre-select a project (e.g., from a project page). Omit to let AI detect.",
     )
+    subproject_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Pre-select a sub-project / work package.",
+    )
+    branch_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Pre-select an org branch (e.g., from a branch page or QR code).",
+    )
+    department_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Pre-select a department.",
+    )
+    service_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Pre-select an org service.",
+    )
+    product_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Pre-select a product.",
+    )
+    service_location_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Pre-select a service location (deployment site).",
+    )
     user_id: Optional[uuid.UUID] = Field(
         default=None,
         description="Authenticated user ID (from JWT). If provided, the Consumer is auto-identified.",

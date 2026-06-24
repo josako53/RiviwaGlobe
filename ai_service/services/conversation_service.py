@@ -169,6 +169,12 @@ class ConversationService:
         language: str = "sw",
         org_id: Optional[uuid.UUID] = None,
         project_id: Optional[uuid.UUID] = None,
+        subproject_id: Optional[uuid.UUID] = None,
+        branch_id: Optional[uuid.UUID] = None,
+        department_id: Optional[uuid.UUID] = None,
+        service_id: Optional[uuid.UUID] = None,
+        product_id: Optional[uuid.UUID] = None,
+        service_location_id: Optional[uuid.UUID] = None,
         user_id: Optional[uuid.UUID] = None,
         phone_number: Optional[str] = None,
         whatsapp_id: Optional[str] = None,
@@ -185,17 +191,23 @@ class ConversationService:
         and the greeting asks for feedback about that specific post.
         """
         data = {
-            "channel":    ConversationChannel(channel.lower()),
-            "language":   language,
-            "phone_number": phone_number,
-            "whatsapp_id":  whatsapp_id,
-            "web_token":    web_token,
-            "user_id":      user_id,
-            "org_id":       org_id,
-            "project_id":   project_id,
-            "post_id":      post_id,
-            "post_slug":    post_slug,
-            "post_title":   post_title,
+            "channel":            ConversationChannel(channel.lower()),
+            "language":           language,
+            "phone_number":       phone_number,
+            "whatsapp_id":        whatsapp_id,
+            "web_token":          web_token,
+            "user_id":            user_id,
+            "org_id":             org_id,
+            "project_id":         project_id,
+            "subproject_id":      subproject_id,
+            "branch_id":          branch_id,
+            "department_id":      department_id,
+            "service_id":         service_id,
+            "product_id":         product_id,
+            "service_location_id": service_location_id,
+            "post_id":            post_id,
+            "post_slug":          post_slug,
+            "post_title":         post_title,
         }
         conv = await self.conv_repo.create(data)
 
@@ -786,14 +798,28 @@ class ConversationService:
             enriched = f"{extracted_desc}\n\n[Original message(s): {user_msgs}]" if extracted_desc else user_msgs
             extracted = {**extracted, "description": enriched}
 
+        def _sid(field) -> Optional[str]:
+            return str(field) if field else None
+
         common_data = {
             **extracted,
-            "project_id":  extracted.get("project_id") or (str(conv.project_id) if conv.project_id else None),
-            "phone_number": conv.phone_number or conv.whatsapp_id,
-            "user_id":     str(conv.user_id) if conv.user_id else None,
-            "channel":     conv.channel.value,
-            "post_id":     str(conv.post_id) if conv.post_id else None,
-            "post_slug":   conv.post_slug,
+            # Authoritative context — conv-stored values win over anything the LLM may
+            # have guessed; extracted values fill gaps when not pre-bound at start time.
+            "org_id":              _sid(conv.org_id) or extracted.get("org_id"),
+            "project_id":          extracted.get("project_id") or _sid(conv.project_id),
+            "subproject_id":       extracted.get("subproject_id") or _sid(conv.subproject_id),
+            "branch_id":           extracted.get("branch_id") or _sid(conv.branch_id),
+            "department_id":       extracted.get("department_id") or _sid(conv.department_id),
+            "service_id":          extracted.get("service_id") or _sid(conv.service_id),
+            "product_id":          extracted.get("product_id") or _sid(conv.product_id),
+            "service_location_id": extracted.get("service_location_id") or _sid(conv.service_location_id),
+            # Conversation meta
+            "phone_number":        conv.phone_number or conv.whatsapp_id,
+            "user_id":             _sid(conv.user_id),
+            "channel":             conv.channel.value,
+            # CMS post context
+            "post_id":             _sid(conv.post_id),
+            "post_slug":           conv.post_slug,
         }
 
         if extracted.get("multiple_issues") and extracted.get("feedback_items"):

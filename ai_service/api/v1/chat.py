@@ -58,15 +58,21 @@ def _conv_response(conv, reply: str, submitted: bool = False, submitted_feedback
 async def start_conversation(body: StartConversation, db: DbDep, token: OptTokenDep) -> dict:
     user_id = token.sub if token else body.user_id
     conv, reply = await _svc(db).start_conversation(
-        channel    = body.channel,
-        language   = body.language,
-        org_id     = body.org_id,
-        project_id = body.project_id,
-        user_id    = user_id,
-        web_token  = body.web_token,
-        post_id    = body.post_id,
-        post_slug  = body.post_slug,
-        post_title = body.post_title,
+        channel             = body.channel,
+        language            = body.language,
+        org_id              = body.org_id,
+        project_id          = body.project_id,
+        subproject_id       = body.subproject_id,
+        branch_id           = body.branch_id,
+        department_id       = body.department_id,
+        service_id          = body.service_id,
+        product_id          = body.product_id,
+        service_location_id = body.service_location_id,
+        user_id             = user_id,
+        web_token           = body.web_token,
+        post_id             = body.post_id,
+        post_slug           = body.post_slug,
+        post_title          = body.post_title,
     )
     return _conv_response(conv, reply)
 
