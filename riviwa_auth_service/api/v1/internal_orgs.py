@@ -330,6 +330,7 @@ async def list_organisations_internal(
                    o.support_email, o.support_phone, o.is_verified,
                    oc.vision, oc.mission, oc.objectives,
                    oc.global_policy, oc.terms_of_use, oc.privacy_policy,
+                   -- FAQs
                    COALESCE(
                        (SELECT jsonb_agg(
                                jsonb_build_object('question', f.question, 'answer', f.answer)
@@ -337,7 +338,80 @@ async def list_organisations_internal(
                         FROM org_faqs f
                         WHERE f.org_id = o.id AND f.is_published = true),
                        '[]'::jsonb
-                   ) AS faqs
+                   ) AS faqs,
+                   -- Industries
+                   COALESCE(
+                       (SELECT jsonb_agg(
+                               jsonb_build_object(
+                                   'id', i.id::text, 'name', i.name, 'slug', i.slug,
+                                   'is_primary', oi.is_primary))
+                        FROM organisation_industries oi
+                        JOIN industries i ON i.id = oi.industry_id
+                        WHERE oi.org_id = o.id AND i.is_active = true),
+                       '[]'::jsonb
+                   ) AS industries,
+                   -- Custom feedback field definitions
+                   COALESCE(
+                       (SELECT jsonb_agg(
+                               jsonb_build_object(
+                                   'field_key', cfd.field_key,
+                                   'label', cfd.label,
+                                   'label_sw', cfd.label_sw,
+                                   'field_type', cfd.field_type,
+                                   'feedback_types', cfd.feedback_types,
+                                   'is_required', cfd.is_required,
+                                   'options', cfd.options,
+                                   'sort_order', cfd.sort_order)
+                               ORDER BY cfd.sort_order)
+                        FROM org_custom_field_defs cfd
+                        WHERE cfd.org_id = o.id
+                          AND cfd.entity_type = 'feedback'
+                          AND cfd.is_active = true),
+                       '[]'::jsonb
+                   ) AS feedback_form_fields,
+                   -- Operating hours (org-wide)
+                   COALESCE(
+                       (SELECT jsonb_agg(
+                               jsonb_build_object(
+                                   'day', oh.day_of_week::text,
+                                   'is_open', oh.is_open,
+                                   'open_time', oh.open_time::text,
+                                   'close_time', oh.close_time::text,
+                                   'break_start', oh.break_start::text,
+                                   'break_end', oh.break_end::text,
+                                   'timezone', oh.timezone,
+                                   'notes', oh.notes)
+                               ORDER BY CASE oh.day_of_week::text
+                                   WHEN 'MONDAY'    THEN 1 WHEN 'TUESDAY'   THEN 2
+                                   WHEN 'WEDNESDAY' THEN 3 WHEN 'THURSDAY'  THEN 4
+                                   WHEN 'FRIDAY'    THEN 5 WHEN 'SATURDAY'  THEN 6
+                                   WHEN 'SUNDAY'    THEN 7 END)
+                        FROM org_operating_hours oh
+                        WHERE oh.org_id = o.id AND oh.branch_id IS NULL),
+                       '[]'::jsonb
+                   ) AS operating_hours,
+                   -- Leadership (public roles only)
+                   COALESCE(
+                       (SELECT jsonb_agg(
+                               jsonb_build_object(
+                                   'id', lr.id::text,
+                                   'full_name', lr.full_name,
+                                   'role_title', lr.role_title,
+                                   'scope', lr.scope::text,
+                                   'duties', lr.duties,
+                                   'department', lr.department,
+                                   'phone', lr.phone,
+                                   'email', lr.email,
+                                   'level', lr.level,
+                                   'parent_role_id', lr.parent_role_id::text,
+                                   'is_public', lr.is_public)
+                               ORDER BY lr.level, lr.sort_order)
+                        FROM org_leadership_roles lr
+                        WHERE lr.org_id = o.id
+                          AND lr.branch_id IS NULL
+                          AND lr.is_active = true),
+                       '[]'::jsonb
+                   ) AS leadership
             FROM organisations o
             LEFT JOIN org_content oc ON oc.org_id = o.id
             WHERE o.deleted_at IS NULL
@@ -364,13 +438,17 @@ async def list_organisations_internal(
                 "support_email":  r["support_email"],
                 "support_phone":  r["support_phone"],
                 "is_verified":    r["is_verified"],
-                "vision":         r["vision"],
-                "mission":        r["mission"],
-                "objectives":     r["objectives"],
-                "global_policy":  r["global_policy"],
-                "terms_of_use":   r["terms_of_use"],
-                "privacy_policy": r["privacy_policy"],
-                "faqs":           list(r["faqs"]) if r["faqs"] else [],
+                "vision":               r["vision"],
+                "mission":              r["mission"],
+                "objectives":           r["objectives"],
+                "global_policy":        r["global_policy"],
+                "terms_of_use":         r["terms_of_use"],
+                "privacy_policy":       r["privacy_policy"],
+                "faqs":                 list(r["faqs"]) if r["faqs"] else [],
+                "industries":           list(r["industries"]) if r["industries"] else [],
+                "feedback_form_fields": list(r["feedback_form_fields"]) if r["feedback_form_fields"] else [],
+                "operating_hours":      list(r["operating_hours"]) if r["operating_hours"] else [],
+                "leadership":           list(r["leadership"]) if r["leadership"] else [],
             }
             for r in rows
         ],

@@ -186,3 +186,15 @@ from models.org_project import (                                   # noqa: F401,
     ProjectProgressImage,
     ProjectChecklistItem,
 )
+
+# ── 12. Org structure: operating hours, leadership/GRAM, geo boundaries ───────
+#    FK chains:
+#      OrgOperatingHours  → organisations.id (CASCADE), org_branches.id (CASCADE)
+#      OrgLeadershipRole  → organisations.id (CASCADE), org_branches.id (SET NULL),
+#                           users.id (SET NULL), org_leadership_roles.id (SET NULL)
+#      OrgGeoBoundary     → organisations.id (CASCADE), org_branches.id (CASCADE)
+from models.org_structure import (                                 # noqa: F401, E402
+    OrgOperatingHours,
+    OrgLeadershipRole,
+    OrgGeoBoundary,
+)

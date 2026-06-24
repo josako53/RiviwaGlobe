@@ -231,35 +231,54 @@ class RAGService:
             f"{f.get('question', '')} {f.get('answer', '')}"
             for f in faqs if isinstance(f, dict)
         )[:500]
+        industries = org.get("industries") or []
+        industries_text = " ".join(
+            i.get("name", "") for i in industries if isinstance(i, dict)
+        )
+        leadership = org.get("leadership") or []
+        leadership_text = " ".join(
+            f"{l.get('full_name', '')} {l.get('role_title', '')}"
+            for l in leadership if isinstance(l, dict)
+        )[:300]
+        hours = org.get("operating_hours") or []
+        hours_summary = " ".join(
+            f"{h.get('day', '')} {h.get('open_time', '')}-{h.get('close_time', '')}"
+            for h in hours if isinstance(h, dict) and h.get("is_open")
+        )[:200]
         text = " ".join(filter(None, [
             org.get("legal_name"), org.get("display_name"), org.get("slug"),
             org.get("sms_code"), org.get("org_type"), desc[:300],
             org.get("support_email"), org.get("support_phone"), org.get("website_url"),
-            org.get("country_code"),
-            vision[:200], mission[:200], objectives[:200], faq_text,
+            org.get("country_code"), industries_text,
+            vision[:200], mission[:200], objectives[:200],
+            faq_text, leadership_text, hours_summary,
         ]))
         payload = {
-            "org_id":         org_id,
-            "legal_name":     org.get("legal_name", ""),
-            "display_name":   org.get("display_name", ""),
-            "slug":           org.get("slug", ""),
-            "sms_code":       org.get("sms_code", ""),
-            "org_type":       org.get("org_type", ""),
-            "country_code":   org.get("country_code", ""),
-            "status":         org.get("status", ""),
-            "description":    desc[:500],
-            "support_email":  org.get("support_email", ""),
-            "support_phone":  org.get("support_phone", ""),
-            "website_url":    org.get("website_url", ""),
-            "is_verified":    bool(org.get("is_verified", False)),
-            "timezone":       org.get("timezone", ""),
-            "vision":         vision[:1000],
-            "mission":        mission[:1000],
-            "objectives":     objectives[:1000],
-            "global_policy":  (org.get("global_policy", "") or "")[:500],
-            "terms_of_use":   (org.get("terms_of_use", "") or "")[:500],
-            "privacy_policy": (org.get("privacy_policy", "") or "")[:500],
-            "faqs":           faqs[:20],
+            "org_id":               org_id,
+            "legal_name":           org.get("legal_name", ""),
+            "display_name":         org.get("display_name", ""),
+            "slug":                 org.get("slug", ""),
+            "sms_code":             org.get("sms_code", ""),
+            "org_type":             org.get("org_type", ""),
+            "country_code":         org.get("country_code", ""),
+            "status":               org.get("status", ""),
+            "description":          desc[:500],
+            "support_email":        org.get("support_email", ""),
+            "support_phone":        org.get("support_phone", ""),
+            "website_url":          org.get("website_url", ""),
+            "is_verified":          bool(org.get("is_verified", False)),
+            "timezone":             org.get("timezone", ""),
+            "vision":               vision[:1000],
+            "mission":              mission[:1000],
+            "objectives":           objectives[:1000],
+            "global_policy":        (org.get("global_policy", "") or "")[:500],
+            "terms_of_use":         (org.get("terms_of_use", "") or "")[:500],
+            "privacy_policy":       (org.get("privacy_policy", "") or "")[:500],
+            "faqs":                 faqs[:20],
+            "industries":           industries[:10],
+            "feedback_form_fields": (org.get("feedback_form_fields") or [])[:50],
+            "operating_hours":      hours[:7],
+            "leadership":           leadership[:20],
         }
         return self.index_entity(org_id, settings.QDRANT_COLLECTION_ORGS, text, payload)
 

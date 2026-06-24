@@ -1481,6 +1481,54 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── CMS SERVICE ──────────────────────────────────────────────────────────────
+  cms_service:
+    build:
+      context: ./cms_service
+      dockerfile: Dockerfile
+    container_name: cms_service
+    init: true
+    restart: always
+    networks: [riviwa-net]
+    ports: ["8150:8150"]
+    environment:
+      CMS_DB_HOST:              cms_db
+      CMS_DB_USER:              ${CMS_DB_USER:-cms_admin}
+      CMS_DB_PASSWORD:          ${CMS_DB_PASSWORD:-cms_pass_150}
+      CMS_DB_NAME:              ${CMS_DB_NAME:-cms_db}
+      AUTH_SECRET_KEY:          ${SECRET_KEY}
+      AUTH_ALGORITHM:           ${ALGORITHM}
+      INTERNAL_SERVICE_KEY:     ${INTERNAL_SERVICE_KEY}
+      KAFKA_BOOTSTRAP_SERVERS:  ${KAFKA_BOOTSTRAP_SERVERS}
+      MINIO_ENDPOINT:           minio:9000
+      MINIO_ACCESS_KEY:         ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY:         ${MINIO_ROOT_PASSWORD:-minioadmin}
+      ENVIRONMENT:              ${ENVIRONMENT:-production}
+      DEBUG:                    ${DEBUG:-false}
+    depends_on:
+      cms_db:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+
+  cms_db:
+    image: postgres:15-alpine
+    container_name: cms_db
+    init: true
+    restart: always
+    networks: [riviwa-net]
+    environment:
+      POSTGRES_USER:     ${CMS_DB_USER:-cms_admin}
+      POSTGRES_PASSWORD: ${CMS_DB_PASSWORD:-cms_pass_150}
+      POSTGRES_DB:       ${CMS_DB_NAME:-cms_db}
+    ports: ["5450:5432"]
+    volumes: [cms_db_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CMS_DB_USER:-cms_admin} -d ${CMS_DB_NAME:-cms_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 networks:
   riviwa-net:
     driver: bridge
@@ -1514,4 +1562,5 @@ volumes:
   waiting_db_data:
   staff_db_data:
   subscription_db_data:
+  cms_db_data:
   certbot_certs:
