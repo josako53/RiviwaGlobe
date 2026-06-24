@@ -288,6 +288,36 @@ class ConversationService:
             await self.conv_repo.save(conv)
             return conv, reply, False, []
 
+        # When stage=CONFIRMING and user says a confirm word, bypass LLM and submit immediately.
+        # This prevents LLM rate-limit failures from blocking an already-confirmed submission.
+        _CONFIRM_WORDS = {"ndio", "ndiyo", "yes", "wasilisha", "submit", "tuma", "sawa", "okay", "ok", "confirm", "endelea"}
+        if conv.stage == ConversationStage.CONFIRMING:
+            msg_words = set(message.lower().replace(",", " ").replace(".", " ").split())
+            if msg_words & _CONFIRM_WORDS:
+                _ext = conv.get_extracted()
+                _has_min = (
+                    _ext.get("feedback_type") not in (None, "", "unknown")
+                    and bool(_ext.get("description", "").strip())
+                )
+                if _has_min:
+                    submitted, submitted_feedback = await self._submit_feedback(conv)
+                    if submitted:
+                        ref_list = ", ".join(f["unique_ref"] for f in submitted_feedback)
+                        thanks = (
+                            f"Asante! Malalamiko yako yamesajiliwa. Nambari yako ya kufuatilia: {ref_list}. "
+                            f"Unaweza kufuatilia hali yako kwa kutumia nambari hii."
+                            if conv.language == "sw"
+                            else
+                            f"Thank you! Your feedback has been submitted. Reference number(s): {ref_list}. "
+                            f"Use this number to follow up on your submission."
+                        )
+                        conv.add_turn("assistant", thanks)
+                        conv.status = ConversationStatus.SUBMITTED
+                        conv.stage  = ConversationStage.DONE
+                        conv.completed_at = datetime.utcnow()
+                        await self.conv_repo.save(conv)
+                        return conv, thanks, True, submitted_feedback
+
         # Build org context (branches, depts, services, products, categories, hours, projects)
         org_context = await self._build_org_context(conv)
 
@@ -362,20 +392,8 @@ class ConversationService:
                 urgency_note = self._urgency_message(conv.language, incharge.name, incharge.phone)
                 reply = f"{reply}\n\n{urgency_note}"
 
-        # If user explicitly confirms AFTER the AI has shown a summary (stage=CONFIRMING) → force submit.
-        # Restricted to CONFIRMING stage only — "Ndiyo" during collection is a general affirmative,
-        # not a submission consent. Only fire after the AI has explicitly asked "Is this correct?"
-        _CONFIRM_WORDS = {"ndio", "ndiyo", "yes", "wasilisha", "submit", "tuma", "sawa", "okay", "ok", "confirm", "endelea"}
-        if conv.stage == ConversationStage.CONFIRMING and action not in ("submit", "followup"):
-            msg_words = set(message.lower().replace(",", " ").replace(".", " ").split())
-            if msg_words & _CONFIRM_WORDS:
-                _ext = conv.get_extracted()
-                _has_min = (
-                    _ext.get("feedback_type") not in (None, "", "unknown")
-                    and bool(_ext.get("description", "").strip())
-                )
-                if _has_min:
-                    action = "submit"
+        # If the LLM itself signalled submit action, honour it directly.
+        # (The pre-LLM confirm-word check above handles the normal user-says-yes path.)
 
         # Update stage
         conv.stage = self._map_action_to_stage(action)
