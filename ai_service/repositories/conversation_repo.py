@@ -89,7 +89,7 @@ class ConversationRepository:
         if channel:
             q = q.where(AIConversation.channel == channel)
         if org_id:
-            q = q.where(AIConversation.organisation_id == org_id)
+            q = q.where(AIConversation.org_id == org_id)
         q = q.order_by(AIConversation.last_active_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(q)
         return list(result.scalars().all())

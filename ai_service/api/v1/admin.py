@@ -71,7 +71,7 @@ async def list_conversations(
 async def get_conversation_admin(conversation_id: uuid.UUID, db: DbDep, claims: StaffDep) -> dict:
     repo = ConversationRepository(db)
     conv = await repo.get_or_404(conversation_id)
-    _check_org_ownership(conv.organisation_id, _caller_org_id(claims))
+    _check_org_ownership(conv.org_id, _caller_org_id(claims))
     extracted = conv.get_extracted()
     return {
         "conversation_id": str(conv.id),
@@ -109,7 +109,7 @@ async def force_submit(conversation_id: uuid.UUID, db: DbDep, claims: StaffDep) 
     from services.conversation_service import ConversationService
     svc  = ConversationService(db=db)
     conv = await svc.conv_repo.get_or_404(conversation_id)
-    _check_org_ownership(conv.organisation_id, _caller_org_id(claims))
+    _check_org_ownership(conv.org_id, _caller_org_id(claims))
     submitted, results = await svc._submit_feedback(conv)
     if submitted:
         from models.conversation import ConversationStatus, ConversationStage
@@ -292,7 +292,7 @@ async def update_conversation(
     """
     repo = ConversationRepository(db)
     conv = await repo.get_or_404(conversation_id)
-    _check_org_ownership(conv.organisation_id, _caller_org_id(claims))
+    _check_org_ownership(conv.org_id, _caller_org_id(claims))
 
     allowed = {"is_urgent", "incharge_name", "incharge_phone", "language"}
     for field in allowed:
@@ -342,7 +342,7 @@ async def archive_conversation(
     """
     repo = ConversationRepository(db)
     conv = await repo.get_or_404(conversation_id)
-    _check_org_ownership(conv.organisation_id, _caller_org_id(claims))
+    _check_org_ownership(conv.org_id, _caller_org_id(claims))
 
     if conv.status == ConversationStatus.ARCHIVED:
         return {"message": "Conversation already archived.", "conversation_id": str(conv.id)}
