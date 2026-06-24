@@ -32,6 +32,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     Enum as SAEnum,
+    ForeignKey,
     Integer,
     Text,
     UniqueConstraint,
