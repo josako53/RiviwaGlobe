@@ -98,22 +98,31 @@ class FeedbackClient:
         category = category_map.get(cat_slug, "other")
 
         payload: Dict[str, Any] = {
-            "project_id": str(data["project_id"]) if data.get("project_id") else None,
+            "project_id":    str(data["project_id"]) if data.get("project_id") else None,
             "feedback_type": raw_type,
-            "category": category,
+            "category":      category,
             "submission_method": "ai_conversation",
-            "subject": data.get("subject") or _generate_subject(data),
-            "description": data.get("description", ""),
-            "is_anonymous": data.get("is_anonymous", False),
-            "channel": self._map_channel(data.get("channel", "other")),
+            "subject":       data.get("subject") or _generate_subject(data),
+            "description":   data.get("description", ""),
+            "is_anonymous":  data.get("is_anonymous", False),
+            "channel":       self._map_channel(data.get("channel", "other")),
+            # Org/branch/dept/service context resolved by ai_service entity resolution
+            "org_id":          str(data["org_id"]) if data.get("org_id") else None,
+            "branch_id":       str(data["branch_id"]) if data.get("branch_id") else None,
+            "department_id":   str(data["department_id"]) if data.get("department_id") else None,
+            "service_id":      str(data["service_id"]) if data.get("service_id") else None,
+            "product_id":      str(data["product_id"]) if data.get("product_id") else None,
+            "category_def_id": str(data["category_def_id"]) if data.get("category_def_id") else None,
         }
 
         # Submitter identity
         if not payload["is_anonymous"]:
             if data.get("submitter_name"):
                 payload["submitter_name"] = data["submitter_name"]
-            if data.get("phone_number"):
-                payload["submitter_phone"] = data["phone_number"]
+            # phone_number = conv.phone_number (pre-bound); submitter_phone = LLM-extracted
+            phone = data.get("phone_number") or data.get("submitter_phone") or data.get("phone")
+            if phone:
+                payload["submitter_phone"] = phone
             if data.get("user_id"):
                 payload["submitted_by_user_id"] = str(data["user_id"])
 
