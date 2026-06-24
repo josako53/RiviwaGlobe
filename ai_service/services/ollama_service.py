@@ -68,8 +68,8 @@ CONVERSATION STYLE (follow these exactly — they define your character):
 5. NATURAL LANGUAGE — write the way a warm, local person would speak. For Swahili: use natural everyday Kiswahili, not a stiff translation of English.
 6. NEVER REPEAT WHAT YOU ALREADY KNOW — if you just heard the problem, do not restate it with filler words. Move forward with one targeted follow-up.
 
-ORGANISATION CONTEXT (branches, departments, services, products, and projects if any — all optional):
-{{PROJECT_CONTEXT}}
+ORGANISATION CONTEXT (branches, departments, services, products, categories, industries, hours, and projects if any — all optional):
+{{ORG_CONTEXT}}
 
 {{ANALYTICS_CONTEXT}}
 
@@ -238,7 +238,7 @@ class OllamaService:
     async def chat(
         self,
         messages: List[Dict[str, str]],
-        project_context: str = "",
+        org_context: str = "",
         knowledge_context: str = "",
         analytics_context: str = "",
         temperature: float = 0.7,
@@ -247,10 +247,11 @@ class OllamaService:
         Send messages to Groq (if GROQ_API_KEY set) or local Ollama.
         Returns the parsed JSON dict from the LLM, or a safe fallback dict.
 
+        org_context:        org structure — branches, depts, services, products, categories, hours
         knowledge_context:  Obsidian vault RAG chunks — GRM procedures, definitions
         analytics_context:  live analytics snapshot — actual grievance counts, rates
         """
-        system = _SYSTEM_PROMPT.replace("{{PROJECT_CONTEXT}}", project_context or "No projects synced yet.")
+        system = _SYSTEM_PROMPT.replace("{{ORG_CONTEXT}}", org_context or "No organisation context available yet.")
         system = system.replace("{{ANALYTICS_CONTEXT}}", analytics_context or "")
         if knowledge_context:
             system = knowledge_context + "\n\n" + system

@@ -288,8 +288,8 @@ class ConversationService:
             await self.conv_repo.save(conv)
             return conv, reply, False, []
 
-        # Build project context for RAG injection
-        project_context = await self._build_project_context(conv)
+        # Build org context (branches, depts, services, products, categories, hours, projects)
+        org_context = await self._build_org_context(conv)
 
         # Search Obsidian knowledge base for relevant GRM context
         knowledge_context = ""
@@ -316,7 +316,7 @@ class ConversationService:
         try:
             llm_resp = await self.ollama.chat(
                 messages=self._format_turns_for_llm(conv.get_turns()),
-                project_context=project_context,
+                org_context=org_context,
                 knowledge_context=knowledge_context,
                 analytics_context=analytics_context,
             )
@@ -630,8 +630,8 @@ class ConversationService:
             })
             log.info("conversation.project_identified_kw", conv_id=str(conv.id), project=p.name)
 
-    async def _build_project_context(self, conv: AIConversation) -> str:
-        """Build project context string to inject into the system prompt."""
+    async def _build_org_context(self, conv: AIConversation) -> str:
+        """Build full org context string (branches, depts, services, products, categories, hours, projects) for the system prompt."""
         projects = await self.kb_repo.list_active()
         if not projects:
             return "No project-specific context (org may use departments, branches, services, or products instead)."
