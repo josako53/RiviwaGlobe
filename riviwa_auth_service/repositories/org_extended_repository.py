@@ -68,8 +68,8 @@ _LOCATION_UPDATABLE = frozenset({
     "is_primary",
 })
 _CONTENT_UPDATABLE = frozenset({
-    "vision", "mission", "objectives", "global_policy",
-    "terms_of_use", "privacy_policy",
+    "vision", "mission", "objectives", "functionalities",
+    "global_policy", "terms_of_use", "privacy_policy",
 })
 _FAQ_UPDATABLE = frozenset({
     "question", "answer", "display_order", "is_published",
