@@ -147,8 +147,8 @@ class OrgPost(SQLModel, table=True):
     is_featured:     bool = Field(default=False, nullable=False,
                                   description="Feature on org homepage / dashboard")
     allows_feedback: bool = Field(
-        default=True, nullable=False,
-        sa_column=Column("allows_feedback", nullable=False, default=True),
+        default=True,
+        sa_column=Column("allows_feedback", Boolean(), nullable=False, default=True),
         description="Allow Riviwa feedback (applause/suggestion/grievance/inquiry) on this post",
     )
 
