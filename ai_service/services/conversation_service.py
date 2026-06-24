@@ -82,6 +82,31 @@ def _build_greeting(language: str, projects: list) -> str:
 
     numbered = "\n".join(f"{i+1}. {l}" for i, l in enumerate(lines))
     return base + loc_header + "\n" + numbered
+def _build_post_greeting(language: str, post_title: str) -> str:
+    """Opening message when conversation is scoped to a CMS post."""
+    if language == "en":
+        return (
+            f"Hello! I'm Riviwa, your feedback assistant.\n\n"
+            f"You're giving feedback about: **{post_title}**\n\n"
+            f"I can capture:\n"
+            f"• 👏 Applause — if you appreciate something\n"
+            f"• 💡 Suggestion — if you have an idea or improvement\n"
+            f"• 🙁 Complaint — if something went wrong or was disappointing\n"
+            f"• ❓ Inquiry — if you have a question\n\n"
+            f"What would you like to share?"
+        )
+    return (
+        f"Habari! Mimi ni Riviwa, msaidizi wa maoni.\n\n"
+        f"Unatoa maoni kuhusu: **{post_title}**\n\n"
+        f"Ninaweza kukusaidia na:\n"
+        f"• 👏 Pongezi — kama unapenda kitu\n"
+        f"• 💡 Pendekezo — kama una wazo au uboreshaji\n"
+        f"• 🙁 Malalamiko — kama kuna tatizo au kitu kilikukatisha tamaa\n"
+        f"• ❓ Maswali — kama una swali\n\n"
+        f"Unataka kushiriki nini?"
+    )
+
+
 _FOLLOWUP_STATUS_SW = "Hali ya malalamiko yako ({}): {} — {}"
 _FOLLOWUP_STATUS_EN = "Your feedback ({}) status: {} — {}"
 
@@ -148,26 +173,39 @@ class ConversationService:
         phone_number: Optional[str] = None,
         whatsapp_id: Optional[str] = None,
         web_token: Optional[str] = None,
+        post_id: Optional[uuid.UUID] = None,
+        post_slug: Optional[str] = None,
+        post_title: Optional[str] = None,
     ) -> Tuple[AIConversation, str]:
         """
         Create a new conversation session and return (session, greeting_reply).
         org_id scopes the conversation to a specific organisation — RAG and
         project detection will only consider projects belonging to that org.
+        When post_id is provided the conversation is scoped to a CMS post
+        and the greeting asks for feedback about that specific post.
         """
-        # Load active projects so we can suggest locations in the greeting
-        active_projects = await self.kb_repo.list_active()
-        greeting = _build_greeting(language, active_projects)
         data = {
-            "channel": ConversationChannel(channel.lower()),
-            "language": language,
+            "channel":    ConversationChannel(channel.lower()),
+            "language":   language,
             "phone_number": phone_number,
-            "whatsapp_id": whatsapp_id,
-            "web_token": web_token,
-            "user_id": user_id,
-            "org_id": org_id,
-            "project_id": project_id,
+            "whatsapp_id":  whatsapp_id,
+            "web_token":    web_token,
+            "user_id":      user_id,
+            "org_id":       org_id,
+            "project_id":   project_id,
+            "post_id":      post_id,
+            "post_slug":    post_slug,
+            "post_title":   post_title,
         }
         conv = await self.conv_repo.create(data)
+
+        if post_id:
+            # Post-scoped conversation: build a post-aware greeting
+            greeting = _build_post_greeting(language, post_title or post_slug or "this post")
+        else:
+            # Standard greeting with active project suggestions
+            active_projects = await self.kb_repo.list_active()
+            greeting = _build_greeting(language, active_projects)
 
         # If project_id was pre-selected, look up its name
         if project_id:
@@ -750,10 +788,12 @@ class ConversationService:
 
         common_data = {
             **extracted,
-            "project_id": extracted.get("project_id") or (str(conv.project_id) if conv.project_id else None),
+            "project_id":  extracted.get("project_id") or (str(conv.project_id) if conv.project_id else None),
             "phone_number": conv.phone_number or conv.whatsapp_id,
-            "user_id": str(conv.user_id) if conv.user_id else None,
-            "channel": conv.channel.value,
+            "user_id":     str(conv.user_id) if conv.user_id else None,
+            "channel":     conv.channel.value,
+            "post_id":     str(conv.post_id) if conv.post_id else None,
+            "post_slug":   conv.post_slug,
         }
 
         if extracted.get("multiple_issues") and extracted.get("feedback_items"):

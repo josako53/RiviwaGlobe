@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-from models.post import CommentStatus, PostStatus, PostType
+from models.post import PostStatus, PostType
 
 
 # ── Post schemas ───────────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ class PostCreate(BaseModel):
     branch_id:          Optional[uuid.UUID] = None
     is_public:          bool                = True
     target_audience:    Optional[str]       = None
-    allows_comments:    bool                = True
+    allows_feedback:    bool                = True
     is_pinned:          bool                = False
     is_featured:        bool                = False
     category_ids:       Optional[List[uuid.UUID]] = None
@@ -42,7 +42,7 @@ class PostUpdate(BaseModel):
     seo_description:    Optional[str]             = None
     is_public:          Optional[bool]            = None
     target_audience:    Optional[str]             = None
-    allows_comments:    Optional[bool]            = None
+    allows_feedback:    Optional[bool]            = None
     is_pinned:          Optional[bool]            = None
     is_featured:        Optional[bool]            = None
     category_ids:       Optional[List[uuid.UUID]] = None
@@ -77,7 +77,7 @@ class PostOut(BaseModel):
     view_count:         int
     is_pinned:          bool
     is_featured:        bool
-    allows_comments:    bool
+    allows_feedback:    bool
     is_public:          bool
     target_audience:    Optional[str]
     created_at:         datetime
@@ -127,39 +127,6 @@ class CategoryOut(BaseModel):
     updated_at:  datetime
 
     model_config = {"from_attributes": True}
-
-
-# ── Comment schemas ────────────────────────────────────────────────────────────
-
-class CommentCreate(BaseModel):
-    content:      str
-    author_name:  Optional[str]       = None
-    author_email: Optional[str]       = None
-    parent_id:    Optional[uuid.UUID] = None
-
-
-class CommentModerate(BaseModel):
-    status:          CommentStatus
-    moderation_note: Optional[str] = None
-
-
-class CommentOut(BaseModel):
-    id:                uuid.UUID
-    post_id:           uuid.UUID
-    parent_id:         Optional[uuid.UUID]
-    user_id:           Optional[uuid.UUID]
-    author_name:       Optional[str]
-    content:           str
-    status:            str
-    is_staff_reply:    bool
-    created_at:        datetime
-    updated_at:        datetime
-    replies:           List["CommentOut"] = []
-
-    model_config = {"from_attributes": True}
-
-
-CommentOut.model_rebuild()
 
 
 # ── Revision schema ────────────────────────────────────────────────────────────

@@ -79,6 +79,11 @@ class AIConversation(SQLModel, table=True):
     project_id:   Optional[uuid.UUID] = Field(default=None)
     project_name: Optional[str]       = Field(default=None, max_length=300)
 
+    # ── CMS post context (set when conversation is started from a post) ───────
+    post_id:    Optional[uuid.UUID] = Field(default=None, index=True)
+    post_slug:  Optional[str]       = Field(default=None, max_length=500)
+    post_title: Optional[str]       = Field(default=None, max_length=500)
+
     # ── Escalation / urgency ─────────────────────────────────────────────────
     is_urgent:      bool = Field(default=False)
     incharge_name:  Optional[str] = Field(default=None, max_length=200)

@@ -743,6 +743,17 @@ class Feedback(SQLModel, table=True):
         description="Submitter's street / plot number. Annex 6 Complainant Details: Address.",
     )
 
+    # ── CMS post origin (soft link) ───────────────────────────────────────────
+    # Set when feedback is submitted in response to a specific CMS post.
+    post_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description="cms_service OrgPost.id — set when feedback originates from a CMS post.",
+    )
+    post_slug: Optional[str] = Field(
+        default=None, max_length=500, nullable=True,
+        description="Denormalized slug of the CMS post for display without a cross-service join.",
+    )
+
     # ── Cross-service origin links (soft links) ────────────────────────────────
     # Set when feedback originates from a stakeholder engagement or distribution
     stakeholder_engagement_id: Optional[uuid.UUID] = Field(
@@ -1725,6 +1736,16 @@ class ChannelSession(SQLModel, table=True):
     __tablename__ = "channel_sessions"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, nullable=False)
+
+    # ── CMS post origin (soft link) ───────────────────────────────────────────
+    post_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description="cms_service OrgPost.id — set when this session was started from a CMS post.",
+    )
+    post_slug: Optional[str] = Field(
+        default=None, max_length=500, nullable=True,
+        description="Denormalized slug of the CMS post.",
+    )
 
     # ── Channel identity ──────────────────────────────────────────────────────
     channel: FeedbackChannel = Field(

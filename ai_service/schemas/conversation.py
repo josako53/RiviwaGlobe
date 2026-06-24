@@ -33,6 +33,12 @@ class StartConversation(BaseModel):
         default=None,
         description="Anonymous session token for web (used when no user_id).",
     )
+    post_id:    Optional[uuid.UUID] = Field(
+        default=None,
+        description="CMS post UUID — scopes the conversation to feedback about a specific post.",
+    )
+    post_slug:  Optional[str] = Field(default=None, description="CMS post slug (denormalized)")
+    post_title: Optional[str] = Field(default=None, description="CMS post title (shown in greeting)")
 
 
 class SendMessage(BaseModel):

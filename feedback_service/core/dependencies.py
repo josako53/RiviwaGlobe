@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Annotated, Callable, Optional
 import structlog
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import ExpiredSignatureError, JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -150,5 +150,15 @@ async def require_authenticated(token: TokenClaims = Depends(get_current_token))
     """Require a valid JWT but no specific role. Used for Consumer self-service endpoints."""
     return token
 
-ConsumerDep = Annotated[TokenClaims, Depends(require_authenticated)]
+ConsumerDep    = Annotated[TokenClaims, Depends(require_authenticated)]
 CurrentUserDep = Annotated[TokenClaims, Depends(get_current_token)]
+
+
+async def require_internal_key(
+    x_internal: Annotated[Optional[str], Header(alias="X-Internal-Service-Key")] = None,
+) -> None:
+    if not x_internal or x_internal != settings.INTERNAL_SERVICE_KEY:
+        raise UnauthorisedError()
+
+
+InternalDep = Annotated[None, Depends(require_internal_key)]

@@ -4,7 +4,7 @@
 # ───────────────────────────────────────────────────────────────────────────
 """api/v1/router.py — feedback_service"""
 from fastapi import APIRouter
-from api.v1 import actions, categories, channels, committees, consumer, employee_feedback, escalation_paths, feedback, reports, voice
+from api.v1 import actions, categories, channels, committees, consumer, employee_feedback, escalation_paths, feedback, internal, reports, voice
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(feedback.router)
@@ -17,3 +17,4 @@ api_v1_router.include_router(consumer.router)
 api_v1_router.include_router(employee_feedback.router)
 api_v1_router.include_router(reports.router)
 api_v1_router.include_router(voice.router)
+api_v1_router.include_router(internal.router)

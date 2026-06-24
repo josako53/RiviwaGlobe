@@ -266,6 +266,8 @@ class FeedbackService:
             entered_by_user_id           = None if is_anon else (token_sub if data.get("officer_recorded") else None),
             stakeholder_engagement_id    = self._to_uuid(data.get("stakeholder_engagement_id")),
             distribution_id              = self._to_uuid(data.get("distribution_id")),
+            post_id                      = self._to_uuid(data.get("post_id")),
+            post_slug                    = data.get("post_slug"),
             subject                      = data["subject"],
             description                  = data["description"],
             media_urls                   = data.get("media_urls"),

@@ -39,6 +39,9 @@ def _conv_response(conv, reply: str, submitted: bool = False, submitted_feedback
         "is_urgent":         conv.is_urgent,
         "incharge_name":     conv.incharge_name,
         "incharge_phone":    conv.incharge_phone,
+        "post_id":           str(conv.post_id) if conv.post_id else None,
+        "post_slug":         conv.post_slug,
+        "post_title":        conv.post_title,
     }
 
 
@@ -61,6 +64,9 @@ async def start_conversation(body: StartConversation, db: DbDep, token: OptToken
         project_id = body.project_id,
         user_id    = user_id,
         web_token  = body.web_token,
+        post_id    = body.post_id,
+        post_slug  = body.post_slug,
+        post_title = body.post_title,
     )
     return _conv_response(conv, reply)
 

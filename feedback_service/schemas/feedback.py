@@ -115,6 +115,10 @@ class ConsumerSubmitFeedback(BaseModel):
         description="OrgService UUID (service_type=PRODUCT) — which product this feedback is about.",
     )
 
+    # ── CMS post origin ───────────────────────────────────────────────────────
+    post_id:   Optional[uuid.UUID] = Field(default=None, description="CMS post UUID this feedback is about")
+    post_slug: Optional[str]       = Field(default=None, max_length=500, description="CMS post slug (denormalized)")
+
     # ── Date and media ────────────────────────────────────────────────────────
     date_of_incident: Optional[str] = Field(default=None, description="When the issue happened (YYYY-MM-DD)")
     media_urls: Optional[List[str]] = Field(default=None, description="Photo/video URLs")
@@ -260,6 +264,8 @@ class StaffSubmitFeedback(BaseModel):
     )
     stakeholder_engagement_id: Optional[uuid.UUID] = Field(default=None, description="From public meeting (Annex 5)")
     distribution_id: Optional[uuid.UUID] = Field(default=None)
+    post_id:   Optional[uuid.UUID] = Field(default=None, description="CMS post UUID this feedback is about")
+    post_slug: Optional[str]       = Field(default=None, max_length=500, description="CMS post slug (denormalized)")
 
     # ── SECTION H — Officer metadata (Annex 5: Action Officer from LGA) ──────
     officer_recorded: bool = Field(default=False, description="Staff entered on behalf of Consumer")

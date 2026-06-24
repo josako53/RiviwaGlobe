@@ -18,9 +18,7 @@ from models.post import (
     OrgPost, OrgPostCategory, OrgPostCategoryLink,
     OrgPostRevision, PostStatus, PostType,
 )
-from schemas.post import (
-    PostCreate, PostListOut, PostOut, PostSchedule, PostUpdate, RevisionOut,
-)
+from schemas.post import PostCreate, PostListOut, PostOut, PostSchedule, PostUpdate, RevisionOut
 
 router = APIRouter(prefix="/cms/posts", tags=["CMS — Posts"])
 
@@ -77,7 +75,7 @@ def _post_to_out(post: OrgPost, categories: list[dict]) -> PostOut:
         editor_id=post.editor_id, editor_name=post.editor_name,
         scheduled_at=post.scheduled_at, published_at=post.published_at,
         view_count=post.view_count, is_pinned=post.is_pinned,
-        is_featured=post.is_featured, allows_comments=post.allows_comments,
+        is_featured=post.is_featured, allows_feedback=post.allows_feedback,
         is_public=post.is_public, target_audience=post.target_audience,
         created_at=post.created_at, updated_at=post.updated_at,
         categories=categories,
@@ -177,7 +175,7 @@ async def create_post(body: PostCreate, db: DbDep, claims: StaffDep) -> PostOut:
         author_name=None,
         is_public=body.is_public,
         target_audience=body.target_audience,
-        allows_comments=body.allows_comments,
+        allows_feedback=body.allows_feedback,
         is_pinned=body.is_pinned,
         is_featured=body.is_featured,
     )

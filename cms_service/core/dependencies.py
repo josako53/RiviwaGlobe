@@ -71,6 +71,17 @@ async def require_authenticated(
     return _claims(_decode(creds.credentials))
 
 
+async def optional_token(
+    creds: Annotated[Optional[HTTPAuthorizationCredentials], Depends(_bearer)],
+) -> Optional[TokenClaims]:
+    if not creds or not creds.credentials:
+        return None
+    try:
+        return _claims(_decode(creds.credentials))
+    except Exception:
+        return None
+
+
 async def require_staff(
     creds: Annotated[Optional[HTTPAuthorizationCredentials], Depends(_bearer)],
 ) -> TokenClaims:
@@ -93,6 +104,7 @@ async def require_service_key(
 
 # ── Annotated deps ─────────────────────────────────────────────────────────────
 
-AuthDep    = Annotated[TokenClaims, Depends(require_authenticated)]
-StaffDep   = Annotated[TokenClaims, Depends(require_staff)]
+AuthDep     = Annotated[TokenClaims, Depends(require_authenticated)]
+StaffDep    = Annotated[TokenClaims, Depends(require_staff)]
 InternalDep = Annotated[None, Depends(require_service_key)]
+OptTokenDep = Annotated[Optional[TokenClaims], Depends(optional_token)]

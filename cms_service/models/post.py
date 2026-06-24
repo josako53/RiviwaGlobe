@@ -7,7 +7,6 @@ Tables
   org_post_categories       Category taxonomy per org (tree structure).
   org_post_category_links   M2M: posts ↔ categories.
   org_post_revisions        Full revision history for every content change.
-  org_post_comments         Threaded comments with moderation workflow.
 
 Design decisions
 ────────────────
@@ -19,6 +18,9 @@ Design decisions
   - Scheduling: status=SCHEDULED + scheduled_at in the future → APScheduler
     flips status to PUBLISHED at scheduled_at time.
   - Soft-delete via deleted_at; all queries filter deleted_at IS NULL.
+  - Engagement: traditional comments replaced by the Riviwa feedback system.
+    Consumers give feedback (applause/suggestion/grievance/inquiry) via AI
+    conversation; results live in feedback_service and are linked by post_id.
 """
 from __future__ import annotations
 
@@ -28,8 +30,8 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
     Enum as SAEnum,
-    ForeignKey,
     Integer,
     Text,
     UniqueConstraint,
@@ -56,13 +58,6 @@ class PostType(str, Enum):
     POLICY        = "POLICY"
     EVENT         = "EVENT"
     PRESS_RELEASE = "PRESS_RELEASE"
-
-
-class CommentStatus(str, Enum):
-    PENDING  = "PENDING"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-    SPAM     = "SPAM"
 
 
 # ── OrgPost ────────────────────────────────────────────────────────────────────
@@ -151,7 +146,11 @@ class OrgPost(SQLModel, table=True):
                                   description="Pin to top of listing")
     is_featured:     bool = Field(default=False, nullable=False,
                                   description="Feature on org homepage / dashboard")
-    allows_comments: bool = Field(default=True,  nullable=False)
+    allows_feedback: bool = Field(
+        default=True, nullable=False,
+        sa_column=Column("allows_feedback", nullable=False, default=True),
+        description="Allow Riviwa feedback (applause/suggestion/grievance/inquiry) on this post",
+    )
 
     # ── Audience ──────────────────────────────────────────────────────────────
     is_public:       bool           = Field(default=True, nullable=False,
@@ -260,61 +259,3 @@ class OrgPostRevision(SQLModel, table=True):
     )
 
 
-# ── OrgPostComment ─────────────────────────────────────────────────────────────
-
-class OrgPostComment(SQLModel, table=True):
-    """
-    Threaded comments on a post with moderation workflow.
-
-    Workflow:
-      PENDING → APPROVED | REJECTED | SPAM
-
-    Threading via parent_id (NULL = top-level comment, non-NULL = reply).
-    is_staff_reply flags official org responses to highlight in the UI.
-    """
-    __tablename__ = "org_post_comments"
-
-    id:           uuid.UUID           = Field(default_factory=uuid.uuid4, primary_key=True)
-    post_id:      uuid.UUID           = Field(
-        sa_column=Column(ForeignKey("org_posts.id", ondelete="CASCADE"),
-                         nullable=False, index=True)
-    )
-    parent_id: Optional[uuid.UUID] = Field(
-        default=None,
-        sa_column=Column(
-            ForeignKey("org_post_comments.id", ondelete="CASCADE"),
-            nullable=True,
-        ),
-        description="NULL = top-level; set = reply to another comment",
-    )
-
-    # Author — registered user OR anonymous
-    user_id:      Optional[uuid.UUID] = Field(default=None, nullable=True, index=True)
-    author_name:  Optional[str]       = Field(default=None, max_length=200, nullable=True)
-    author_email: Optional[str]       = Field(default=None, max_length=255, nullable=True)
-
-    content: str = Field(sa_column=Column(Text, nullable=False))
-
-    status: CommentStatus = Field(
-        default=CommentStatus.PENDING,
-        sa_column=Column(SAEnum(CommentStatus, name="comment_status"),
-                         nullable=False, index=True),
-    )
-    is_staff_reply: bool = Field(default=False, nullable=False,
-                                  description="Official org response (highlighted in UI)")
-
-    moderated_by_id:   Optional[uuid.UUID] = Field(default=None, nullable=True)
-    moderated_by_name: Optional[str]       = Field(default=None, max_length=200, nullable=True)
-    moderation_note:   Optional[str]       = Field(default=None, max_length=500, nullable=True)
-
-    created_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
-    )
-    updated_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), server_default=text("now()"),
-                         onupdate=text("now()"), nullable=False)
-    )
-    deleted_at: Optional[datetime] = Field(
-        default=None,
-        sa_column=Column(DateTime(timezone=True), nullable=True),
-    )
