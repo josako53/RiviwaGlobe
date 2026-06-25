@@ -527,23 +527,23 @@ class ChannelService:
         else:
             if session.language == "sw":
                 system += (
-                    "\n\nUTAMBUZI WA SHIRIKA: "
-                    "Shirika bado halijatambuliwa. Angalia ujumbe wa mtumiaji kwa makini. "
-                    "Kama jina la shirika, biashara, hospitali, benki, au taasisi limetajwa "
-                    "(hata kwa ishara) — weka jina hilo kwenye target_org_name na endelea kukusanya maelezo. "
-                    "Kama HAKUNA jina la shirika katika ujumbe wa mtumiaji — "
-                    "swali lako la kwanza LAZIMA liwe: 'Hii ni kuhusu shirika au biashara gani?' "
-                    "Usitoe pole au kutaka maelezo mengine KABLA ya swali hili."
+                    "\n\nUTAMBUZI WA SHIRIKA — HATUA MBILI:\n"
+                    "1. KWANZA angalia: Je, ujumbe wa mtumiaji unataja shirika, biashara, hospitali, "
+                    "benki, au taasisi yoyote (wazi au kwa ishara)?\n"
+                    "   • NDIYO → weka jina lake kwenye target_org_name. Kisha jibu kawaida — "
+                    "toa pole, uliza maelezo zaidi, n.k.\n"
+                    "   • HAPANA → jibu lako lazima LIANZE kwa: 'Hii ni kuhusu shirika au biashara gani?' "
+                    "KABLA ya maneno mengine yoyote. Usitoe pole kwanza. Usitake maelezo mengine kwanza."
                 )
             else:
                 system += (
-                    "\n\nORG RESOLUTION: "
-                    "The organisation has not been identified yet. Scan the user's message carefully. "
-                    "If any organisation, business, hospital, bank, or institution name is mentioned "
-                    "(directly or implied) — capture it in target_org_name and continue collecting feedback details. "
-                    "ONLY IF no organisation name is found in the message — "
-                    "your FIRST question must be: 'Which organisation or business is this about?' "
-                    "Do not show sympathy or ask for other details before that question."
+                    "\n\nORG RESOLUTION — TWO-STEP DECISION:\n"
+                    "1. FIRST check: does the user's message mention any organisation, business, "
+                    "hospital, bank, service provider, or named entity?\n"
+                    "   • YES → set target_org_name to that name. Then respond normally — "
+                    "acknowledge their situation, ask for details, etc.\n"
+                    "   • NO → your response MUST begin with: 'Which organisation or business is this about?' "
+                    "before anything else. Do NOT lead with sympathy. Do NOT ask for other details first."
                 )
 
         messages = [{"role": t["role"], "content": t["content"]} for t in session.get_turns()]

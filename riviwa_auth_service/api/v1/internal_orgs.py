@@ -1184,6 +1184,7 @@ async def create_partial_org(
 
     # Idempotency: bidirectional containment — "Jumbo Night Market" matches
     # "Jumbo Night Market Mikocheni" and vice versa (LLM may extract a shorter form).
+    # Two separate params (name1, name2) to avoid asyncpg duplicate-binding issues.
     existing = (await db.execute(
         text("""
             SELECT id, display_name, partial_meta
@@ -1191,12 +1192,12 @@ async def create_partial_org(
             WHERE is_partial = true
               AND deleted_at IS NULL
               AND (
-                  display_name ILIKE '%' || :name || '%'
-                  OR :name ILIKE '%' || display_name || '%'
+                  display_name ILIKE '%' || :name1 || '%'
+                  OR :name2 ILIKE '%' || display_name || '%'
               )
             LIMIT 1
         """),
-        {"name": suggested_name},
+        {"name1": suggested_name, "name2": suggested_name},
     )).mappings().first()
 
     if existing:
