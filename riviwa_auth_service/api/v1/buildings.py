@@ -166,7 +166,7 @@ async def _require_org_admin(org_id: uuid.UUID, user: dict, db: AsyncSession) ->
             SELECT org_role FROM organisation_members
             WHERE organisation_id = :org_id AND user_id = :uid AND status = 'ACTIVE'
         """),
-        {"org_id": str(org_id), "uid": str(user["id"])},
+        {"org_id": str(org_id), "uid": str(user.id)},
     )).mappings().first()
     if not row or row["org_role"] not in ("OWNER", "ADMIN", "MANAGER"):
         raise HTTPException(status_code=403, detail="Org admin access required.")
@@ -203,7 +203,7 @@ async def create_building(
                 accessibility_notes, is_active, created_at, updated_at
             ) VALUES (
                 gen_random_uuid(), :org_id, :branch_id, :name, :code, :description,
-                :gps_lat, :gps_lng, :boundary_polygon::jsonb, :ground_altitude_m,
+                :gps_lat, :gps_lng, CAST(:boundary_polygon AS jsonb), :ground_altitude_m,
                 :ground_reference_hpa, :reference_station_id, :total_floors,
                 :accessibility_notes, true, now(), now()
             ) RETURNING *
@@ -513,7 +513,7 @@ async def create_zone(
                 boundary_polygon, department_id, is_active, created_at, updated_at
             ) VALUES (
                 gen_random_uuid(), :floor_id, :org_id, :name, :code, :zone_type,
-                :boundary_polygon::jsonb, :department_id, true, now(), now()
+                CAST(:boundary_polygon AS jsonb), :department_id, true, now(), now()
             ) RETURNING *
         """),
         {
@@ -624,10 +624,10 @@ async def create_poi(
                 is_active, created_at, updated_at
             ) VALUES (
                 gen_random_uuid(), :floor_id, :zone_id, :org_id, :name, :code, :poi_type,
-                :gps_lat, :gps_lng, :gps_accuracy_radius_m, :boundary_polygon::jsonb,
+                :gps_lat, :gps_lng, :gps_accuracy_radius_m, CAST(:boundary_polygon AS jsonb),
                 :department_id, :service_id, :staff_assigned_user_id,
                 :is_emergency_point, :nearest_emergency_poi_id,
-                :connections_to::jsonb, :qr_code_id, :accessibility_notes,
+                CAST(:connections_to AS jsonb), :qr_code_id, :accessibility_notes,
                 true, now(), now()
             ) RETURNING *
         """),

@@ -38,14 +38,14 @@ log = structlog.get_logger(__name__)
 
 # ── Greetings ─────────────────────────────────────────────────────────────────
 _GREETING_EN_BASE = (
-    "Hello! I'm Riviwa AI, your Riviwa assistant. "
-    "I can help you to get your voice heard right now.\n"
-    "Do you have a grievance, suggestion, or applause?"
+    "Hello! I'm Riviwa AI. "
+    "What would you like to share — a complaint, suggestion, praise, or question? "
+    "I'm here to make sure your voice reaches the right people right now."
 )
 _GREETING_SW_BASE = (
-    "Habari! Mimi ni Riviwa AI, msaidizi wako wa Riviwa. "
-    "Ninaweza kukusaidia sauti yako isikike sasa hivi.\n"
-    "Je, una malalamiko, mapendekezo, au shukrani?"
+    "Habari! Mimi ni Riviwa AI. "
+    "Niambie — una tatizo, pendekezo, pongezi, au swali? "
+    "Niko hapa kukusaidia sauti yako isikike kwa wanaohusika sasa hivi."
 )
 
 
