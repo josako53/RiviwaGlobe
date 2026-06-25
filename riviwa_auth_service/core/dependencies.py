@@ -104,6 +104,7 @@ class TokenClaims:
     org_id:        Optional[uuid.UUID]
     org_role:      Optional[str]
     platform_role: Optional[str]
+    first_name:    Optional[str]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -178,6 +179,7 @@ async def get_current_token(
         org_id=uuid.UUID(claims["org_id"]) if claims.get("org_id") else None,
         org_role=(claims.get("org_role") or "").lower() or None,
         platform_role=claims.get("platform_role"),
+        first_name=claims.get("first_name"),
     )
 
     # Deny-list check — O(1) Redis GET.

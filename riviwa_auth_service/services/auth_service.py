@@ -300,6 +300,7 @@ class AuthService:
             org_id=org_id,
             org_role=org_role,
             platform_role=platform_role,
+            first_name=user.full_name.split()[0] if user.full_name else None,
         )
         refresh = generate_refresh_token()
         await self._store_refresh_token(refresh, user_id)
@@ -372,6 +373,7 @@ class AuthService:
             org_id=org_id,
             org_role=org_role,
             platform_role=platform_role,
+            first_name=user.full_name.split()[0] if user.full_name else None,
         )
 
         log.info("auth.token_refreshed", user_id=str(user_id), ip=ip_address)
@@ -409,6 +411,7 @@ class AuthService:
             org_id=org_id,
             org_role=org_role,
             platform_role=platform_role,
+            first_name=user.full_name.split()[0] if user.full_name else None,
         )
         new_refresh = generate_refresh_token()
         await self._store_refresh_token(new_refresh, user.id)

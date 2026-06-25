@@ -183,12 +183,14 @@ class ChannelService:
         )
         session = await self.repo.create(session)
 
+        name = data.get("user_name", "")
+        salutation = f"Habari {name}! " if name else "Habari! "
         opening = (
-            "Habari! Mimi ni Riviwa AI. "
+            f"{salutation}Mimi ni Riviwa AI. "
             "Niambie — una tatizo, pendekezo, pongezi, au swali? "
             "Niko hapa kukusaidia."
         ) if session.language == "sw" else (
-            "Hello! I'm Riviwa AI. "
+            f"{'Hello ' + name + '!' if name else 'Hello!'} I'm Riviwa AI. "
             "What would you like to share today — a complaint, suggestion, praise, or question? "
             "I'm here to help."
         )

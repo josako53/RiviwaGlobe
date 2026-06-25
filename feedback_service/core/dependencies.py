@@ -25,6 +25,7 @@ class TokenClaims:
     org_id:        Optional[uuid.UUID]
     org_role:      Optional[str]
     platform_role: Optional[str]
+    first_name:    Optional[str] = None
 
 
 def _decode(raw: str) -> TokenClaims:
@@ -42,6 +43,7 @@ def _decode(raw: str) -> TokenClaims:
             org_id        = uuid.UUID(p["org_id"]) if p.get("org_id") else None,
             org_role      = (p.get("org_role") or "").lower() or None,
             platform_role = p.get("platform_role"),
+            first_name    = p.get("first_name"),
         )
     except (KeyError, ValueError):
         raise TokenInvalidError()

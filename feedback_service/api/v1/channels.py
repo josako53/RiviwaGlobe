@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Query, Request, status
-from core.dependencies import DbDep, StaffDep, OptTokenDep
+from core.dependencies import DbDep, StaffDep, OptTokenDep, ConsumerDep
 from schemas.category import AbandonSession, CreateChannelSession
 from schemas.feedback import AIChannelSessionCreate, AIChannelMessage, AISessionResponse
 from services.channel_service import ChannelService
@@ -33,11 +33,13 @@ def _svc(db): return ChannelService(db=db)
     ),
     tags=["AI Channels"],
 )
-async def ai_start_session(body: AIChannelSessionCreate, db: DbDep) -> AISessionResponse:
-    """No auth required — Consumers interact via phone number/WhatsApp ID."""
+async def ai_start_session(body: AIChannelSessionCreate, db: DbDep, token: ConsumerDep) -> AISessionResponse:
+    data = body.model_dump(exclude_none=True)
+    if token.first_name:
+        data["user_name"] = token.first_name
     session = await _svc(db).create_session(
-        data=body.model_dump(exclude_none=True),
-        created_by=uuid.UUID("00000000-0000-0000-0000-000000000000"),  # system user
+        data=data,
+        created_by=token.sub,
     )
     return AISessionResponse(
         session_id=session.id,

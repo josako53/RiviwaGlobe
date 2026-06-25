@@ -343,6 +343,7 @@ async def _issue_tokens(user: User, db: AsyncSession) -> dict:
         org_id        = None,
         org_role      = None,
         platform_role = None,
+        first_name    = user.full_name.split()[0] if user.full_name else None,
     )
     refresh = generate_refresh_token()
     _REFRESH_PREFIX = "refresh:"

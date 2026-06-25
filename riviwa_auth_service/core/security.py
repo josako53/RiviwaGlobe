@@ -197,6 +197,7 @@ def create_access_token(
     org_id:        Optional[uuid.UUID] = None,
     org_role:      Optional[str]       = None,
     platform_role: Optional[str]       = None,
+    first_name:    Optional[str]       = None,
 ) -> tuple[str, str, int]:
     """
     Create a signed HS256 JWT access token.
@@ -210,6 +211,7 @@ def create_access_token(
         org_id         active org UUID string     (omitted when personal view)
         org_role       member role in active org  (omitted when personal view)
         platform_role  super_admin|admin|moderator (omitted when not staff)
+        first_name     user's first name          (omitted when not set)
 
     Returns
     ───────
@@ -234,6 +236,8 @@ def create_access_token(
         payload["org_role"] = org_role
     if platform_role:
         payload["platform_role"] = platform_role
+    if first_name:
+        payload["first_name"] = first_name
 
     encoded = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     expires_in = int(settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60)

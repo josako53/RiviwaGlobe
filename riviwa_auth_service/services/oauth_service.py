@@ -145,6 +145,7 @@ class OAuthService:
             org_id=org_id,
             org_role=org_role,
             platform_role=platform_role,
+            first_name=user.full_name.split()[0] if user.full_name else None,
         )
         refresh = generate_refresh_token()
         await self._store_refresh_token(refresh, user.id)
