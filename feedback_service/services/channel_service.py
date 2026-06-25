@@ -435,6 +435,20 @@ class ChannelService:
                     )
                     reply = reply.rstrip() + notice
 
+        # Deterministic org-question gate: if STILL no org after this turn,
+        # force the question regardless of what the LLM replied.
+        if not session.org_id:
+            org_q = (
+                "Hii ni kuhusu shirika au biashara gani?"
+                if session.language == "sw"
+                else "Which organisation or business is this about?"
+            )
+            if not any(phrase in reply.lower() for phrase in
+                       ["which organisation", "which organization", "which business",
+                        "organisation or business", "organization or business",
+                        "hii ni kuhusu shirika"]):
+                reply = org_q
+
         session.add_turn("assistant", reply)
         await self.repo.save(session)
         submitted = False
