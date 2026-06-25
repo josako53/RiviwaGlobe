@@ -1073,3 +1073,180 @@ async def get_nearest_branches(
 
     results.sort(key=lambda x: x["distance_km"])
     return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /internal/orgs/search   — name-based org search for AI conversation
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/orgs/search",
+    summary="[Internal] Search organisations by name for AI org resolution",
+    dependencies=[Depends(_require_service_key)],
+)
+async def search_orgs(
+    q:     str = Query(..., min_length=2, description="Name fragment to search"),
+    limit: int = Query(default=5, ge=1, le=20),
+    db:    AsyncSession = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """
+    Case-insensitive ILIKE search across display_name, legal_name, and sms_code.
+    Used by channel_service when the AI extracts an org name from the user's message
+    and needs to find the matching registered organisation.
+    Returns only non-partial, non-deleted orgs.
+    """
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT id, legal_name, display_name, slug, org_type, status,
+                   country_code, sms_code, is_verified,
+                   COALESCE(
+                       (SELECT ol.city FROM org_locations ol
+                        JOIN org_branches ob ON ob.id = ol.branch_id
+                        WHERE ob.organisation_id = o.id AND ol.is_primary = true
+                        LIMIT 1),
+                       NULL
+                   ) AS city
+            FROM organisations o
+            WHERE deleted_at IS NULL
+              AND is_partial = false
+              AND (
+                  display_name ILIKE :q
+                  OR legal_name  ILIKE :q
+                  OR sms_code    ILIKE :q
+              )
+            ORDER BY
+                CASE WHEN display_name ILIKE :exact THEN 0 ELSE 1 END,
+                display_name
+            LIMIT :limit
+        """),
+        {"q": f"%{q}%", "exact": q, "limit": limit},
+    )).mappings().all()
+
+    return [
+        {
+            "org_id":       str(r["id"]),
+            "display_name": r["display_name"],
+            "legal_name":   r["legal_name"],
+            "slug":         r["slug"],
+            "org_type":     r["org_type"],
+            "status":       r["status"],
+            "country_code": r["country_code"],
+            "sms_code":     r["sms_code"],
+            "is_verified":  r["is_verified"],
+            "city":         r["city"],
+        }
+        for r in rows
+    ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POST /internal/orgs/partial — create a placeholder org from AI conversation
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post(
+    "/orgs/partial",
+    status_code=201,
+    summary="[Internal] Create a partial/placeholder org from AI conversation",
+    dependencies=[Depends(_require_service_key)],
+)
+async def create_partial_org(
+    body: Dict[str, Any],
+    db:   AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Called by channel_service when a user submits feedback for an org that is
+    not yet registered on Riviwa. Creates a minimal placeholder Organisation row
+    with is_partial=True so the feedback can be recorded and linked.
+
+    Body fields:
+      suggested_name   str  (required) — the name the user mentioned
+      created_by_id    str  (required) — UUID of the submitting user
+      sector           str  (optional) — industry/sector mentioned
+      city             str  (optional) — city/location mentioned
+      source           str  (optional) — "ai_conversation" | "qr" etc.
+      language         str  (optional) — conversation language
+
+    Returns the new org_id and display_name.
+    Idempotent: if a partial org with the same normalised name already exists,
+    returns the existing one and bumps partial_meta.feedback_count.
+    """
+    from sqlalchemy import text
+    import re
+
+    suggested_name = (body.get("suggested_name") or "").strip()
+    if not suggested_name:
+        raise HTTPException(status_code=400, detail="suggested_name is required.")
+
+    created_by_id = body.get("created_by_id")
+    if not created_by_id:
+        raise HTTPException(status_code=400, detail="created_by_id is required.")
+
+    # Idempotency: look for existing partial org with same name (case-insensitive)
+    existing = (await db.execute(
+        text("""
+            SELECT id, display_name, partial_meta
+            FROM organisations
+            WHERE is_partial = true
+              AND deleted_at IS NULL
+              AND display_name ILIKE :name
+            LIMIT 1
+        """),
+        {"name": suggested_name},
+    )).mappings().first()
+
+    if existing:
+        # Bump feedback_count in meta
+        meta = dict(existing["partial_meta"] or {})
+        meta["feedback_count"] = int(meta.get("feedback_count", 0)) + 1
+        await db.execute(
+            text("UPDATE organisations SET partial_meta = CAST(:meta AS jsonb), updated_at = now() WHERE id = :id"),
+            {"meta": __import__("json").dumps(meta), "id": str(existing["id"])},
+        )
+        await db.commit()
+        return {"org_id": str(existing["id"]), "display_name": existing["display_name"], "is_new": False}
+
+    # Generate a unique slug
+    base_slug = re.sub(r"[^a-z0-9]+", "-", suggested_name.lower()).strip("-")
+    import uuid as _uuid
+    short = str(_uuid.uuid4())[:8]
+    slug = f"partial-{base_slug}-{short}"
+
+    # Partial meta
+    meta = {
+        "suggested_name":    suggested_name,
+        "sector":            body.get("sector"),
+        "city":              body.get("city"),
+        "source":            body.get("source", "ai_conversation"),
+        "language":          body.get("language", "en"),
+        "submitter_user_id": body.get("created_by_id"),
+        "feedback_count":    1,
+    }
+
+    new_id = str(_uuid.uuid4())
+    await db.execute(
+        text("""
+            INSERT INTO organisations (
+                id, legal_name, display_name, slug, org_type, status,
+                is_verified, is_payment_verified, is_kyc_verified,
+                is_partial, partial_meta, created_by_id, max_members,
+                created_at, updated_at
+            ) VALUES (
+                CAST(:id AS uuid), :legal_name, :display_name, :slug, 'OTHER', 'PENDING_VERIFICATION',
+                false, false, false,
+                true, CAST(:meta AS jsonb), CAST(:created_by_id AS uuid), 0,
+                now(), now()
+            )
+        """),
+        {
+            "id":             new_id,
+            "legal_name":     suggested_name,
+            "display_name":   suggested_name,
+            "slug":           slug,
+            "meta":           __import__("json").dumps(meta),
+            "created_by_id":  created_by_id,
+        },
+    )
+    await db.commit()
+    log.info("partial_org.created", org_id=new_id, name=suggested_name)
+    return {"org_id": new_id, "display_name": suggested_name, "is_new": True}

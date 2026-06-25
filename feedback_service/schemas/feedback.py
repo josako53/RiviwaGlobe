@@ -314,7 +314,7 @@ class AIChannelSessionCreate(BaseModel):
         "example": {
             "channel": "whatsapp",
             "phone_number": "+255712345678",
-            "project_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "org_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
             "language": "sw",
         }
     })
@@ -323,6 +323,19 @@ class AIChannelSessionCreate(BaseModel):
     phone_number: Optional[str] = Field(default=None, max_length=20)
     whatsapp_id: Optional[str] = Field(default=None, max_length=50)
     project_id: Optional[uuid.UUID] = Field(default=None, description="Auto-detected if omitted")
+    org_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Organisation context — from QR code, SMS code, org page, or CMS post. "
+                    "If omitted, resolved from GPS or AI conversation.",
+    )
+    latitude: Optional[float] = Field(
+        default=None, ge=-90.0, le=90.0,
+        description="Device GPS latitude — used to identify nearest org branch.",
+    )
+    longitude: Optional[float] = Field(
+        default=None, ge=-180.0, le=180.0,
+        description="Device GPS longitude — used to identify nearest org branch.",
+    )
     language: str = Field(default="sw", description="sw | en")
     gateway_session_id: Optional[str] = Field(default=None)
     gateway_provider: str = Field(default="other")

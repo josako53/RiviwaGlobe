@@ -93,7 +93,8 @@ Baada ya kila ujumbe wa mtumiaji, rudisha JSON hii TU (bila maelezo mengine):
     "ward": "<kata au null>",
     "incident_date": "<YYYY-MM-DD au null>",
     "submitter_name": "<jina au null>",
-    "is_anonymous": true|false
+    "is_anonymous": true|false,
+    "target_org_name": "<jina la shirika lililotajwa au null>"
   },
   "confidence": 0.0,
   "ready_to_submit": false,
@@ -146,7 +147,8 @@ After each user message, return ONLY this JSON (no other text):
     "ward": "<sub-location or null>",
     "incident_date": "<YYYY-MM-DD or null>",
     "submitter_name": "<name or null>",
-    "is_anonymous": true|false
+    "is_anonymous": true|false,
+    "target_org_name": "<name of the organisation the feedback is for, or null>"
   },
   "confidence": 0.0,
   "ready_to_submit": false,
@@ -170,9 +172,27 @@ class ChannelService:
         if channel not in (FeedbackChannel.SMS, FeedbackChannel.WHATSAPP, FeedbackChannel.PHONE_CALL):
             raise ValidationError("channel must be sms, whatsapp, or phone_call for a two-way session.")
 
+        # ── Matter 1: resolve org context from any of five entry points ────────
+        org_id: Optional[uuid.UUID] = None
+        org_display_name: Optional[str] = None
+
+        if data.get("org_id"):
+            org_id = _to_uuid(data["org_id"])
+            org_display_name = await self._resolve_org_by_id(org_id)
+        elif data.get("latitude") is not None and data.get("longitude") is not None:
+            org_id, org_display_name = await self._resolve_org_from_gps(
+                float(data["latitude"]), float(data["longitude"])
+            )
+        elif data.get("project_id"):
+            org_id, org_display_name = await self._resolve_org_from_project(
+                _to_uuid(data["project_id"])
+            )
+
         session = ChannelSession(
             channel             = channel,
             project_id          = _to_uuid(data["project_id"]) if data.get("project_id") else None,
+            org_id              = org_id,
+            org_display_name    = org_display_name,
             phone_number        = data.get("phone_number"),
             whatsapp_id         = data.get("whatsapp_id"),
             gateway_session_id  = data.get("gateway_session_id"),
@@ -184,16 +204,41 @@ class ChannelService:
         session = await self.repo.create(session)
 
         name = data.get("user_name", "")
-        salutation = f"Habari {name}! " if name else "Habari! "
-        opening = (
-            f"{salutation}Mimi ni Riviwa AI. "
-            "Niambie — una tatizo, pendekezo, pongezi, au swali? "
-            "Niko hapa kukusaidia."
-        ) if session.language == "sw" else (
-            f"{'Hello ' + name + '!' if name else 'Hello!'} I'm Riviwa AI. "
-            "What would you like to share today — a complaint, suggestion, praise, or question? "
-            "I'm here to help."
-        )
+        lang = session.language
+
+        if org_display_name:
+            # Org-aware greeting (QR / GPS / org page / CMS / SMS-code)
+            if lang == "sw":
+                opening = (
+                    f"{'Habari ' + name + '!' if name else 'Habari!'} "
+                    f"Karibu {org_display_name}. "
+                    "Mimi ni Riviwa AI. Niambie — una tatizo, pendekezo, pongezi, au swali? "
+                    "Niko hapa kukusaidia."
+                )
+            else:
+                opening = (
+                    f"{'Hello ' + name + '!' if name else 'Hello!'} "
+                    f"Welcome to {org_display_name}. "
+                    "I'm Riviwa AI. What would you like to share today — a complaint, suggestion, praise, or question? "
+                    "I'm here to help."
+                )
+        else:
+            # Generic greeting — org resolved during conversation (Matter 2)
+            if lang == "sw":
+                opening = (
+                    f"{'Habari ' + name + '!' if name else 'Habari!'} "
+                    "Mimi ni Riviwa AI. "
+                    "Niambie — una tatizo, pendekezo, pongezi, au swali? "
+                    "Niko hapa kukusaidia."
+                )
+            else:
+                opening = (
+                    f"{'Hello ' + name + '!' if name else 'Hello!'} "
+                    "I'm Riviwa AI. "
+                    "What would you like to share today — a complaint, suggestion, praise, or question? "
+                    "I'm here to help."
+                )
+
         session.add_turn("assistant", opening)
         await self.repo.save(session)
         await self.db.commit()
@@ -350,6 +395,44 @@ class ChannelService:
                 current[k] = v
         current["confidence"] = confidence
         session.extracted_data = current
+
+        # ── Matter 2/3: resolve org from AI-extracted name ────────────────────
+        if not session.org_id:
+            target_org_name = extracted.get("target_org_name")
+            if target_org_name and target_org_name != "null":
+                notify_partial = False
+                matches = await self._search_org_by_name(target_org_name)
+                if len(matches) == 1:
+                    session.org_id = uuid.UUID(matches[0]["org_id"])
+                    session.org_display_name = matches[0]["display_name"]
+                elif len(matches) > 1:
+                    names = " / ".join(m["display_name"] for m in matches[:3])
+                    clarify = (
+                        f" Je, unamaanisha: {names}?"
+                        if session.language == "sw"
+                        else f" Did you mean one of these: {names}?"
+                    )
+                    reply = reply.rstrip() + clarify
+                else:
+                    # Matter 3: auto-create partial org silently
+                    submitter_id = session.user_id or session.recorded_by_user_id
+                    new_org_id, is_new = await self._create_partial_org(
+                        suggested_name=target_org_name,
+                        user_id=submitter_id,
+                        meta={"source": "ai_conversation", "session_id": str(session.id)},
+                    )
+                    if new_org_id:
+                        session.org_id = new_org_id
+                        session.org_display_name = target_org_name
+                        notify_partial = is_new
+                if notify_partial:
+                    notice = (
+                        f" ({target_org_name} bado haipo kwenye Riviwa, lakini tumeandika maoni yako na tutawasiliana nao.)"
+                        if session.language == "sw"
+                        else f" ({target_org_name} isn't on Riviwa yet, but we've noted your feedback and will reach out to them.)"
+                    )
+                    reply = reply.rstrip() + notice
+
         session.add_turn("assistant", reply)
         await self.repo.save(session)
         submitted = False
@@ -385,6 +468,7 @@ class ChannelService:
         fb = Feedback(
             unique_ref                  = unique_ref,
             project_id                  = session.project_id,
+            org_id                      = session.org_id,
             feedback_type               = fb_type,
             category                    = FeedbackCategory.OTHER,
             category_def_id             = category_def_id,
@@ -423,6 +507,38 @@ class ChannelService:
                              if c.status == CategoryStatus.ACTIVE)
         if cat_list:
             system += f"\n\nAvailable categories:\n{cat_list}"
+
+        # Inject org context so the model knows whether to ask or not
+        if session.org_display_name:
+            if session.language == "sw":
+                system += (
+                    f"\n\nMUKTADHA WA SHIRIKA: Maoni haya ni kwa {session.org_display_name}. "
+                    "Shirika tayari limetambuliwa — USISEME swali kuhusu ni shirika gani. "
+                    "Weka target_org_name = null katika extracted."
+                )
+            else:
+                system += (
+                    f"\n\nORGANISATION CONTEXT: This feedback is for {session.org_display_name}. "
+                    "The organisation is already identified — do NOT ask which organisation this is about. "
+                    "Set target_org_name = null in extracted."
+                )
+        else:
+            if session.language == "sw":
+                system += (
+                    "\n\nUTAMBUZI WA SHIRIKA: Shirika bado halijatambuliwa. "
+                    "Toa jina la shirika kutoka kwa maandishi ya mtumiaji kama limetajwa. "
+                    "Kama haijulikani baada ya ujumbe wa kwanza, uliza mara moja tu: "
+                    "'Hii ni kuhusu shirika au biashara gani?' "
+                    "Weka target_org_name kwenye extracted."
+                )
+            else:
+                system += (
+                    "\n\nORG RESOLUTION: The organisation has not been identified yet. "
+                    "Extract the organisation name from what the user says (it may be mentioned implicitly). "
+                    "If not clear from the first message, ask ONCE: 'Which organisation or business is this about?' "
+                    "Set target_org_name in extracted to the name mentioned, or null if not yet known."
+                )
+
         messages = [{"role": t["role"], "content": t["content"]} for t in session.get_turns()]
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -462,6 +578,102 @@ class ChannelService:
             )
             return {"reply": fallback, "extracted": {}, "confidence": 0.0,
                     "ready_to_submit": False, "language": session.language}
+
+    # ── Org resolution helpers (Matter 1–3) ──────────────────────────────────
+
+    async def _resolve_org_by_id(self, org_id: uuid.UUID) -> Optional[str]:
+        """Return display_name for a known org_id (QR / SMS-code / org-page / CMS)."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/{org_id}/sms-code",
+                    headers={"X-Service-Key": settings.INTERNAL_SERVICE_KEY},
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("display_name")
+        except Exception as exc:
+            log.warning("channel.resolve_org_by_id_failed", org_id=str(org_id), error=str(exc))
+        return None
+
+    async def _resolve_org_from_gps(
+        self, lat: float, lng: float
+    ) -> tuple[Optional[uuid.UUID], Optional[str]]:
+        """Return (org_id, org_name) for the nearest branch within 2 km."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/api/v1/internal/locations/nearest",
+                    params={"lat": lat, "lng": lng, "radius_km": 2.0},
+                    headers={"X-Service-Key": settings.INTERNAL_SERVICE_KEY},
+                )
+                if resp.status_code == 200:
+                    results = resp.json()
+                    if results:
+                        nearest = results[0]
+                        return uuid.UUID(nearest["org_id"]), nearest.get("branch_name")
+        except Exception as exc:
+            log.warning("channel.resolve_org_from_gps_failed", lat=lat, lng=lng, error=str(exc))
+        return None, None
+
+    async def _resolve_org_from_project(
+        self, project_id: uuid.UUID
+    ) -> tuple[Optional[uuid.UUID], Optional[str]]:
+        """Return (org_id, org_display_name) from ProjectCache (project is child of org)."""
+        try:
+            from models.project import ProjectCache
+            from sqlalchemy import select as sa_select
+            result = await self.db.execute(
+                sa_select(ProjectCache).where(
+                    ProjectCache.id == project_id
+                ).limit(1)
+            )
+            pc = result.scalar_one_or_none()
+            if pc and pc.organisation_id:
+                return pc.organisation_id, pc.org_display_name
+        except Exception as exc:
+            log.warning("channel.resolve_org_from_project_failed",
+                        project_id=str(project_id), error=str(exc))
+        return None, None
+
+    async def _search_org_by_name(self, name: str) -> list[dict]:
+        """ILIKE search orgs by name — returns list of {org_id, display_name, ...}."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/search",
+                    params={"q": name, "limit": 5},
+                    headers={"X-Service-Key": settings.INTERNAL_SERVICE_KEY},
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+        except Exception as exc:
+            log.warning("channel.search_org_failed", name=name, error=str(exc))
+        return []
+
+    async def _create_partial_org(
+        self, suggested_name: str, user_id: Optional[uuid.UUID], meta: dict
+    ) -> tuple[Optional[uuid.UUID], bool]:
+        """Create a partial/placeholder org. Returns (org_id, is_new)."""
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/partial",
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Service-Key": settings.INTERNAL_SERVICE_KEY,
+                    },
+                    json={
+                        "suggested_name": suggested_name,
+                        "created_by_id":  str(user_id) if user_id else None,
+                        "source":         meta.get("source", "ai_conversation"),
+                    },
+                )
+                if resp.status_code in (200, 201):
+                    d = resp.json()
+                    return uuid.UUID(d["org_id"]), d.get("is_new", True)
+        except Exception as exc:
+            log.warning("channel.create_partial_org_failed", name=suggested_name, error=str(exc))
+        return None, False
 
     async def _register_with_auth(
         self, phone: str, channel: str, language: str

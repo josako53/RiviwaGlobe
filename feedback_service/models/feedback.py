@@ -1825,6 +1825,16 @@ class ChannelSession(SQLModel, table=True):
         sa_column=Column(ForeignKey("fb_projects.id", ondelete="SET NULL"), nullable=True, index=True),
         description="Resolved during conversation if not provided at session start.",
     )
+    # Org context — set from any of the five entry points (GPS, QR, SMS code,
+    # org page selection, CMS post) or resolved by AI during conversation.
+    org_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description="auth_service Organisation.id — resolved from GPS, QR, SMS code, org page, CMS, or AI.",
+    )
+    org_display_name: Optional[str] = Field(
+        default=None, max_length=255, nullable=True,
+        description="Cached org name for greeting and context — avoids repeated auth_service lookups.",
+    )
 
     # ── Contact identification ────────────────────────────────────────────────
     # At least one of these is set based on the channel.

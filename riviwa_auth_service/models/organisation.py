@@ -307,6 +307,19 @@ class Organisation(SQLModel, table=True):
     kyc_verified_by_id:   Optional[uuid.UUID] = Field(default=None, nullable=True)
     kyc_rejection_reason: Optional[str]       = Field(default=None, max_length=512, nullable=True)
 
+    # ── Partial Organisation (AI-discovered, not yet officially on Riviwa) ────
+    # When a user submits feedback for an org not registered on Riviwa, the AI
+    # creates a placeholder org automatically. Only platform admins can see it.
+    is_partial: bool = Field(
+        default=False, index=True, nullable=False,
+        description="True when auto-created from AI conversation for an unregistered org.",
+    )
+    partial_meta: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="AI context: suggested_name, sector, city, source, submitter_user_id.",
+    )
+
     # ── Ownership ─────────────────────────────────────────────────────────────
     # RESTRICT: cannot delete a User who is the creator of an org.
     # Transfer ownership first (via POST /orgs/{id}/transfer-ownership),
