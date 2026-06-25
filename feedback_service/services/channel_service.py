@@ -594,7 +594,12 @@ class ChannelService:
                       "messages": groq_messages, "temperature": 0.3,
                       "response_format": {"type": "json_object"}},
             )
-            return resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            rj = resp.json()
+            content = rj.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not content:
+                log.warning("channel.groq_empty_content", session_id=str(session.id),
+                            status=resp.status_code, response=str(rj)[:400])
+            return content
 
         try:
             async with httpx.AsyncClient(timeout=30) as client:
