@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.security import get_current_user
+from core.dependencies import get_current_user
 from db.session import get_async_session as get_db
 
 log = structlog.get_logger(__name__)
