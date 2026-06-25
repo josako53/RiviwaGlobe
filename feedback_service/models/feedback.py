@@ -103,7 +103,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, Text, UniqueConstraint, text
+from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
