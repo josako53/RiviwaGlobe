@@ -63,10 +63,20 @@ class ConsumerSubmitFeedback(BaseModel):
         description="District / LGA where the issue occurred. Required so the AI can identify the relevant project.",
     )
 
+    # ── Org / project scope ───────────────────────────────────────────────────
+    org_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="Organisation UUID. Required when project_id is omitted for org-level feedback.",
+    )
+
     # ── AI auto-detected if omitted ───────────────────────────────────────────
     project_id: Optional[uuid.UUID] = Field(
         default=None,
         description="Project UUID. Omit to let the AI detect it from your location and description.",
+    )
+    branch_id: Optional[uuid.UUID] = Field(
+        default=None,
+        description="OrgBranch UUID — which branch this feedback relates to.",
     )
     category: Optional[str] = Field(
         default=None,
