@@ -1182,14 +1182,18 @@ async def create_partial_org(
     if not created_by_id:
         raise HTTPException(status_code=400, detail="created_by_id is required.")
 
-    # Idempotency: look for existing partial org with same name (case-insensitive)
+    # Idempotency: bidirectional containment — "Jumbo Night Market" matches
+    # "Jumbo Night Market Mikocheni" and vice versa (LLM may extract a shorter form).
     existing = (await db.execute(
         text("""
             SELECT id, display_name, partial_meta
             FROM organisations
             WHERE is_partial = true
               AND deleted_at IS NULL
-              AND display_name ILIKE :name
+              AND (
+                  display_name ILIKE '%' || :name || '%'
+                  OR :name ILIKE '%' || display_name || '%'
+              )
             LIMIT 1
         """),
         {"name": suggested_name},
