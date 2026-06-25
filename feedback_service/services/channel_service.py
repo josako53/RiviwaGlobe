@@ -527,20 +527,25 @@ class ChannelService:
         else:
             if session.language == "sw":
                 system += (
-                    "\n\nUTAMBUZI WA SHIRIKA (MUHIMU SANA): Shirika bado halijatambuliwa. "
-                    "Toa jina la shirika kutoka kwa maneno ya mtumiaji kama limetajwa wazi au kwa ishara. "
-                    "Kama jina la shirika HALIKUTAJWA katika ujumbe wa kwanza wa mtumiaji, "
-                    "SWALI LAKO LA KWANZA LAZIMA liwe: 'Hii ni kuhusu shirika au biashara gani?' "
-                    "Uliza swali hili KABLA ya maswali mengine yoyote. "
-                    "Weka target_org_name kwenye extracted (jina au null)."
+                    "\n\nUTAMBUZI WA SHIRIKA — SHERIA NGUMU: "
+                    "Shirika bado halijatambuliwa. Angalia ujumbe wa mtumiaji kwa makini. "
+                    "Kama jina la shirika, biashara, hospitali, benki, au taasisi limetajwa "
+                    "(hata kwa ishara) — weka jina hilo kwenye target_org_name. "
+                    "Kama HAKUNA jina la shirika wowote katika ujumbe — "
+                    "jibu lako lazima LIANZE na swali: 'Hii ni kuhusu shirika au biashara gani?' "
+                    "KABLA ya yoyote. Usitoe pole kwanza. Usitake maelezo zaidi kwanza. "
+                    "Swali la shirika NI la kwanza kabisa."
                 )
             else:
                 system += (
-                    "\n\nORG RESOLUTION (HIGH PRIORITY): The organisation has not been identified yet. "
-                    "Extract the organisation name from what the user says — it may be stated directly or implied. "
-                    "If no organisation name was mentioned in the user's message, your VERY FIRST follow-up question "
-                    "MUST be: 'Which organisation or business is this about?' — ask this BEFORE any other question. "
-                    "Set target_org_name in extracted to the name you identified, or null if still unknown."
+                    "\n\nORG RESOLUTION — HARD RULE: "
+                    "The organisation has not been identified yet. Scan the user's message carefully. "
+                    "If any organisation, business, hospital, bank, or institution name is mentioned "
+                    "(even implied) — capture it in target_org_name. "
+                    "If NO organisation name appears anywhere in the user's message — "
+                    "your reply MUST start with: 'Which organisation or business is this about?' "
+                    "Do NOT express sympathy first. Do NOT ask for details first. "
+                    "The org question comes FIRST, always."
                 )
 
         messages = [{"role": t["role"], "content": t["content"]} for t in session.get_turns()]

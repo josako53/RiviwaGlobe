@@ -1232,7 +1232,7 @@ async def create_partial_org(
                 is_partial, partial_meta, created_by_id, max_members,
                 created_at, updated_at
             ) VALUES (
-                CAST(:id AS uuid), :legal_name, :display_name, :slug, 'OTHER', 'PENDING_VERIFICATION',
+                CAST(:id AS uuid), :legal_name, :display_name, :slug, 'BUSINESS', 'PENDING_VERIFICATION',
                 false, false, false,
                 true, CAST(:meta AS jsonb), CAST(:created_by_id AS uuid), 0,
                 now(), now()
