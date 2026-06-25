@@ -570,6 +570,7 @@ async def ai_submit_feedback(request: Request, db: DbDep, kafka: KafkaDep) -> di
         "issue_gps_lat":             body.get("issue_gps_lat"),
         "issue_gps_lng":             body.get("issue_gps_lng"),
         "issue_gps_accuracy_m":      body.get("issue_gps_accuracy_m"),
+        "pressure_hpa":              body.get("pressure_hpa"),
         "media_urls":                body.get("media_urls"),
         "custom_fields":             body.get("custom_fields"),
         "post_id":                   body.get("post_id"),

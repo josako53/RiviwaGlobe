@@ -774,6 +774,142 @@ async def get_org_hq_location(
 
 
 @router.get(
+    "/branches/{branch_id}/buildings",
+    summary="[Internal] List buildings for a branch — used by feedback_service for building resolution",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_branch_buildings(
+    branch_id: uuid.UUID,
+    db:        AsyncSession = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """
+    Returns all active buildings for a branch with boundary_polygon and
+    barometric ground_reference_hpa. feedback_service uses boundary_polygon
+    to determine which building a GPS coordinate belongs to.
+    """
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT id, name, code, gps_lat, gps_lng, boundary_polygon,
+                   ground_altitude_m, ground_reference_hpa, reference_taken_at,
+                   reference_station_id, total_floors
+            FROM org_buildings
+            WHERE branch_id = :branch_id AND is_active = true
+            ORDER BY name
+        """),
+        {"branch_id": str(branch_id)},
+    )).mappings().all()
+    return [
+        {
+            "id":                   str(r["id"]),
+            "name":                 r["name"],
+            "code":                 r["code"],
+            "gps_lat":              float(r["gps_lat"]) if r["gps_lat"] is not None else None,
+            "gps_lng":              float(r["gps_lng"]) if r["gps_lng"] is not None else None,
+            "boundary_polygon":     r["boundary_polygon"],
+            "ground_altitude_m":    float(r["ground_altitude_m"]) if r["ground_altitude_m"] is not None else None,
+            "ground_reference_hpa": float(r["ground_reference_hpa"]) if r["ground_reference_hpa"] is not None else None,
+            "reference_taken_at":   r["reference_taken_at"].isoformat() if r["reference_taken_at"] else None,
+            "reference_station_id": r["reference_station_id"],
+            "total_floors":         r["total_floors"],
+        }
+        for r in rows
+    ]
+
+
+@router.get(
+    "/buildings/{building_id}/floors",
+    summary="[Internal] List calibrated floors for barometric floor detection",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_building_floors(
+    building_id: uuid.UUID,
+    db:          AsyncSession = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """
+    Returns all active floors with calibrated_pressure_hpa ordered by floor_number.
+    feedback_service compares the user's phone pressure_hpa to each floor's
+    calibrated_pressure_hpa and selects the closest match.
+    Only floors with calibrated_pressure_hpa are returned (uncalibrated floors
+    cannot participate in pressure-based floor detection).
+    """
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT id, floor_number, floor_name, calibrated_pressure_hpa,
+                   calibrated_at, floor_height_m, ceiling_height_m
+            FROM org_floors
+            WHERE building_id = :building_id
+              AND is_active = true
+              AND calibrated_pressure_hpa IS NOT NULL
+            ORDER BY floor_number
+        """),
+        {"building_id": str(building_id)},
+    )).mappings().all()
+    return [
+        {
+            "id":                       str(r["id"]),
+            "floor_number":             r["floor_number"],
+            "floor_name":               r["floor_name"],
+            "calibrated_pressure_hpa":  float(r["calibrated_pressure_hpa"]),
+            "calibrated_at":            r["calibrated_at"].isoformat() if r["calibrated_at"] else None,
+            "floor_height_m":           float(r["floor_height_m"]) if r["floor_height_m"] is not None else None,
+            "ceiling_height_m":         float(r["ceiling_height_m"]) if r["ceiling_height_m"] is not None else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get(
+    "/floors/{floor_id}/pois",
+    summary="[Internal] List active POIs on a floor for GPS nearest-match resolution",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_floor_pois(
+    floor_id: uuid.UUID,
+    db:       AsyncSession = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """
+    Returns all active POIs on the given floor that have a GPS coordinate.
+    feedback_service uses Haversine nearest-match to resolve poi_id after
+    floor detection. Only POIs with gps_lat/gps_lng are returned.
+    """
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT id, zone_id, name, code, poi_type,
+                   gps_lat, gps_lng, gps_accuracy_radius_m,
+                   department_id, service_id,
+                   is_emergency_point, nearest_emergency_poi_id
+            FROM org_points_of_interest
+            WHERE floor_id = :floor_id
+              AND is_active = true
+              AND gps_lat IS NOT NULL
+              AND gps_lng IS NOT NULL
+            ORDER BY name
+        """),
+        {"floor_id": str(floor_id)},
+    )).mappings().all()
+    return [
+        {
+            "id":                       str(r["id"]),
+            "zone_id":                  str(r["zone_id"]) if r["zone_id"] else None,
+            "name":                     r["name"],
+            "code":                     r["code"],
+            "poi_type":                 r["poi_type"],
+            "gps_lat":                  float(r["gps_lat"]),
+            "gps_lng":                  float(r["gps_lng"]),
+            "gps_accuracy_radius_m":    r["gps_accuracy_radius_m"],
+            "department_id":            str(r["department_id"]) if r["department_id"] else None,
+            "service_id":               str(r["service_id"]) if r["service_id"] else None,
+            "is_emergency_point":       r["is_emergency_point"],
+            "nearest_emergency_poi_id": str(r["nearest_emergency_poi_id"]) if r["nearest_emergency_poi_id"] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get(
     "/locations/nearest",
     summary="[Internal] Find nearest branch(es) within radius for GPS resolution",
     dependencies=[Depends(_require_service_key)],

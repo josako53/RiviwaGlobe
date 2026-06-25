@@ -886,6 +886,19 @@ class Feedback(SQLModel, table=True):
         default=None, nullable=True, index=True,
         description="Resolved Point of Interest (room/desk/counter) from GPS coordinate at submission time.",
     )
+    floor_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description="Resolved OrgFloor UUID — detected from barometric pressure at submission time.",
+    )
+    pressure_hpa: Optional[float] = Field(
+        default=None, nullable=True,
+        description="Phone barometric pressure reading (hPa) at submission time. Used for floor detection.",
+    )
+    floor_confidence: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(10), nullable=True),
+        description="'high' when pressure delta to matched floor < 1.5 hPa; 'low' when 1.5–3 hPa; null if no calibration.",
+    )
 
     # ── Timeline ───────────────────────────────────────────────────────────────
     date_of_incident: Optional[datetime] = Field(

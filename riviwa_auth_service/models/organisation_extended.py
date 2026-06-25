@@ -4,7 +4,7 @@ models/organisation_extended.py
 Extended Organisation capabilities — layered on top of organisation.py without
 modifying the core file beyond adding back-populate hooks.
 
-NEW TABLES (13)
+NEW TABLES (17)
 ═══════════════════════════════════════════════════════════════════════════════
   org_locations           — physical addresses for an Org or Branch
   org_content             — vision / mission / objectives / policy / T&C
@@ -28,6 +28,10 @@ NEW TABLES (13)
   org_service_media       — images / videos / docs per service listing
   org_service_faqs        — FAQ items per service listing
   org_service_policies    — policy & T&C text blocks per service listing
+  org_buildings           — named physical buildings within an org/branch campus
+  org_floors              — floors within a building (barometric pressure calibration)
+  org_zones               — named zones/wards/wings within a floor
+  org_points_of_interest  — specific counters/rooms/desks/nurse-stations within a zone
 
 ═══════════════════════════════════════════════════════════════════════════════
 FULL RELATIONSHIP MAP
@@ -1458,3 +1462,332 @@ class OrgServicePolicy(SQLModel, table=True):
     )
 
     service: "OrgService" = Relationship(back_populates="policies")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# OrgBuilding
+# ═════════════════════════════════════════════════════════════════════════════
+
+class OrgBuilding(SQLModel, table=True):
+    """
+    A named physical building within an organisation's campus or branch.
+
+    A hospital campus may have Block A (OPD), Block B (Maternity), Block C (Admin).
+    An airport may have Terminal 1, Terminal 2, Cargo Terminal.
+    A single-building office still has one OrgBuilding row.
+
+    Barometric calibration fields:
+      ground_reference_hpa — measured at the building's main entrance at onboarding time.
+      reference_taken_at   — timestamp of that measurement.
+    When a reference_station_id IoT device is configured, feedback_service uses live
+    pressure readings from that device instead of the stored reference to eliminate
+    weather drift.
+    """
+    __tablename__ = "org_buildings"
+
+    id:              uuid.UUID        = Field(default_factory=uuid.uuid4, primary_key=True)
+    organisation_id: uuid.UUID        = Field(foreign_key="organisations.id", index=True)
+    branch_id:       Optional[uuid.UUID] = Field(
+        default=None, foreign_key="org_branches.id", nullable=True, index=True,
+        description="Owning branch. NULL = org-level building (single-office org).",
+    )
+    name: str = Field(
+        max_length=200,
+        description="Human-readable building name e.g. 'Block A — OPD', 'Main Terminal'",
+    )
+    code: Optional[str] = Field(
+        default=None, max_length=50, nullable=True,
+        description="Short reference code e.g. 'BLK-A', 'T1'",
+    )
+    description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+
+    # ── Physical location ─────────────────────────────────────────────────────
+    gps_lat: Optional[float] = Field(
+        default=None, nullable=True,
+        description="GPS latitude of the building entrance (for map pin display)",
+    )
+    gps_lng: Optional[float] = Field(
+        default=None, nullable=True,
+        description="GPS longitude of the building entrance",
+    )
+    boundary_polygon: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description=(
+            "Polygon footprint of the building. Ordered list of "
+            "{\"lat\": float, \"lng\": float, \"label\": str} points. "
+            "Used to resolve which building a GPS coordinate belongs to."
+        ),
+    )
+
+    # ── Barometric calibration ────────────────────────────────────────────────
+    ground_altitude_m: Optional[float] = Field(
+        default=None, nullable=True,
+        description="GPS altitude of ground floor entrance in metres above sea level (outdoor measurement)",
+    )
+    ground_reference_hpa: Optional[float] = Field(
+        default=None, nullable=True,
+        description="Barometric pressure (hPa) measured at the building ground floor entrance at calibration time",
+    )
+    reference_taken_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="When ground_reference_hpa was measured — used to assess calibration staleness",
+    )
+    reference_station_id: Optional[str] = Field(
+        default=None, max_length=100, nullable=True,
+        description="IoT device UUID that reports live ground-floor pressure — eliminates weather drift",
+    )
+
+    total_floors:       Optional[int] = Field(default=None, nullable=True)
+    accessibility_notes: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    is_active: bool = Field(default=True, nullable=False)
+
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"),
+                         onupdate=text("now()"), nullable=False)
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# OrgFloor
+# ═════════════════════════════════════════════════════════════════════════════
+
+class OrgFloor(SQLModel, table=True):
+    """
+    A single floor within an OrgBuilding.
+
+    calibrated_pressure_hpa is the barometric pressure (hPa) measured by an admin
+    standing on this floor during building onboarding. At feedback submission time,
+    the user's phone pressure is compared to all floors in the building; the floor
+    with the smallest pressure difference is selected.
+
+    floor_number convention:
+      -2  = second basement
+      -1  = basement / lower ground
+       0  = ground floor (G / EG)
+       1  = first floor (1F)
+       2  = second floor (2F)
+    """
+    __tablename__ = "org_floors"
+
+    id:              uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    building_id:     uuid.UUID = Field(foreign_key="org_buildings.id", index=True)
+    organisation_id: uuid.UUID = Field(foreign_key="organisations.id", index=True)
+
+    floor_number: int = Field(
+        description="Integer floor index: -2=B2, -1=B1, 0=Ground, 1=First, 2=Second …"
+    )
+    floor_name: str = Field(
+        max_length=200,
+        description="Display name e.g. 'Ground Floor', 'Level 2 — Maternity Wing'",
+    )
+
+    # ── Barometric calibration ─────────────────────────────────────────────────
+    calibrated_pressure_hpa: Optional[float] = Field(
+        default=None, nullable=True,
+        description="Pressure (hPa) measured on this floor during onboarding. Used for floor detection.",
+    )
+    calibrated_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+        description="When calibrated_pressure_hpa was recorded",
+    )
+
+    # ── Physical dimensions (site-specific — do not assume 3.5m) ─────────────
+    floor_height_m: Optional[float] = Field(
+        default=None, nullable=True,
+        description="Measured height of this floor's finished floor above ground level (metres)",
+    )
+    ceiling_height_m: Optional[float] = Field(
+        default=None, nullable=True,
+        description="Height of this floor's ceiling above its floor surface (metres)",
+    )
+
+    floor_plan_url: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True),
+        description="MinIO/S3 URL to SVG or GeoJSON floor plan — used for AI wayfinding display",
+    )
+    is_active: bool = Field(default=True, nullable=False)
+
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"),
+                         onupdate=text("now()"), nullable=False)
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# OrgZone
+# ═════════════════════════════════════════════════════════════════════════════
+
+class OrgZone(SQLModel, table=True):
+    """
+    A named area within a floor — a ward, wing, department section, or reception area.
+
+    Zones divide a floor into logical regions. GPS coordinates within a zone's
+    boundary_polygon are attributed to that zone. A zone links to an OrgDepartment
+    when the area is staffed by a specific department.
+
+    zone_type values: WARD | DEPARTMENT | RECEPTION | WAITING | CORRIDOR |
+                      EMERGENCY | ADMIN | PHARMACY | LAB | THEATRE | OTHER
+    """
+    __tablename__ = "org_zones"
+
+    id:              uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    floor_id:        uuid.UUID = Field(foreign_key="org_floors.id", index=True)
+    organisation_id: uuid.UUID = Field(foreign_key="organisations.id", index=True)
+
+    name: str = Field(
+        max_length=200,
+        description="e.g. 'Cardiology Wing', 'Outpatient Reception', 'Maternity Ward A'",
+    )
+    code: Optional[str] = Field(default=None, max_length=50, nullable=True)
+    zone_type: str = Field(
+        max_length=50,
+        description="WARD | DEPARTMENT | RECEPTION | WAITING | CORRIDOR | EMERGENCY | ADMIN | PHARMACY | LAB | THEATRE | OTHER",
+    )
+    boundary_polygon: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="GPS polygon boundary of this zone within the floor plan.",
+    )
+    department_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True, index=True,
+        description="OrgDepartment UUID — staffing link for this zone",
+    )
+    is_active: bool = Field(default=True, nullable=False)
+
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"),
+                         onupdate=text("now()"), nullable=False)
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# OrgPointOfInterest
+# ═════════════════════════════════════════════════════════════════════════════
+
+class OrgPointOfInterest(SQLModel, table=True):
+    """
+    A specific, named point within a floor — a desk, counter, room, nurse station,
+    emergency point, lift, or exit.
+
+    At feedback submission time, the server resolves the user's GPS coordinate
+    (after floor detection via barometric pressure) to the nearest active POI
+    on that floor using the Haversine formula or polygon containment.
+
+    Emergency routing:
+      is_emergency_point=True marks this POI as a place where help is available
+      (triage counter, first-aid point, nurse station, emergency exit).
+      nearest_emergency_poi_id allows the AI to instantly tell a user in distress:
+      "The nearest emergency point is 20 metres ahead on your right."
+
+    Navigation graph:
+      connections_to is a list of POI UUIDs representing walkable connections
+      from this POI (e.g. a desk connects to a corridor, the corridor connects
+      to the lift). This graph powers AI step-by-step wayfinding directions.
+
+    poi_type values:
+      DESK | COUNTER | ROOM | NURSE_STATION | EMERGENCY | TRIAGE |
+      LIFT | STAIRS | EXIT | TOILET | WAITING_AREA | KIOSK | BED |
+      RECEPTION | PHARMACY | LAB | CASHIER | INFO_POINT | OTHER
+    """
+    __tablename__ = "org_points_of_interest"
+
+    id:              uuid.UUID        = Field(default_factory=uuid.uuid4, primary_key=True)
+    floor_id:        uuid.UUID        = Field(foreign_key="org_floors.id", index=True)
+    zone_id:         Optional[uuid.UUID] = Field(
+        default=None, foreign_key="org_zones.id", nullable=True, index=True,
+        description="Parent zone. NULL = POI placed directly on floor without zone grouping.",
+    )
+    organisation_id: uuid.UUID        = Field(foreign_key="organisations.id", index=True)
+
+    name: str = Field(
+        max_length=300,
+        description="e.g. 'Cardiology OPD — Desk 3', 'Nurse Station 4', 'Triage Counter', 'Block B Lift'",
+    )
+    code: Optional[str] = Field(
+        default=None, max_length=100, nullable=True,
+        description="Short code e.g. 'CARD-OPD-D3', 'NS4', 'TRIAGE-1'",
+    )
+    poi_type: str = Field(
+        max_length=50,
+        description=(
+            "DESK | COUNTER | ROOM | NURSE_STATION | EMERGENCY | TRIAGE | "
+            "LIFT | STAIRS | EXIT | TOILET | WAITING_AREA | KIOSK | BED | "
+            "RECEPTION | PHARMACY | LAB | CASHIER | INFO_POINT | OTHER"
+        ),
+    )
+
+    # ── GPS location ──────────────────────────────────────────────────────────
+    gps_lat: Optional[float] = Field(
+        default=None, nullable=True,
+        description="GPS latitude of this POI's exact position",
+    )
+    gps_lng: Optional[float] = Field(
+        default=None, nullable=True,
+        description="GPS longitude of this POI's exact position",
+    )
+    gps_accuracy_radius_m: Optional[int] = Field(
+        default=None, nullable=True,
+        description="How close (metres) a user's GPS must be to count as 'at this POI'",
+    )
+    boundary_polygon: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="For room-sized POIs: polygon boundary instead of single GPS point.",
+    )
+
+    # ── Staffing links ────────────────────────────────────────────────────────
+    department_id:        Optional[uuid.UUID] = Field(default=None, nullable=True)
+    service_id:           Optional[uuid.UUID] = Field(default=None, nullable=True)
+    staff_assigned_user_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True,
+        description="User UUID of the staff member normally stationed at this POI",
+    )
+
+    # ── Emergency routing ─────────────────────────────────────────────────────
+    is_emergency_point: bool = Field(
+        default=False, nullable=False,
+        description="True for triage counters, first-aid points, nurse stations, emergency exits",
+    )
+    nearest_emergency_poi_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True,
+        description="UUID of the nearest OrgPointOfInterest with is_emergency_point=True",
+    )
+
+    # ── Navigation graph ──────────────────────────────────────────────────────
+    connections_to: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description="[poi_id, ...] — walkable connections for AI step-by-step direction generation",
+    )
+
+    # ── Secondary QR link ─────────────────────────────────────────────────────
+    qr_code_id: Optional[uuid.UUID] = Field(
+        default=None, nullable=True,
+        description="QRCode UUID from qr_service — for receipt-embedded post-service triggers",
+    )
+
+    accessibility_notes: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True),
+        description="Wheelchair access, hearing loop, visual impairment features, etc.",
+    )
+    is_active: bool = Field(default=True, nullable=False)
+
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"),
+                         onupdate=text("now()"), nullable=False)
+    )

@@ -191,6 +191,154 @@ async def _check_geofence_org(org_id: uuid.UUID, lat: float, lng: float) -> Opti
         return None
 
 
+async def _resolve_floor(
+    branch_id: uuid.UUID,
+    lat: float,
+    lng: float,
+    pressure_hpa: float,
+) -> tuple[uuid.UUID | None, str | None]:
+    """
+    Resolve which OrgFloor the user is on using barometric pressure.
+
+    Steps:
+    1. Find all buildings for the branch (via polygon or nearest-centre).
+    2. Match the user's GPS to the correct building (polygon containment).
+    3. Fetch all calibrated floors for that building.
+    4. Compare user's pressure_hpa to each floor's calibrated_pressure_hpa.
+    5. Return (floor_id, confidence) where confidence is 'high' (<1.5 hPa delta)
+       or 'low' (1.5–3.0 hPa delta). Returns (None, None) if no calibration exists.
+
+    Never raises — floor detection is best-effort analytics metadata.
+    """
+    import httpx
+    from core.config import settings
+
+    headers = {
+        "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+        "X-Service-Name": "feedback_service",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            # Step 1: get buildings for the branch
+            r = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/branches/{branch_id}/buildings",
+                headers=headers,
+            )
+            if r.status_code != 200 or not r.json():
+                return None, None
+
+            buildings = r.json()
+
+            # Step 2: find which building contains the GPS coordinate
+            matched_building_id: str | None = None
+            for bld in buildings:
+                poly = bld.get("boundary_polygon")
+                if poly and len(poly) >= 3 and _point_in_polygon(lat, lng, poly):
+                    matched_building_id = bld["id"]
+                    break
+            # Fallback: nearest building by centre GPS
+            if not matched_building_id:
+                for bld in buildings:
+                    if bld.get("gps_lat") and bld.get("gps_lng"):
+                        matched_building_id = bld["id"]
+                        break
+            if not matched_building_id:
+                return None, None
+
+            # Step 3: fetch calibrated floors
+            r2 = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/buildings/{matched_building_id}/floors",
+                headers=headers,
+            )
+            if r2.status_code != 200 or not r2.json():
+                return None, None
+
+            floors = r2.json()
+            if not floors:
+                return None, None
+
+            # Step 4: find floor with smallest pressure delta
+            best_floor = min(floors, key=lambda f: abs(f["calibrated_pressure_hpa"] - pressure_hpa))
+            delta = abs(best_floor["calibrated_pressure_hpa"] - pressure_hpa)
+
+            if delta > 3.0:
+                log.info("feedback.floor_detection_uncertain",
+                         branch=str(branch_id), delta_hpa=round(delta, 2))
+                return None, None
+
+            confidence = "high" if delta < 1.5 else "low"
+            log.info("feedback.floor_resolved",
+                     branch=str(branch_id), floor=best_floor["floor_name"],
+                     floor_number=best_floor["floor_number"],
+                     delta_hpa=round(delta, 2), confidence=confidence)
+            return uuid.UUID(best_floor["id"]), confidence
+
+    except Exception as exc:
+        log.warning("feedback.floor_resolution_failed", branch=str(branch_id), error=str(exc))
+        return None, None
+
+
+async def _resolve_poi(floor_id: uuid.UUID, lat: float, lng: float) -> uuid.UUID | None:
+    """
+    Given a resolved floor_id and GPS coordinate, find the nearest active POI
+    on that floor. Uses Haversine distance to all POIs with GPS coordinates.
+
+    Returns poi_id of the nearest POI within gps_accuracy_radius_m (or within 20m
+    if no radius is set). Returns None if no POIs are configured or GPS is too far
+    from any POI.
+
+    Never raises — POI resolution is best-effort metadata.
+    """
+    import httpx
+    from core.config import settings
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/floors/{floor_id}/pois",
+                headers={
+                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                    "X-Service-Name": "feedback_service",
+                },
+            )
+            if r.status_code != 200 or not r.json():
+                return None
+
+            pois = r.json()
+            if not pois:
+                return None
+
+            # Find nearest POI by Haversine
+            best_poi = None
+            best_dist = float("inf")
+            for poi in pois:
+                dist = _haversine_m(lat, lng, poi["gps_lat"], poi["gps_lng"])
+                if dist < best_dist:
+                    best_dist = dist
+                    best_poi = poi
+
+            if best_poi is None:
+                return None
+
+            # Respect the POI's configured accuracy radius (default 20m)
+            radius = best_poi.get("gps_accuracy_radius_m") or 20
+            if best_dist > radius:
+                log.info("feedback.poi_too_far",
+                         floor=str(floor_id), poi=best_poi["name"],
+                         dist_m=round(best_dist), radius_m=radius)
+                return None
+
+            log.info("feedback.poi_resolved",
+                     floor=str(floor_id), poi=best_poi["name"],
+                     poi_type=best_poi["poi_type"], dist_m=round(best_dist))
+            return uuid.UUID(best_poi["id"])
+
+    except Exception as exc:
+        log.warning("feedback.poi_resolution_failed", floor=str(floor_id), error=str(exc))
+        return None
+
+
 async def _resolve_branch_id(department_id: uuid.UUID) -> uuid.UUID | None:
     """
     Call auth_service GET /internal/departments/{dept_id} to resolve the
@@ -390,6 +538,7 @@ class FeedbackService:
             issue_gps_lat                = float(data["issue_gps_lat"]) if data.get("issue_gps_lat") else None,
             issue_gps_lng                = float(data["issue_gps_lng"]) if data.get("issue_gps_lng") else None,
             issue_gps_accuracy_m         = int(data["issue_gps_accuracy_m"]) if data.get("issue_gps_accuracy_m") else None,
+            pressure_hpa                 = float(data["pressure_hpa"]) if data.get("pressure_hpa") else None,
             date_of_incident             = datetime.fromisoformat(data["date_of_incident"]) if data.get("date_of_incident") else None,
         )
         # Backdate support: staff can set submitted_at for historical records
@@ -407,6 +556,14 @@ class FeedbackService:
                 f.physically_verified = await _check_geofence(f.branch_id, f.issue_gps_lat, f.issue_gps_lng)
             elif f.org_id:
                 f.physically_verified = await _check_geofence_org(f.org_id, f.issue_gps_lat, f.issue_gps_lng)
+
+        # Floor detection (barometric pressure) + POI resolution (nearest GPS on floor)
+        if f.issue_gps_lat is not None and f.issue_gps_lng is not None and f.pressure_hpa is not None and f.branch_id:
+            f.floor_id, f.floor_confidence = await _resolve_floor(
+                f.branch_id, f.issue_gps_lat, f.issue_gps_lng, f.pressure_hpa
+            )
+            if f.floor_id:
+                f.poi_id = await _resolve_poi(f.floor_id, f.issue_gps_lat, f.issue_gps_lng)
 
         # Auto-link to dynamic FeedbackCategoryDef by slug
         slug = _category_slug(data.get("category"))
@@ -582,6 +739,7 @@ class FeedbackService:
             issue_gps_lat       = float(data["issue_gps_lat"]) if data.get("issue_gps_lat") else None,
             issue_gps_lng       = float(data["issue_gps_lng"]) if data.get("issue_gps_lng") else None,
             issue_gps_accuracy_m = int(data["issue_gps_accuracy_m"]) if data.get("issue_gps_accuracy_m") else None,
+            pressure_hpa        = float(data["pressure_hpa"]) if data.get("pressure_hpa") else None,
             date_of_incident    = datetime.fromisoformat(data["date_of_incident"]) if data.get("date_of_incident") else None,
             submitter_name      = None if is_anon else data.get("submitter_name"),
             submitter_phone     = None if is_anon else data.get("submitter_phone"),
@@ -595,6 +753,14 @@ class FeedbackService:
                 f.physically_verified = await _check_geofence(f.branch_id, f.issue_gps_lat, f.issue_gps_lng)
             elif f.org_id:
                 f.physically_verified = await _check_geofence_org(f.org_id, f.issue_gps_lat, f.issue_gps_lng)
+
+        # Floor detection (barometric pressure) + POI resolution (nearest GPS on floor)
+        if f.issue_gps_lat is not None and f.issue_gps_lng is not None and f.pressure_hpa is not None and f.branch_id:
+            f.floor_id, f.floor_confidence = await _resolve_floor(
+                f.branch_id, f.issue_gps_lat, f.issue_gps_lng, f.pressure_hpa
+            )
+            if f.floor_id:
+                f.poi_id = await _resolve_poi(f.floor_id, f.issue_gps_lat, f.issue_gps_lng)
 
         # Auto-link category_def_id: prefer AI pre-resolved ID, else slug lookup
         if data.get("category_def_id"):
