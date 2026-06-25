@@ -371,9 +371,21 @@ class OrgLocation(SQLModel, table=True):
     geofence_radius_m: Optional[int] = Field(
         default=None, nullable=True,
         description=(
-            "Radius in metres around (latitude, longitude) that counts as 'on premises'. "
-            "Used by feedback_service to set physically_verified=true when a submitter's GPS "
-            "falls within this boundary. NULL means no geofence defined for this location."
+            "Circular fallback geofence: radius in metres around (latitude, longitude). "
+            "Only used when boundary_polygon is NULL. "
+            "NULL means no geofence of any kind is defined for this location."
+        ),
+    )
+    boundary_polygon: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description=(
+            "Polygon boundary of the physical premises as an ordered list of GPS coordinate points. "
+            "Each point: {\"lat\": float, \"lng\": float, \"label\": str (optional)}. "
+            "Minimum 4 points recommended — N, S, E, W corners at minimum; add more for "
+            "L-shaped buildings, campus perimeters, or any irregular structure. "
+            "feedback_service uses ray-casting point-in-polygon to set physically_verified. "
+            "Takes precedence over geofence_radius_m when both are set."
         ),
     )
     is_primary:   bool            = Field(default=False, nullable=False)

@@ -712,9 +712,11 @@ async def get_branch_location(
 
     row = (await db.execute(
         text("""
-            SELECT ol.latitude, ol.longitude, ol.geofence_radius_m
+            SELECT ol.latitude, ol.longitude, ol.geofence_radius_m, ol.boundary_polygon
             FROM org_locations ol
             WHERE ol.branch_id = :branch_id
+            ORDER BY ol.is_primary DESC
+            LIMIT 1
         """),
         {"branch_id": str(branch_id)},
     )).mappings().first()
@@ -727,6 +729,47 @@ async def get_branch_location(
         "latitude":          float(row["latitude"])         if row["latitude"]         is not None else None,
         "longitude":         float(row["longitude"])        if row["longitude"]        is not None else None,
         "geofence_radius_m": int(row["geofence_radius_m"]) if row["geofence_radius_m"] is not None else None,
+        "boundary_polygon":  row["boundary_polygon"],
+    }
+
+
+@router.get(
+    "/orgs/{org_id}/hq-location",
+    summary="[Internal] Get org headquarters location and geofence for physically_verified check",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_org_hq_location(
+    org_id: uuid.UUID,
+    db:     AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns the GPS coordinates, geofence radius, and boundary polygon for the
+    organisation's primary headquarters location (branch_id IS NULL).
+    Called by feedback_service when feedback has org_id but no branch_id —
+    typically organisations with a single office / no branch structure.
+    """
+    from sqlalchemy import text
+
+    row = (await db.execute(
+        text("""
+            SELECT ol.latitude, ol.longitude, ol.geofence_radius_m, ol.boundary_polygon
+            FROM org_locations ol
+            WHERE ol.organisation_id = :org_id AND ol.branch_id IS NULL
+            ORDER BY ol.is_primary DESC
+            LIMIT 1
+        """),
+        {"org_id": str(org_id)},
+    )).mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="No headquarters location for this organisation.")
+
+    return {
+        "org_id":            str(org_id),
+        "latitude":          float(row["latitude"])         if row["latitude"]         is not None else None,
+        "longitude":         float(row["longitude"])        if row["longitude"]        is not None else None,
+        "geofence_radius_m": int(row["geofence_radius_m"]) if row["geofence_radius_m"] is not None else None,
+        "boundary_polygon":  row["boundary_polygon"],
     }
 
 

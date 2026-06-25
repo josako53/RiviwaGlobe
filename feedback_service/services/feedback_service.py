@@ -96,12 +96,52 @@ def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return R * 2 * math.asin(math.sqrt(a))
 
 
+def _point_in_polygon(lat: float, lng: float, polygon: list) -> bool:
+    """
+    Ray-casting point-in-polygon algorithm.
+    polygon: ordered list of {"lat": ..., "lng": ...} dicts (≥ 3 points).
+    Works for convex and concave polygons.
+    """
+    n = len(polygon)
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i]["lng"], polygon[i]["lat"]
+        xj, yj = polygon[j]["lng"], polygon[j]["lat"]
+        if ((yi > lat) != (yj > lat)) and (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _evaluate_location(lat: float, lng: float, loc: dict, label: str) -> Optional[bool]:
+    """
+    Given a location dict from auth_service, apply polygon check first,
+    fall back to circular radius. Returns True/False/None.
+    """
+    polygon = loc.get("boundary_polygon")
+    if polygon and len(polygon) >= 3:
+        result = _point_in_polygon(lat, lng, polygon)
+        log.info("feedback.geofence_polygon", context=label, inside=result, points=len(polygon))
+        return result
+    radius_m  = loc.get("geofence_radius_m")
+    centre_lat = loc.get("latitude")
+    centre_lng = loc.get("longitude")
+    if radius_m is None or centre_lat is None or centre_lng is None:
+        return None
+    dist_m = _haversine_m(lat, lng, centre_lat, centre_lng)
+    result = dist_m <= radius_m
+    log.info("feedback.geofence_radius", context=label,
+             dist_m=round(dist_m), radius_m=radius_m, inside=result)
+    return result
+
+
 async def _check_geofence(branch_id: uuid.UUID, lat: float, lng: float) -> Optional[bool]:
     """
-    Returns True  — submitter GPS is inside the branch geofence.
-    Returns False — submitter GPS is outside the branch geofence.
-    Returns None  — no geofence configured for this branch, or branch has no GPS location.
-    Never raises.
+    Returns True  — submitter GPS is inside the branch boundary.
+    Returns False — submitter GPS is outside the branch boundary.
+    Returns None  — no geofence or boundary configured for this branch.
+    Polygon boundary takes precedence over circular radius. Never raises.
     """
     import httpx
     from core.config import settings
@@ -118,19 +158,36 @@ async def _check_geofence(branch_id: uuid.UUID, lat: float, lng: float) -> Optio
             if r.status_code != 200:
                 log.warning("feedback.geofence_lookup_failed", branch=str(branch_id), status=r.status_code)
                 return None
-            loc = r.json()
-            radius_m   = loc.get("geofence_radius_m")
-            branch_lat = loc.get("latitude")
-            branch_lng = loc.get("longitude")
-            if radius_m is None or branch_lat is None or branch_lng is None:
-                return None
-            dist_m = _haversine_m(lat, lng, branch_lat, branch_lng)
-            result = dist_m <= radius_m
-            log.info("feedback.geofence_check", branch=str(branch_id),
-                     dist_m=round(dist_m), radius_m=radius_m, inside=result)
-            return result
+            return _evaluate_location(lat, lng, r.json(), f"branch:{branch_id}")
     except Exception as exc:
         log.warning("feedback.geofence_unreachable", branch=str(branch_id), error=str(exc))
+        return None
+
+
+async def _check_geofence_org(org_id: uuid.UUID, lat: float, lng: float) -> Optional[bool]:
+    """
+    Same as _check_geofence but for organisations with no branch structure —
+    looks up the org's primary HQ location (branch_id IS NULL).
+    Never raises.
+    """
+    import httpx
+    from core.config import settings
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/{org_id}/hq-location",
+                headers={
+                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                    "X-Service-Name": "feedback_service",
+                },
+            )
+            if r.status_code != 200:
+                log.warning("feedback.geofence_hq_lookup_failed", org=str(org_id), status=r.status_code)
+                return None
+            return _evaluate_location(lat, lng, r.json(), f"org_hq:{org_id}")
+    except Exception as exc:
+        log.warning("feedback.geofence_hq_unreachable", org=str(org_id), error=str(exc))
         return None
 
 
@@ -344,9 +401,12 @@ class FeedbackService:
         if f.department_id and not f.branch_id:
             f.branch_id = await _resolve_branch_id(f.department_id)
 
-        # Geofence check: set physically_verified from GPS vs branch boundary
-        if f.issue_gps_lat is not None and f.issue_gps_lng is not None and f.branch_id:
-            f.physically_verified = await _check_geofence(f.branch_id, f.issue_gps_lat, f.issue_gps_lng)
+        # Geofence check: branch polygon/radius first, org HQ fallback for branchless orgs
+        if f.issue_gps_lat is not None and f.issue_gps_lng is not None:
+            if f.branch_id:
+                f.physically_verified = await _check_geofence(f.branch_id, f.issue_gps_lat, f.issue_gps_lng)
+            elif f.org_id:
+                f.physically_verified = await _check_geofence_org(f.org_id, f.issue_gps_lat, f.issue_gps_lng)
 
         # Auto-link to dynamic FeedbackCategoryDef by slug
         slug = _category_slug(data.get("category"))
@@ -529,9 +589,12 @@ class FeedbackService:
         )
         f = await self.repo.create(f)
 
-        # Geofence check: set physically_verified from GPS vs branch boundary
-        if f.issue_gps_lat is not None and f.issue_gps_lng is not None and f.branch_id:
-            f.physically_verified = await _check_geofence(f.branch_id, f.issue_gps_lat, f.issue_gps_lng)
+        # Geofence check: branch polygon/radius first, org HQ fallback for branchless orgs
+        if f.issue_gps_lat is not None and f.issue_gps_lng is not None:
+            if f.branch_id:
+                f.physically_verified = await _check_geofence(f.branch_id, f.issue_gps_lat, f.issue_gps_lng)
+            elif f.org_id:
+                f.physically_verified = await _check_geofence_org(f.org_id, f.issue_gps_lat, f.issue_gps_lng)
 
         # Auto-link category_def_id: prefer AI pre-resolved ID, else slug lookup
         if data.get("category_def_id"):
