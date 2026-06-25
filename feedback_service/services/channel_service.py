@@ -387,6 +387,7 @@ class ChannelService:
         result     = await self._call_llm(session, active_cats)
         reply      = result.get("reply", "...")
         extracted  = result.get("extracted", {})
+        llm_failed = result.get("llm_failed", False)
         confidence = float(result.get("confidence", 0.0))
         ready      = result.get("ready_to_submit", False)
         if detected_lang := result.get("language"):
@@ -436,8 +437,8 @@ class ChannelService:
                     reply = reply.rstrip() + notice
 
         # Deterministic org-question gate: if STILL no org after this turn,
-        # force the question regardless of what the LLM replied.
-        if not session.org_id:
+        # force the question — but only when the LLM call actually succeeded.
+        if not session.org_id and not llm_failed:
             org_q = (
                 "Hii ni kuhusu shirika au biashara gani?"
                 if session.language == "sw"
@@ -564,34 +565,48 @@ class ChannelService:
                 )
 
         messages = [{"role": t["role"], "content": t["content"]} for t in session.get_turns()]
+
+        async def _try_anthropic(client: httpx.AsyncClient) -> str:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": settings.ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                },
+                json={"model": "claude-sonnet-4-6", "max_tokens": 600,
+                      "system": system, "messages": messages},
+            )
+            text = "".join(
+                b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text"
+            )
+            if not text:
+                raise ValueError(f"Anthropic returned empty content (status={resp.status_code})")
+            return text
+
+        async def _try_groq(client: httpx.AsyncClient) -> str:
+            groq_messages = [{"role": "system", "content": system}] + messages
+            resp = await client.post(
+                f"{settings.GROQ_BASE_URL}/chat/completions",
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                json={"model": settings.GROQ_MODEL, "max_tokens": 600,
+                      "messages": groq_messages, "temperature": 0.3,
+                      "response_format": {"type": "json_object"}},
+            )
+            return resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+
         try:
             async with httpx.AsyncClient(timeout=30) as client:
+                text = ""
                 if settings.ANTHROPIC_API_KEY:
-                    resp = await client.post(
-                        "https://api.anthropic.com/v1/messages",
-                        headers={
-                            "Content-Type": "application/json",
-                            "x-api-key": settings.ANTHROPIC_API_KEY,
-                            "anthropic-version": "2023-06-01",
-                        },
-                        json={"model": "claude-sonnet-4-6", "max_tokens": 600,
-                              "system": system, "messages": messages},
-                    )
-                    text = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
-                else:
-                    # Fallback to Groq (OpenAI-compatible)
-                    groq_messages = [{"role": "system", "content": system}] + messages
-                    resp = await client.post(
-                        f"{settings.GROQ_BASE_URL}/chat/completions",
-                        headers={
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {settings.GROQ_API_KEY}",
-                        },
-                        json={"model": settings.GROQ_MODEL, "max_tokens": 600,
-                              "messages": groq_messages, "temperature": 0.3,
-                              "response_format": {"type": "json_object"}},
-                    )
-                    text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+                    try:
+                        text = await _try_anthropic(client)
+                    except Exception as anth_exc:
+                        log.warning("channel.anthropic_failed_trying_groq",
+                                    session_id=str(session.id), error=str(anth_exc))
+                if not text and settings.GROQ_API_KEY:
+                    text = await _try_groq(client)
                 return _json.loads(text.strip())
         except Exception as exc:
             log.error("channel.llm_call_failed", session_id=str(session.id), error=str(exc))
@@ -601,7 +616,8 @@ class ChannelService:
                 else "Sorry, there was a technical issue. Please try again later."
             )
             return {"reply": fallback, "extracted": {}, "confidence": 0.0,
-                    "ready_to_submit": False, "language": session.language}
+                    "ready_to_submit": False, "language": session.language,
+                    "llm_failed": True}
 
     # ── Org resolution helpers (Matter 1–3) ──────────────────────────────────
 
