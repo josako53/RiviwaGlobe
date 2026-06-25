@@ -51,8 +51,8 @@ class ConsumerSubmitFeedback(BaseModel):
     # ── Required ──────────────────────────────────────────────────────────────
     feedback_type: str = Field(
         ...,
-        description="grievance | suggestion | applause",
-        json_schema_extra={"enum": ["grievance", "suggestion", "applause"]},
+        description="grievance | suggestion | applause | inquiry",
+        json_schema_extra={"enum": ["grievance", "suggestion", "applause", "inquiry"]},
     )
     description: str = Field(
         ..., min_length=10,

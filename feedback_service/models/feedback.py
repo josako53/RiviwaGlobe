@@ -7,21 +7,32 @@
 """
 models/feedback.py
 ═══════════════════════════════════════════════════════════════════════════════
-The complete Feedback domain — three submission types on one table,
-with the GRM escalation hierarchy always present.
+The complete Feedback domain — four submission types on one table,
+with the escalation hierarchy always present.
 
-DESIGN PRINCIPLE: ONE TABLE, THREE TYPES
+RIVIWA PURPOSE
+──────────────────────────────────────────────────────────────────────────────
+  Riviwa ensures the provision of excellent services (as the owner would
+  intend) and high-quality products in REAL TIME — for Governments, Heads of
+  State, Private Sectors, NGOs, Embassies, Hospitals, Agriculture, Social
+  Welfare, and many more — through feedback.
+
+  Riviwa AI solves or reduces problems and implements suggestions in real-time,
+  multiplies positive performance factors from applause to all staff and
+  departments, and clarifies all inquiries in real-time — intelligently
+  customised per individual case.
+
+DESIGN PRINCIPLE: ONE TABLE, FOUR TYPES
 ──────────────────────────────────────────────────────────────────────────────
   Feedback  → the single submission table
-    · type = GRIEVANCE:  formal complaint, always routes through GRM
-    · type = SUGGESTION: idea or recommendation, simpler lifecycle
-    · type = APPLAUSE:   positive recognition, simplest lifecycle
+    · type = GRIEVANCE:  complaint/dissatisfaction — routes through escalation
+    · type = SUGGESTION: recommendation or advice for improvement
+    · type = APPLAUSE:   praise of service, product, staff, or organisation
+    · type = INQUIRY:    question or request for information/clarification
 
-  The GRM (Grievance Redress Mechanism) is ALWAYS PRESENT — every feedback
-  submission has the full escalation chain available. For SUGGESTION and
-  APPLAUSE this is mostly dormant (they rarely escalate), but the structure
-  is consistent. This was the explicit design decision: no conditional logic
-  based on type, no missing tables.
+  The escalation chain is always present on the record. For SUGGESTION,
+  APPLAUSE, and INQUIRY it is mostly dormant but structurally consistent —
+  no conditional logic based on type, no missing tables.
 
 FEEDBACK LIFECYCLE
 ──────────────────────────────────────────────────────────────────────────────
@@ -31,23 +42,33 @@ FEEDBACK LIFECYCLE
                                           ↓
                                         APPEALED → [re-review] → RESOLVED
 
-  SUGGESTION / APPLAUSE lifecycle (simpler):
-    SUBMITTED → ACKNOWLEDGED → ACTIONED (or NOTED) → CLOSED
+  SUGGESTION lifecycle:
+    SUBMITTED → ACKNOWLEDGED → ACTIONED (implemented) or NOTED → CLOSED
+
+  APPLAUSE lifecycle (simplest):
+    SUBMITTED → ACKNOWLEDGED → CLOSED
+    (positive factors broadcast to relevant staff/departments)
+
+  INQUIRY lifecycle:
+    SUBMITTED → ACKNOWLEDGED → ANSWERED → CLOSED
 
   DISMISSED is available for all types (unfounded, duplicate, out of scope).
 
-GRM ESCALATION HIERARCHY (SEP Section 5)
+GRM ESCALATION HIERARCHY (configurable per organisation)
 ──────────────────────────────────────────────────────────────────────────────
-  Level 1  WARD          Ward/sub-project GHC — first point of contact
-  Level 2  LGA_PIU       LGA Grievance Handling Committee at LGA GRM Unit level
-  Level 3  PCU           Coordinating Unit (PO-RALG/TARURA)
-  Level 4  TARURA_WBCU   TARURA World Bank Coordinating Unit
-  Level 5  TANROADS      For bridge/road-specific grievances
-  Level 6  WORLD_BANK    Final escalation — World Bank direct
+  Each organisation configures its own EscalationPath with ordered
+  EscalationLevel records. 7 built-in system templates are provided
+  (SIMPLE_2_LEVEL through GOVT_GRM_STANDARD) — organisations clone and
+  customise. Example for a government infrastructure project:
 
-  Grievances start at WARD (Level 1) by default.
+    Level 1  Ward GHC       — first point of contact
+    Level 2  LGA GRM Unit   — district-level committee
+    Level 3  Coordinating Unit
+    Level 4  Ministry / World Bank Coordinating Unit
+    Level 5  Final escalation (ministry, court, or donor body)
+
   Each escalation creates a FeedbackEscalation row with from/to/reason.
-  Anonymous grievances can escalate — the anonymity is preserved at each level.
+  Anonymous grievances can escalate — anonymity is preserved at each level.
 
 ANONYMOUS SUBMISSIONS
 ──────────────────────────────────────────────────────────────────────────────
@@ -115,26 +136,36 @@ from models.project import ProjectCache, ProjectStageCache        # noqa: F401
 
 class FeedbackType(str, Enum):
     """
-    The spectrum of feedback that can be submitted about any project.
+    The four types of feedback Riviwa handles — for any organisation, sector,
+    or industry worldwide.
 
-    GRIEVANCE   → formal complaint requiring investigation and resolution.
-                  Always routes through the GRM escalation hierarchy.
-                  Examples: unfair compensation, construction noise, safety hazard,
-                  lack of access, worker mistreatment, environmental damage.
+    GRIEVANCE   → Expression of dissatisfaction or annoyance about a service,
+                  product, staff, or organisation — arising from a feeling of
+                  being treated unfairly, or from real distress caused by an
+                  issue. Includes both informal complaints and formal complaints
+                  filed to seek a resolution.
+                  Riviwa AI: solves or reduces the problem in real-time.
+                  Routes through the organisation's escalation hierarchy.
 
-    SUGGESTION  → constructive idea or recommendation to improve the project.
-                  Simpler lifecycle — acknowledged, considered, actioned or noted.
-                  Examples: widen pedestrian path, add community notice board,
-                  change meeting schedule, include women in consultation committees.
+    SUGGESTION  → Recommendation or advice on how things should be done,
+                  handled, or attended to — for the sake of improvement, or
+                  what should be considered now or next time.
+                  Riviwa AI: implements the suggestion in real-time where
+                  possible; otherwise plans and tracks it to completion.
 
-    APPLAUSE    → positive feedback recognising good performance.
-                  Simplest lifecycle — acknowledged and closed.
-                  Examples: bridge completed on schedule, contractor was respectful,
-                  GRM Unit responded quickly to a concern, resettlement was well handled.
+    APPLAUSE    → Praise or compliment of a service, product, staff member,
+                  department, feature, or organisation.
+                  Riviwa AI: multiplies the positive performance factor —
+                  broadcasts recognition to all relevant staff and departments
+                  to achieve excellence across the organisation.
 
-    INQUIRY     → question or request for information. No GRM escalation.
-                  Examples: how does the compensation process work?, what is the
-                  status of my land valuation?, who do I contact about X?
+    INQUIRY     → A question or request for information/details designed to
+                  resolve doubts, discover facts, or understand how something
+                  works (e.g. "how does the compensation process work?",
+                  "what is the status of my case?", "are you open on Saturday?",
+                  "how do I apply for this service?").
+                  Riviwa AI: clarifies and answers in real-time from org
+                  knowledge. No escalation.
     """
     GRIEVANCE   = "grievance"
     SUGGESTION  = "suggestion"
