@@ -249,7 +249,7 @@ async def get_department_internal(
 
     row = (await db.execute(
         text("""
-            SELECT id, name, code, branch_id
+            SELECT id, name, code, branch_id, org_id
             FROM org_departments
             WHERE id = :dept_id AND is_active = true
         """),
@@ -260,10 +260,51 @@ async def get_department_internal(
         raise HTTPException(status_code=404, detail="Department not found.")
 
     return {
-        "id":        str(row["id"]),
-        "name":      row["name"],
-        "code":      row["code"],
-        "branch_id": str(row["branch_id"]) if row["branch_id"] else None,
+        "id":              str(row["id"]),
+        "name":            row["name"],
+        "code":            row["code"],
+        "branch_id":       str(row["branch_id"]) if row["branch_id"] else None,
+        "organisation_id": str(row["org_id"]) if row["org_id"] else None,
+    }
+
+
+# GET /internal/branches/{branch_id}
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/branches/{branch_id}",
+    summary="[Internal] Resolve branch organisation_id",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_branch_internal(
+    branch_id: uuid.UUID,
+    db:        AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Returns id, name, code, and organisation_id for a single branch.
+    Called by feedback_service to derive org_id from a consumer-provided
+    branch_id (e.g. branch selected from UI or inferred from QR context).
+    org_id is always derived from the child entity — never accepted directly.
+    """
+    from sqlalchemy import text
+
+    row = (await db.execute(
+        text("""
+            SELECT id, name, code, organisation_id
+            FROM org_branches
+            WHERE id = :branch_id AND status = 'ACTIVE'
+        """),
+        {"branch_id": str(branch_id)},
+    )).mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Branch not found.")
+
+    return {
+        "id":              str(row["id"]),
+        "name":            row["name"],
+        "code":            row["code"],
+        "organisation_id": str(row["organisation_id"]) if row["organisation_id"] else None,
     }
 
 
@@ -904,6 +945,50 @@ async def get_floor_pois(
             "service_id":               str(r["service_id"]) if r["service_id"] else None,
             "is_emergency_point":       r["is_emergency_point"],
             "nearest_emergency_poi_id": str(r["nearest_emergency_poi_id"]) if r["nearest_emergency_poi_id"] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get(
+    "/orgs/{org_id}/branches-with-locations",
+    summary="[Internal] List all branches for an org with GPS polygon — used by feedback_service to auto-resolve branch_id from GPS",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_org_branches_with_locations(
+    org_id: uuid.UUID,
+    db:     AsyncSession = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """
+    Returns all active branches for the org, each with its boundary_polygon and
+    GPS centre. feedback_service calls this when branch_id is not explicitly provided
+    in the submission: it checks which branch polygon contains the user's GPS coordinate
+    and uses that branch_id for building/floor/POI resolution.
+    Only branches that have an org_location record are returned.
+    """
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT ob.id AS branch_id, ob.name, ob.code AS branch_code,
+                   ol.latitude, ol.longitude, ol.geofence_radius_m, ol.boundary_polygon
+            FROM org_branches ob
+            JOIN org_locations ol ON ol.branch_id = ob.id
+            WHERE ob.organisation_id = :org_id
+              AND ob.status = 'ACTIVE'
+              AND ol.is_primary = true
+            ORDER BY ob.name
+        """),
+        {"org_id": str(org_id)},
+    )).mappings().all()
+    return [
+        {
+            "branch_id":         str(r["branch_id"]),
+            "name":              r["name"],
+            "branch_code":       r["branch_code"],
+            "latitude":          float(r["latitude"])         if r["latitude"]         is not None else None,
+            "longitude":         float(r["longitude"])        if r["longitude"]        is not None else None,
+            "geofence_radius_m": int(r["geofence_radius_m"]) if r["geofence_radius_m"] is not None else None,
+            "boundary_polygon":  r["boundary_polygon"],
         }
         for r in rows
     ]

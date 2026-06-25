@@ -339,11 +339,11 @@ async def _resolve_poi(floor_id: uuid.UUID, lat: float, lng: float) -> uuid.UUID
         return None
 
 
-async def _resolve_branch_id(department_id: uuid.UUID) -> uuid.UUID | None:
+async def _get_department_context(department_id: uuid.UUID) -> dict:
     """
-    Call auth_service GET /internal/departments/{dept_id} to resolve the
-    branch_id for a department. Returns None if unreachable or no branch set.
-    Never raises — branch_id is optional analytics metadata.
+    Call auth_service GET /internal/departments/{dept_id}.
+    Returns dict with branch_id and organisation_id (both may be None).
+    Never raises.
     """
     import httpx
     from core.config import settings
@@ -358,13 +358,86 @@ async def _resolve_branch_id(department_id: uuid.UUID) -> uuid.UUID | None:
                 },
             )
             if r.status_code == 200:
-                raw = r.json().get("branch_id")
-                return uuid.UUID(raw) if raw else None
-            log.warning("feedback.branch_resolve_failed", dept=str(department_id), status=r.status_code)
-            return None
+                data = r.json()
+                return {
+                    "branch_id":       uuid.UUID(data["branch_id"]) if data.get("branch_id") else None,
+                    "organisation_id": uuid.UUID(data["organisation_id"]) if data.get("organisation_id") else None,
+                }
+            log.warning("feedback.dept_context_failed", dept=str(department_id), status=r.status_code)
     except Exception as exc:
-        log.warning("feedback.branch_resolve_unreachable", dept=str(department_id), error=str(exc))
+        log.warning("feedback.dept_context_unreachable", dept=str(department_id), error=str(exc))
+    return {"branch_id": None, "organisation_id": None}
+
+
+async def _resolve_branch_id(department_id: uuid.UUID) -> uuid.UUID | None:
+    """Resolve branch_id from department. Thin wrapper around _get_department_context."""
+    return (await _get_department_context(department_id))["branch_id"]
+
+
+async def _get_org_from_branch(branch_id: uuid.UUID) -> uuid.UUID | None:
+    """
+    Call auth_service GET /internal/branches/{branch_id}.
+    Returns the branch's organisation_id. Never raises.
+    org_id is always derived from a child entity — never accepted directly from users.
+    """
+    import httpx
+    from core.config import settings
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/branches/{branch_id}",
+                headers={
+                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                    "X-Service-Name": "feedback_service",
+                },
+            )
+            if r.status_code == 200:
+                raw = r.json().get("organisation_id")
+                return uuid.UUID(raw) if raw else None
+            log.warning("feedback.org_from_branch_failed", branch=str(branch_id), status=r.status_code)
+    except Exception as exc:
+        log.warning("feedback.org_from_branch_unreachable", branch=str(branch_id), error=str(exc))
+    return None
+
+
+async def _resolve_branch_from_gps(org_id: uuid.UUID, lat: float, lng: float) -> uuid.UUID | None:
+    """
+    When no branch_id is submitted but GPS is present, resolve the branch by
+    checking which branch polygon contains the GPS point.
+    Calls auth_service GET /internal/orgs/{org_id}/branches-with-locations.
+    Returns the first matching branch_id, or None if no polygon match.
+    Never raises.
+    """
+    import httpx
+    from core.config import settings
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(
+                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/{org_id}/branches-with-locations",
+                headers={
+                    "X-Service-Key":  settings.INTERNAL_SERVICE_KEY,
+                    "X-Service-Name": "feedback_service",
+                },
+            )
+            if r.status_code != 200:
+                log.warning("feedback.branch_gps_lookup_failed", org=str(org_id), status=r.status_code)
+                return None
+            branches = r.json()
+    except Exception as exc:
+        log.warning("feedback.branch_gps_unreachable", org=str(org_id), error=str(exc))
         return None
+
+    for branch in branches:
+        poly = branch.get("boundary_polygon")
+        if poly:
+            if _point_in_polygon(lat, lng, poly):
+                log.info("feedback.branch_resolved_from_gps",
+                         org=str(org_id), branch=branch["branch_id"],
+                         lat=lat, lng=lng)
+                return uuid.UUID(branch["branch_id"])
+    return None
 
 
 async def _classify_via_ai_service(data: dict) -> dict | None:
@@ -461,7 +534,6 @@ class FeedbackService:
 
     async def submit(self, data: dict, token_sub: Optional[uuid.UUID] = None, token_org_id: Optional[uuid.UUID] = None) -> Feedback:
         project_id = self._to_uuid(data.get("project_id"))
-        explicit_org_id = self._to_uuid(data.get("org_id"))
         project = None
         active_stage = None
 
@@ -478,11 +550,16 @@ class FeedbackService:
         else:
             feedback_type = FeedbackType(data["feedback_type"])
 
-        # org_id: project wins, then explicit field, then token org
-        effective_org_id = (
-            project.organisation_id if project
-            else explicit_org_id or token_org_id
-        )
+        # org_id is ALWAYS derived from the child entity hierarchy — never from a direct
+        # user-provided field. project → branch → department → service/product → token org.
+        if project:
+            effective_org_id = project.organisation_id
+        elif data.get("branch_id"):
+            effective_org_id = await _get_org_from_branch(self._to_uuid(data["branch_id"]))
+        elif data.get("department_id"):
+            effective_org_id = (await _get_department_context(self._to_uuid(data["department_id"])))["organisation_id"]
+        else:
+            effective_org_id = token_org_id  # staff fallback: their active dashboard org from JWT
 
         # Use MAX of existing sequence numbers so gaps/deletions never cause duplicates
         _year = datetime.now().year
@@ -549,6 +626,10 @@ class FeedbackService:
         # Resolve branch_id from department when not explicitly provided
         if f.department_id and not f.branch_id:
             f.branch_id = await _resolve_branch_id(f.department_id)
+
+        # Auto-resolve branch_id from GPS polygon when still missing
+        if not f.branch_id and f.org_id and f.issue_gps_lat is not None and f.issue_gps_lng is not None:
+            f.branch_id = await _resolve_branch_from_gps(f.org_id, f.issue_gps_lat, f.issue_gps_lng)
 
         # Geofence check: branch polygon/radius first, org HQ fallback for branchless orgs
         if f.issue_gps_lat is not None and f.issue_gps_lng is not None:
@@ -719,9 +800,25 @@ class FeedbackService:
         unique_ref = f"{prefix}-{_year}-{_seq:04d}"
         is_anon   = bool(data.get("is_anonymous", False))
 
+        # org_id is ALWAYS derived from the child entity — never accepted directly from consumers.
+        # Chain: project → branch → department → service/product
+        if project:
+            effective_org_id: Optional[uuid.UUID] = project.organisation_id
+        elif data.get("branch_id"):
+            effective_org_id = await _get_org_from_branch(self._to_uuid(data["branch_id"]))
+        elif data.get("department_id"):
+            effective_org_id = (await _get_department_context(self._to_uuid(data["department_id"])))["organisation_id"]
+        elif data.get("service_id"):
+            effective_org_id = None  # TODO: add service→org internal endpoint when needed
+        else:
+            effective_org_id = None  # no org context — feedback will be platform-level
+
         f = Feedback(
             unique_ref          = unique_ref,
+            org_id              = effective_org_id,
             project_id          = project_id,
+            branch_id           = self._to_uuid(data.get("branch_id")),
+            department_id       = self._to_uuid(data.get("department_id")),
             feedback_type       = fb_type,
             category            = _safe_category(data.get("category")),
             status              = FeedbackStatus.SUBMITTED,
@@ -746,6 +843,14 @@ class FeedbackService:
             media_urls          = data.get("media_urls"),
         )
         f = await self.repo.create(f)
+
+        # Resolve branch_id from department when not explicitly provided
+        if f.department_id and not f.branch_id:
+            f.branch_id = await _resolve_branch_id(f.department_id)
+
+        # Auto-resolve branch_id from GPS polygon when still missing
+        if not f.branch_id and f.org_id and f.issue_gps_lat is not None and f.issue_gps_lng is not None:
+            f.branch_id = await _resolve_branch_from_gps(f.org_id, f.issue_gps_lat, f.issue_gps_lng)
 
         # Geofence check: branch polygon/radius first, org HQ fallback for branchless orgs
         if f.issue_gps_lat is not None and f.issue_gps_lng is not None:

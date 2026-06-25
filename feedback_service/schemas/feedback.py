@@ -63,20 +63,14 @@ class ConsumerSubmitFeedback(BaseModel):
         description="District / LGA where the issue occurred. Required so the AI can identify the relevant project.",
     )
 
-    # ── Org / project scope ───────────────────────────────────────────────────
-    org_id: Optional[uuid.UUID] = Field(
-        default=None,
-        description="Organisation UUID. Required when project_id is omitted for org-level feedback.",
-    )
-
-    # ── AI auto-detected if omitted ───────────────────────────────────────────
+    # ── Scope — AI auto-detects project; org is always derived from child entity ─
     project_id: Optional[uuid.UUID] = Field(
         default=None,
         description="Project UUID. Omit to let the AI detect it from your location and description.",
     )
     branch_id: Optional[uuid.UUID] = Field(
         default=None,
-        description="OrgBranch UUID — which branch this feedback relates to.",
+        description="OrgBranch UUID — which branch this feedback is about. org_id is derived from it.",
     )
     category: Optional[str] = Field(
         default=None,
@@ -173,20 +167,15 @@ class StaffSubmitFeedback(BaseModel):
     })
 
     # ── SECTION A — Required ──────────────────────────────────────────────────
-    # project_id and org_id are mutually exclusive alternatives.
-    # Provide project_id for GRM project-scoped feedback, or org_id alone
-    # for org-level feedback (branch/department/service/product) without a project.
+    # org_id is NEVER provided directly — it is derived from the child entity:
+    # project_id → project.organisation_id
+    # branch_id  → branch.organisation_id
+    # department_id → department.organisation_id
+    # service_id / product_id → service.organisation_id
+    # Fallback for staff: JWT token org_id (their active dashboard org)
     project_id: Optional[uuid.UUID] = Field(
         default=None,
         description="Project UUID. Omit when submitting org-level feedback without a project.",
-    )
-    org_id: Optional[uuid.UUID] = Field(
-        default=None,
-        description=(
-            "Organisation UUID. Required when project_id is omitted. "
-            "Allows feedback scoped to a branch, department, service, or product "
-            "without requiring a GRM project to exist."
-        ),
     )
     feedback_type: str = Field(
         ...,
@@ -194,12 +183,6 @@ class StaffSubmitFeedback(BaseModel):
         json_schema_extra={"enum": ["grievance", "suggestion", "applause", "inquiry"]},
     )
     category: str = Field(..., description="Feedback category (Annex 5: Type of Complaint)")
-
-    @model_validator(mode="after")
-    def require_project_or_org(self) -> "StaffSubmitFeedback":
-        if not self.project_id and not self.org_id:
-            raise ValueError("Provide either project_id (for project-scoped feedback) or org_id (for org-level feedback without a project).")
-        return self
     channel: str = Field(
         ...,
         description=(
