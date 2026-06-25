@@ -92,17 +92,19 @@ async def ai_get_session(session_id: uuid.UUID, db: DbDep) -> dict:
     s = await _svc(db).get_or_404(session_id)
     extracted = s.extracted_data or {}
     return {
-        "session_id": str(s.id),
-        "status": s.status.value,
-        "channel": s.channel.value,
-        "language": s.language,
-        "turn_count": s.turn_count,
-        "confidence": float(extracted.get("confidence", 0.0)),
-        "extracted_data": extracted,
-        "feedback_id": str(s.feedback_id) if s.feedback_id else None,
-        "transcript": s.get_turns(),
-        "started_at": s.started_at.isoformat() if s.started_at else None,
-        "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+        "session_id":       str(s.id),
+        "status":           s.status.value,
+        "channel":          s.channel.value,
+        "language":         s.language,
+        "turn_count":       s.turn_count,
+        "confidence":       float(extracted.get("confidence", 0.0)),
+        "extracted_data":   extracted,
+        "feedback_id":      str(s.feedback_id) if s.feedback_id else None,
+        "org_id":           str(s.org_id) if s.org_id else None,
+        "org_display_name": s.org_display_name,
+        "transcript":       s.get_turns(),
+        "started_at":       s.started_at.isoformat() if s.started_at else None,
+        "completed_at":     s.completed_at.isoformat() if s.completed_at else None,
     }
 
 
