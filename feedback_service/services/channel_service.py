@@ -188,6 +188,7 @@ class ChannelService:
                 _to_uuid(data["project_id"])
             )
 
+        is_officer = bool(data.get("is_officer_assisted", False))
         session = ChannelSession(
             channel             = channel,
             project_id          = _to_uuid(data["project_id"]) if data.get("project_id") else None,
@@ -198,8 +199,9 @@ class ChannelService:
             gateway_session_id  = data.get("gateway_session_id"),
             gateway_provider    = data.get("gateway_provider", "other"),
             language            = data.get("language", "sw"),
-            is_officer_assisted = bool(data.get("is_officer_assisted", False)),
-            recorded_by_user_id = created_by if data.get("is_officer_assisted") else None,
+            is_officer_assisted = is_officer,
+            user_id             = None if is_officer else created_by,
+            recorded_by_user_id = created_by if is_officer else None,
         )
         session = await self.repo.create(session)
 
@@ -525,18 +527,20 @@ class ChannelService:
         else:
             if session.language == "sw":
                 system += (
-                    "\n\nUTAMBUZI WA SHIRIKA: Shirika bado halijatambuliwa. "
-                    "Toa jina la shirika kutoka kwa maandishi ya mtumiaji kama limetajwa. "
-                    "Kama haijulikani baada ya ujumbe wa kwanza, uliza mara moja tu: "
-                    "'Hii ni kuhusu shirika au biashara gani?' "
-                    "Weka target_org_name kwenye extracted."
+                    "\n\nUTAMBUZI WA SHIRIKA (MUHIMU SANA): Shirika bado halijatambuliwa. "
+                    "Toa jina la shirika kutoka kwa maneno ya mtumiaji kama limetajwa wazi au kwa ishara. "
+                    "Kama jina la shirika HALIKUTAJWA katika ujumbe wa kwanza wa mtumiaji, "
+                    "SWALI LAKO LA KWANZA LAZIMA liwe: 'Hii ni kuhusu shirika au biashara gani?' "
+                    "Uliza swali hili KABLA ya maswali mengine yoyote. "
+                    "Weka target_org_name kwenye extracted (jina au null)."
                 )
             else:
                 system += (
-                    "\n\nORG RESOLUTION: The organisation has not been identified yet. "
-                    "Extract the organisation name from what the user says (it may be mentioned implicitly). "
-                    "If not clear from the first message, ask ONCE: 'Which organisation or business is this about?' "
-                    "Set target_org_name in extracted to the name mentioned, or null if not yet known."
+                    "\n\nORG RESOLUTION (HIGH PRIORITY): The organisation has not been identified yet. "
+                    "Extract the organisation name from what the user says — it may be stated directly or implied. "
+                    "If no organisation name was mentioned in the user's message, your VERY FIRST follow-up question "
+                    "MUST be: 'Which organisation or business is this about?' — ask this BEFORE any other question. "
+                    "Set target_org_name in extracted to the name you identified, or null if still unknown."
                 )
 
         messages = [{"role": t["role"], "content": t["content"]} for t in session.get_turns()]
