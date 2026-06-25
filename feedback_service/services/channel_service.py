@@ -538,12 +538,15 @@ class ChannelService:
             else:
                 system += (
                     "\n\nORG RESOLUTION — TWO-STEP DECISION:\n"
-                    "1. FIRST check: does the user's message mention any organisation, business, "
-                    "hospital, bank, service provider, or named entity?\n"
-                    "   • YES → set target_org_name to that name. Then respond normally — "
-                    "acknowledge their situation, ask for details, etc.\n"
-                    "   • NO → your response MUST begin with: 'Which organisation or business is this about?' "
-                    "before anything else. Do NOT lead with sympathy. Do NOT ask for other details first."
+                    "Step 1 — scan the user's message: is any organisation, business, "
+                    "hospital, bank, service, or named entity mentioned (explicitly or implied)?\n"
+                    "Step 2a — IF YES: set target_org_name to that name. "
+                    "Then respond naturally — acknowledge, ask for details, etc.\n"
+                    "Step 2b — IF NO: the VERY FIRST words of your reply must be "
+                    "'Which organisation or business is this about?' — verbatim, nothing before it. "
+                    "Phrases like 'I'm sorry to hear that', 'That sounds', 'I understand', or "
+                    "'Can you tell me more' are FORBIDDEN as opening words when no org is identified. "
+                    "The organisation question is mandatory and must come first."
                 )
 
         messages = [{"role": t["role"], "content": t["content"]} for t in session.get_turns()]
