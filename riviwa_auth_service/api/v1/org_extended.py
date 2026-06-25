@@ -115,21 +115,23 @@ router = APIRouter(prefix="/orgs", tags=["Orgs — Extended"])
 
 class LocationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id:              uuid.UUID
-    organisation_id: uuid.UUID
-    branch_id:       Optional[uuid.UUID] = None
-    location_type:   str
-    label:           Optional[str]       = None
-    line1:           str
-    line2:           Optional[str]       = None
-    city:            str
-    state:           Optional[str]       = None
-    postal_code:     Optional[str]       = None
-    country_code:    str
-    region:          Optional[str]       = None
-    latitude:        Optional[float]     = None
-    longitude:       Optional[float]     = None
-    is_primary:      bool
+    id:               uuid.UUID
+    organisation_id:  uuid.UUID
+    branch_id:        Optional[uuid.UUID] = None
+    location_type:    str
+    label:            Optional[str]       = None
+    line1:            str
+    line2:            Optional[str]       = None
+    city:             str
+    state:            Optional[str]       = None
+    postal_code:      Optional[str]       = None
+    country_code:     str
+    region:           Optional[str]       = None
+    latitude:         Optional[float]     = None
+    longitude:        Optional[float]     = None
+    geofence_radius_m: Optional[int]     = None
+    boundary_polygon:  Optional[list]    = None
+    is_primary:       bool
 
 
 class ContentResponse(BaseModel):
@@ -265,37 +267,66 @@ class ServicePolicyResponse(BaseModel):
 # Request bodies
 # ─────────────────────────────────────────────────────────────────────────────
 
+class BoundaryPoint(BaseModel):
+    lat:   float = Field(ge=-90,  le=90)
+    lng:   float = Field(ge=-180, le=180)
+    label: Optional[str] = Field(default=None, max_length=50,
+                                 description="Corner label e.g. 'north_west', 'main_entrance'")
+
+
 class CreateLocationRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
-    location_type: OrgLocationType         = OrgLocationType.HEADQUARTERS
-    branch_id:     Optional[uuid.UUID]     = None
-    label:         Optional[str]           = Field(default=None, max_length=100)
-    line1:         str                     = Field(min_length=1, max_length=200)
-    line2:         Optional[str]           = Field(default=None, max_length=200)
-    city:          str                     = Field(min_length=1, max_length=100)
-    state:         Optional[str]           = Field(default=None, max_length=100)
-    postal_code:   Optional[str]           = Field(default=None, max_length=20)
-    country_code:  str                     = Field(min_length=2, max_length=2, pattern=r"^[A-Z]{2}$")
-    region:        Optional[str]           = Field(default=None, max_length=150)
-    latitude:      Optional[float]         = None
-    longitude:     Optional[float]         = None
-    is_primary:    bool                    = False
+    location_type:     OrgLocationType            = OrgLocationType.HEADQUARTERS
+    branch_id:         Optional[uuid.UUID]        = None
+    label:             Optional[str]              = Field(default=None, max_length=100)
+    line1:             str                        = Field(min_length=1, max_length=200)
+    line2:             Optional[str]              = Field(default=None, max_length=200)
+    city:              str                        = Field(min_length=1, max_length=100)
+    state:             Optional[str]              = Field(default=None, max_length=100)
+    postal_code:       Optional[str]              = Field(default=None, max_length=20)
+    country_code:      str                        = Field(min_length=2, max_length=2, pattern=r"^[A-Z]{2}$")
+    region:            Optional[str]              = Field(default=None, max_length=150)
+    latitude:          Optional[float]            = Field(default=None, ge=-90,  le=90,
+                                                          description="Centre-point latitude (used as fallback when no boundary_polygon)")
+    longitude:         Optional[float]            = Field(default=None, ge=-180, le=180,
+                                                          description="Centre-point longitude")
+    geofence_radius_m: Optional[int]              = Field(default=None, ge=1,
+                                                          description="Circular fallback radius in metres. Only used when boundary_polygon is not set.")
+    boundary_polygon:  Optional[list[BoundaryPoint]] = Field(
+        default=None,
+        description=(
+            "Ordered polygon boundary of the physical premises. Minimum 4 points — "
+            "north-west, north-east, south-east, south-west corners at minimum. "
+            "Add more points for L-shaped buildings, campus perimeters, or irregular structures. "
+            "Takes precedence over geofence_radius_m for physically_verified checks."
+        ),
+    )
+    is_primary:        bool                       = False
 
 
 class UpdateLocationRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
-    location_type: Optional[OrgLocationType] = None
-    label:         Optional[str]             = Field(default=None, max_length=100)
-    line1:         Optional[str]             = Field(default=None, max_length=200)
-    line2:         Optional[str]             = None
-    city:          Optional[str]             = Field(default=None, max_length=100)
-    state:         Optional[str]             = None
-    postal_code:   Optional[str]             = None
-    country_code:  Optional[str]             = Field(default=None, min_length=2, max_length=2)
-    region:        Optional[str]             = None
-    latitude:      Optional[float]           = None
-    longitude:     Optional[float]           = None
-    is_primary:    Optional[bool]            = None
+    location_type:     Optional[OrgLocationType]        = None
+    label:             Optional[str]                    = Field(default=None, max_length=100)
+    line1:             Optional[str]                    = Field(default=None, max_length=200)
+    line2:             Optional[str]                    = None
+    city:              Optional[str]                    = Field(default=None, max_length=100)
+    state:             Optional[str]                    = None
+    postal_code:       Optional[str]                    = None
+    country_code:      Optional[str]                    = Field(default=None, min_length=2, max_length=2)
+    region:            Optional[str]                    = None
+    latitude:          Optional[float]                  = Field(default=None, ge=-90,  le=90)
+    longitude:         Optional[float]                  = Field(default=None, ge=-180, le=180)
+    geofence_radius_m: Optional[int]                    = Field(default=None, ge=1,
+                                                                description="Circular fallback radius in metres.")
+    boundary_polygon:  Optional[list[BoundaryPoint]]    = Field(
+        default=None,
+        description=(
+            "Replace the full polygon boundary. Send an empty list [] to clear it. "
+            "Minimum 4 points recommended (N-W, N-E, S-E, S-W corners)."
+        ),
+    )
+    is_primary:        Optional[bool]                   = None
 
 
 class UpsertContentRequest(BaseModel):

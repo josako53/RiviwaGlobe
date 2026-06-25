@@ -65,7 +65,7 @@ log = structlog.get_logger(__name__)
 _LOCATION_UPDATABLE = frozenset({
     "location_type", "label", "line1", "line2", "city", "state",
     "postal_code", "country_code", "region", "latitude", "longitude",
-    "is_primary",
+    "is_primary", "geofence_radius_m", "boundary_polygon",
 })
 _CONTENT_UPDATABLE = frozenset({
     "vision", "mission", "objectives", "functionalities",
