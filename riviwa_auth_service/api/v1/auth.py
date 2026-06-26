@@ -34,7 +34,6 @@ from core.dependencies import (
     get_current_token,
     get_user_agent,
     require_active_user,
-    require_feature,
 )
 from models.user import User
 from schemas.auth.login import (
@@ -231,10 +230,8 @@ async def logout(
     response_model=SwitchOrgResponse,
     status_code=status.HTTP_200_OK,
     summary="Switch active org dashboard",
-    dependencies=[Depends(require_feature("multi_org"))],
     responses={
         401: {"description": "Not authenticated"},
-        402: {"description": "Plan does not include multi-org access"},
         403: {"description": "Not an active member of the requested org"},
     },
 )
@@ -276,10 +273,8 @@ async def switch_org(
     response_model=SocialAuthResponse,
     status_code=status.HTTP_200_OK,
     summary="Social login / registration (Google · Apple · Facebook)",
-    dependencies=[Depends(require_feature("social_login"))],
     responses={
         401: {"description": "Invalid or expired provider token"},
-        402: {"description": "Plan does not include social login"},
         409: {"description": "Email linked to a different OAuth provider"},
     },
 )
