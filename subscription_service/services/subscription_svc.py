@@ -15,6 +15,7 @@ from core.exceptions import (
     ConflictError, NotFoundError, SubscriptionError, PromoError
 )
 import services.notification_client as notif
+from events import producer as evt
 from models.subscription import (
     BillingCycle, Invoice, InvoiceStatus, OrgAddOn, OrgFeatureOverride,
     OverrideType, Plan, PromoCode,
@@ -203,6 +204,7 @@ class SubscriptionService:
         await self.db.commit()
         log.info("subscription.created", org_id=org_id, plan=plan.slug, cycle=billing_cycle)
         notif.notify_subscribed(org_id=org_id, plan_name=plan.display_name, billing_cycle=billing_cycle, price_usd=str(price), next_renewal_date=period_end.strftime("%Y-%m-%d"), invoice_number=invoice.invoice_number)
+        evt.publish_subscribed(org_id, plan.slug, billing_cycle, str(sub.id), invoice.invoice_number)
         return sub, invoice
 
     # ── Upgrade ───────────────────────────────────────────────────────────────
@@ -246,6 +248,7 @@ class SubscriptionService:
                               from_plan_id=old_plan_id, to_plan_id=new_plan.id)
         await self.db.commit()
         notif.notify_upgraded(org_id=org_id, old_plan=old_plan.display_name, new_plan=new_plan.display_name)
+        evt.publish_upgraded(org_id, old_plan.display_name, new_plan.display_name)
         log.info("subscription.upgraded", org_id=org_id, from_plan=old_plan.slug, to_plan=new_plan.slug)
         return sub
 
@@ -272,8 +275,10 @@ class SubscriptionService:
                               from_plan_id=old_plan_id, to_plan_id=new_plan.id,
                               metadata={"effective_at": sub.current_period_end.isoformat()})
         await self.db.commit()
+        effective_date = sub.current_period_end.strftime("%Y-%m-%d")
         log.info("subscription.downgraded", org_id=org_id, from_plan=old_plan.slug, to_plan=new_plan.slug)
-        notif.notify_downgraded(org_id=org_id, old_plan=old_plan.display_name, new_plan=new_plan.display_name, effective_date=sub.current_period_end.strftime("%Y-%m-%d"))
+        notif.notify_downgraded(org_id=org_id, old_plan=old_plan.display_name, new_plan=new_plan.display_name, effective_date=effective_date)
+        evt.publish_downgraded(org_id, old_plan.display_name, new_plan.display_name, effective_date)
         return sub
 
     # ── Cancel ────────────────────────────────────────────────────────────────
@@ -303,8 +308,10 @@ class SubscriptionService:
         await self._log_event(sub, SubscriptionEventType.CANCELLED, actor_id=actor_id,
                               actor_type="org",
                               metadata={"reason": reason, "immediate": immediate})
+        access_end_date = sub.current_period_end.strftime("%Y-%m-%d")
         await self.db.commit()
-        notif.notify_cancelled(org_id=org_id, plan_name="your plan", access_end_date=sub.current_period_end.strftime("%Y-%m-%d"))
+        notif.notify_cancelled(org_id=org_id, plan_name="your plan", access_end_date=access_end_date)
+        evt.publish_cancelled(org_id, reason, "your plan", access_end_date)
         return sub
 
     # ── Pause ─────────────────────────────────────────────────────────────────

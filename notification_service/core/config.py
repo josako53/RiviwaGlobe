@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     # ── Internal service key (same secret as other services) ──────────────────
     INTERNAL_SERVICE_KEY: str = Field(default="change-me-in-env")
 
+    # ── Auth service (owner-contact lookup for subscription notifications) ──────
+    AUTH_SERVICE_URL: str = Field(
+        default="http://riviwa_auth_service:8000",
+        description="Base URL of auth_service for internal owner-contact lookups.",
+    )
+
     # ── Subscription service (feature-gate checks) ────────────────────────────
     SUBSCRIPTION_SERVICE_URL: str = Field(
         default="http://subscription_service:8140",

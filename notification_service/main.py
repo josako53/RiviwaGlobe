@@ -83,6 +83,7 @@ from channels.sms import SMSChannel
 from channels.whatsapp import WhatsAppChannel
 from core.config import settings
 from events.consumer import start_consumer, stop_consumer
+from events.subscription_consumer import start_subscription_consumer, stop_subscription_consumer
 from events.producer import start_producer, stop_producer
 from scheduler.jobs import create_scheduler
 
@@ -119,8 +120,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Start Kafka producer (delivery receipts → riviwa.notifications.events)
     await start_producer()
 
-    # Start Kafka consumer
+    # Start Kafka consumer (riviwa.notifications)
     await start_consumer()
+
+    # Start subscription Kafka consumer (riviwa.subscription.events)
+    await start_subscription_consumer()
 
     # Start APScheduler
     scheduler = create_scheduler()
@@ -133,6 +137,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # ── Shutdown ──────────────────────────────────────────────────────────────
     log.info("notification_service.stopping")
     await stop_consumer()
+    await stop_subscription_consumer()
     await stop_producer()
     scheduler.shutdown(wait=False)
     log.info("notification_service.stopped")

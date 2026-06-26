@@ -73,21 +73,24 @@ def _fire(event_type: str, payload: Dict[str, Any], key: str) -> None:
     asyncio.ensure_future(_send())
 
 
-def publish_subscribed(org_id: str, plan_slug: str, billing_cycle: str, subscription_id: str) -> None:
+def publish_subscribed(org_id: str, plan_slug: str, billing_cycle: str, subscription_id: str, invoice_number: str) -> None:
     _fire("subscription.subscribed", {"org_id": org_id, "plan": plan_slug,
-          "billing_cycle": billing_cycle, "subscription_id": subscription_id}, key=org_id)
+          "billing_cycle": billing_cycle, "subscription_id": subscription_id,
+          "invoice_number": invoice_number}, key=org_id)
 
 
 def publish_upgraded(org_id: str, from_plan: str, to_plan: str) -> None:
     _fire("subscription.upgraded", {"org_id": org_id, "from_plan": from_plan, "to_plan": to_plan}, key=org_id)
 
 
-def publish_downgraded(org_id: str, from_plan: str, to_plan: str) -> None:
-    _fire("subscription.downgraded", {"org_id": org_id, "from_plan": from_plan, "to_plan": to_plan}, key=org_id)
+def publish_downgraded(org_id: str, from_plan: str, to_plan: str, effective_date: str) -> None:
+    _fire("subscription.downgraded", {"org_id": org_id, "from_plan": from_plan, "to_plan": to_plan,
+          "effective_date": effective_date}, key=org_id)
 
 
-def publish_cancelled(org_id: str, reason: Optional[str]) -> None:
-    _fire("subscription.cancelled", {"org_id": org_id, "reason": reason}, key=org_id)
+def publish_cancelled(org_id: str, reason: Optional[str], plan_name: str, access_end_date: str) -> None:
+    _fire("subscription.cancelled", {"org_id": org_id, "reason": reason,
+          "plan_name": plan_name, "access_end_date": access_end_date}, key=org_id)
 
 
 def publish_payment_succeeded(org_id: str, invoice_number: str, amount_usd: str) -> None:

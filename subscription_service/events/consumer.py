@@ -61,6 +61,7 @@ async def _handle(event: dict) -> None:
     from sqlalchemy import select
     from models.subscription import Plan
     import services.notification_client as notif
+    from events import producer as evt
 
     event_type = event.get("event_type", "")
 
@@ -105,6 +106,9 @@ async def _handle(event: dict) -> None:
                     period_end=sub.current_period_end.strftime("%Y-%m-%d"),
                     next_renewal_date=sub.current_period_end.strftime("%Y-%m-%d"),
                 )
+                evt.publish_payment_succeeded(
+                    str(sub.org_id), inv.invoice_number, str(inv.total_usd)
+                )
 
     elif event_type == "payment.failed":
         payload      = event.get("payload", {})
@@ -131,3 +135,4 @@ async def _handle(event: dict) -> None:
                         amount_usd=str(inv.total_usd),
                         failure_reason=payload.get("failure_reason", "Payment declined"),
                     )
+                    evt.publish_payment_failed(str(sub.org_id), inv.invoice_number)
