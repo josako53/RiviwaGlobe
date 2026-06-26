@@ -18,6 +18,8 @@ Route inventory
   Content (1-to-1)
     GET    /orgs/{org_id}/content
     PUT    /orgs/{org_id}/content
+    GET    /orgs/{org_id}/branches/{branch_id}/content
+    PUT    /orgs/{org_id}/branches/{branch_id}/content
 
   Org-level FAQs
     POST   /orgs/{org_id}/faqs
@@ -148,6 +150,19 @@ class ContentResponse(BaseModel):
     updated_at:       datetime
 
 
+class BranchContentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id:              uuid.UUID
+    branch_id:       uuid.UUID
+    org_id:          uuid.UUID
+    mission:         Optional[str]  = None
+    vision:          Optional[str]  = None
+    objectives:      Optional[str]  = None
+    functionalities: Optional[list] = None
+    strategic_focus: Optional[str]  = None
+    updated_at:      datetime
+
+
 class FAQResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id:            uuid.UUID
@@ -196,6 +211,8 @@ class ServiceResponse(BaseModel):
     product_format:      Optional[str]       = None
     inherits_location:   bool
     summary:             Optional[str]       = None
+    description:         Optional[str]       = None
+    objective:           Optional[str]       = None
     category:            Optional[str]       = None
     subcategory:         Optional[str]       = None
     tags:                Optional[str]       = None
@@ -343,6 +360,21 @@ class UpsertContentRequest(BaseModel):
     privacy_policy:  Optional[str]  = None
 
 
+class UpsertBranchContentRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    mission:         Optional[str]  = None
+    vision:          Optional[str]  = None
+    objectives:      Optional[str]  = None
+    functionalities: Optional[list] = Field(
+        default=None,
+        description='List of branch capabilities: [{"title": "Visa Processing", "description": "..."}]',
+    )
+    strategic_focus: Optional[str]  = Field(
+        default=None, max_length=500,
+        description="Short strategic focus statement for this branch",
+    )
+
+
 class CreateFAQRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     question:      str  = Field(min_length=1)
@@ -399,6 +431,7 @@ class CreateServiceRequest(BaseModel):
     inherits_location:   bool                     = True
     summary:             Optional[str]            = Field(default=None, max_length=500)
     description:         Optional[str]            = None
+    objective:           Optional[str]            = None
     category:            Optional[str]            = Field(default=None, max_length=100)
     subcategory:         Optional[str]            = Field(default=None, max_length=100)
     tags:                Optional[str]            = Field(default=None, max_length=500)
@@ -422,6 +455,7 @@ class UpdateServiceRequest(BaseModel):
     inherits_location:   Optional[bool]                  = None
     summary:             Optional[str]                   = None
     description:         Optional[str]                   = None
+    objective:           Optional[str]                   = None
     category:            Optional[str]                   = None
     subcategory:         Optional[str]                   = None
     tags:                Optional[str]                   = None
@@ -641,6 +675,47 @@ async def upsert_content(
     fields = body.model_dump(exclude_none=True)
     content = await svc.upsert_content(org_id, **fields)
     return ContentResponse.model_validate(content)
+
+
+# ─── Branch content (1-to-1 per branch) ──────────────────────────────────────
+
+@router.get(
+    "/{org_id}/branches/{branch_id}/content",
+    response_model=Optional[BranchContentResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Get branch content profile (mission, vision, objectives)",
+    dependencies=[Depends(require_active_user)],
+)
+async def get_branch_content(
+    org_id:    uuid.UUID,
+    branch_id: uuid.UUID,
+    svc:       OrgExtendedServiceDep,
+) -> Optional[BranchContentResponse]:
+    """Returns null if no content profile has been created yet for this branch."""
+    content = await svc.get_branch_content(org_id, branch_id)
+    return BranchContentResponse.model_validate(content) if content else None
+
+
+@router.put(
+    "/{org_id}/branches/{branch_id}/content",
+    response_model=BranchContentResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Create or update branch content profile [admin+]",
+    dependencies=[_admin_guard],
+)
+async def upsert_branch_content(
+    org_id:    uuid.UUID,
+    branch_id: uuid.UUID,
+    body:      UpsertBranchContentRequest,
+    svc:       OrgExtendedServiceDep,
+) -> BranchContentResponse:
+    """
+    Idempotent upsert: creates the branch content row if it does not exist,
+    updates it if it does. Send only the fields you want to change.
+    """
+    fields  = body.model_dump(exclude_none=True)
+    content = await svc.upsert_branch_content(org_id, branch_id, **fields)
+    return BranchContentResponse.model_validate(content)
 
 
 # ═════════════════════════════════════════════════════════════════════════════

@@ -766,6 +766,67 @@ class OrgBranchManager(SQLModel, table=True):
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# OrgBranchContent  — mission / vision / objectives per Branch
+# ═════════════════════════════════════════════════════════════════════════════
+
+class OrgBranchContent(SQLModel, table=True):
+    """
+    Identity-level content for a Branch: mission, vision, objectives, functionalities.
+
+    1-to-1 with OrgBranch (branch_id is UNIQUE).
+
+    Mirrors OrgContent (org-level) but scoped to a specific branch so each
+    branch can articulate its own purpose within the parent organisation.
+
+    Relationship wiring:
+      OrgBranchContent.branch ←→ OrgBranch (FK, 1:1 via UNIQUE)
+    """
+    __tablename__ = "org_branch_content"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, nullable=False)
+
+    branch_id: uuid.UUID = Field(
+        sa_column=Column(
+            ForeignKey("org_branches.id", ondelete="CASCADE"),
+            nullable=False,
+            unique=True,
+            index=True,
+        ),
+        description="1:1 with OrgBranch",
+    )
+    org_id: uuid.UUID = Field(
+        sa_column=Column(
+            ForeignKey("organisations.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+        description="Denormalised for efficient org-scoped queries",
+    )
+
+    mission:         Optional[str]  = Field(default=None, sa_column=Column(Text, nullable=True),
+                                            description="Branch mission statement")
+    vision:          Optional[str]  = Field(default=None, sa_column=Column(Text, nullable=True),
+                                            description="Branch vision statement")
+    objectives:      Optional[str]  = Field(default=None, sa_column=Column(Text, nullable=True),
+                                            description="Strategic objectives (free text or bullet list)")
+    functionalities: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description='Structured list: [{"title": "Visa Processing", "description": "..."}]',
+    )
+    strategic_focus: Optional[str]  = Field(default=None, max_length=500, nullable=True,
+                                            description="Short strategic focus statement")
+
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"),
+                         onupdate=text("now()"), nullable=False)
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # OrgService
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -887,6 +948,8 @@ class OrgService(SQLModel, table=True):
 
     summary:     Optional[str] = Field(default=None, max_length=500, nullable=True)
     description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    objective:   Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True),
+                                       description="What this service aims to achieve")
     category:    Optional[str] = Field(default=None, max_length=100, nullable=True, index=True)
     subcategory: Optional[str] = Field(default=None, max_length=100, nullable=True)
     tags:        Optional[str] = Field(default=None, max_length=500, nullable=True,

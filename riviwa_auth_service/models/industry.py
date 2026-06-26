@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text, UniqueConstraint, Boolean, Integer, text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -263,3 +264,168 @@ class IndustryFieldTemplate(SQLModel, table=True):
 
     # Relationships
     industry: Optional["Industry"] = Relationship(back_populates="field_templates")
+
+
+# ── IndustryPolicyDocument ────────────────────────────────────────────────────
+
+class PolicyDocumentType(str, Enum):
+    LAW        = "LAW"         # Acts of Parliament, statutes
+    REGULATION = "REGULATION"  # Statutory instruments, rules
+    POLICY     = "POLICY"      # Government policy papers
+    STANDARD   = "STANDARD"    # Industry standards (ISO, IEC, etc.)
+    GUIDELINE  = "GUIDELINE"   # Best practice guidelines
+    DIRECTIVE  = "DIRECTIVE"   # Directives / circulars
+    FRAMEWORK  = "FRAMEWORK"   # Operational frameworks
+
+
+class IndustryPolicyDocument(SQLModel, table=True):
+    """
+    Country-level or platform-wide industry policy, law, regulation, or standard.
+
+    Examples:
+      - Tanzania Food Safety Act, 2003 (industry=food, country_code=TZ, type=LAW)
+      - ISO 9001:2015 Quality Management (industry=NULL=all, type=STANDARD)
+      - WHO Guidelines on Safe Medication Practices (type=GUIDELINE)
+      - IFC Performance Standard 5 (type=FRAMEWORK)
+
+    industry_id = NULL → applies to all industries (platform-wide)
+    country_code = NULL → international / not country-specific
+    """
+    __tablename__ = "industry_policy_documents"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    industry_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            ForeignKey("industries.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+        description="NULL = applies to all industries (platform-wide)",
+    )
+
+    country_code: Optional[str] = Field(
+        default=None, max_length=3, nullable=True, index=True,
+        description="ISO 3166-1 alpha-2/3 e.g. 'TZ', 'KE'. NULL = international.",
+    )
+    region: Optional[str] = Field(
+        default=None, max_length=100, nullable=True,
+        description="Sub-national region e.g. 'East Africa', 'Dar es Salaam'",
+    )
+
+    policy_type: PolicyDocumentType = Field(
+        sa_column=Column(SAEnum(PolicyDocumentType, name="policy_document_type"),
+                         nullable=False, index=True),
+    )
+
+    title:              str           = Field(max_length=500, nullable=False)
+    slug:               str           = Field(max_length=200, nullable=False, unique=True, index=True,
+                                              description="URL-safe handle e.g. 'tz-food-safety-act-2003'")
+    issuing_authority:  Optional[str] = Field(default=None, max_length=300, nullable=True,
+                                              description="e.g. 'Government of Tanzania', 'ISO', 'WHO'")
+    document_number:    Optional[str] = Field(default=None, max_length=100, nullable=True,
+                                              description="e.g. 'ISO 9001:2015', 'Cap. 432'")
+
+    effective_date: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    expiry_date: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+
+    content_md: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True),
+        description="Full text or summary in Markdown",
+    )
+    file_url:   Optional[str] = Field(default=None, max_length=1024, nullable=True,
+                                      description="Link to PDF or official document")
+    version:    Optional[str] = Field(default=None, max_length=50, nullable=True)
+    language:   str           = Field(default="en", max_length=10, nullable=False,
+                                      description="BCP 47 language tag e.g. 'en', 'sw'")
+
+    is_active: bool = Field(default=True, nullable=False)
+    is_public: bool = Field(default=True, nullable=False,
+                            description="Publicly visible without authentication")
+
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"))
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"))
+    )
+
+
+# ── PlatformGuide ─────────────────────────────────────────────────────────────
+
+class GuideType(str, Enum):
+    PROFESSIONAL_GUIDE = "PROFESSIONAL_GUIDE"  # Industry professional guides
+    REFERENCE_MANUAL   = "REFERENCE_MANUAL"    # Operational reference manuals
+    STANDARD           = "STANDARD"            # Adopted standards
+    BEST_PRACTICE      = "BEST_PRACTICE"       # Best practice compilations
+    TRAINING_MATERIAL  = "TRAINING_MATERIAL"   # Training / onboarding materials
+    CHECKLIST          = "CHECKLIST"           # Process checklists
+    TEMPLATE           = "TEMPLATE"            # Document templates
+    FAQ                = "FAQ"                 # FAQ guides
+
+
+class PlatformGuide(SQLModel, table=True):
+    """
+    Platform-level professional documents, guides, and assistance materials.
+
+    Knowledge base for GRM focal persons, org admins, external auditors,
+    and industry professionals.
+
+    industry_id = NULL → general/cross-sector guide
+    """
+    __tablename__ = "platform_guides"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    industry_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            ForeignKey("industries.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+        description="NULL = general/cross-sector guide",
+    )
+
+    title:       str           = Field(max_length=500, nullable=False)
+    slug:        str           = Field(max_length=200, nullable=False, unique=True, index=True)
+    guide_type:  GuideType     = Field(
+        sa_column=Column(SAEnum(GuideType, name="guide_type"), nullable=False, index=True),
+    )
+
+    applicable_sectors: Optional[list] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+        description='Industry slugs: ["healthcare", "education", "finance"]',
+    )
+    target_audience: Optional[str] = Field(
+        default=None, max_length=200, nullable=True,
+        description="e.g. 'GRM Focal Persons', 'Org Administrators', 'All Staff'",
+    )
+
+    content_md:  Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True),
+                                       description="Full guide content in Markdown")
+    file_url:    Optional[str] = Field(default=None, max_length=1024, nullable=True,
+                                       description="Downloadable PDF or document")
+    file_format: Optional[str] = Field(default=None, max_length=20, nullable=True,
+                                       description="e.g. 'PDF', 'DOCX', 'MD'")
+
+    version:         Optional[str] = Field(default=None, max_length=50,  nullable=True)
+    language:        str           = Field(default="en", max_length=10,  nullable=False)
+    source_standard: Optional[str] = Field(
+        default=None, max_length=300, nullable=True,
+        description="e.g. 'ISO 10002:2018', 'IFC PS5', 'UNHCR 2022'",
+    )
+
+    is_public: bool = Field(default=True, nullable=False)
+    is_active: bool = Field(default=True, nullable=False)
+
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"))
+    )
+    updated_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=text("now()"), onupdate=text("now()"))
+    )

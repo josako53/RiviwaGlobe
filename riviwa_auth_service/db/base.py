@@ -144,6 +144,7 @@ from models.fraud import (                                         # noqa: F401,
 #      OrgFAQ             → organisations.id
 #      OrgBranch          → organisations.id, org_branches.id (self-ref, SET NULL)
 #      OrgBranchManager   → org_branches.id, users.id
+#      OrgBranchContent   → org_branches.id (CASCADE), organisations.id (CASCADE)
 #      OrgService         → organisations.id, org_branches.id (SET NULL)
 #      OrgBranchService   → org_branches.id, org_services.id
 #      OrgServiceMedia    → org_services.id
@@ -155,6 +156,7 @@ from models.organisation_extended import (                         # noqa: F401,
     OrgFAQ,
     OrgBranch,
     OrgBranchManager,
+    OrgBranchContent,
     OrgService,
     OrgServicePersonnel,
     OrgBranchService,
@@ -167,12 +169,17 @@ from models.organisation_extended import (                         # noqa: F401,
 # ── 9. Department (FK → organisations, org_branches) ─────────────────────────
 from models.department import OrgDepartment                        # noqa: F401, E402
 
-# ── 10. Industries and custom field definitions (FK → organisations, industries)
+# ── 10. Industries, custom field defs, policy docs, and platform guides ───────
+#    FK chains:
+#      IndustryPolicyDocument → industries.id (SET NULL)
+#      PlatformGuide          → industries.id (SET NULL)
 from models.industry import (                                      # noqa: F401, E402
     Industry,
     OrganisationIndustry,
     OrgCustomFieldDefinition,
     IndustryFieldTemplate,
+    IndustryPolicyDocument,
+    PlatformGuide,
 )
 
 # ── 11. Org projects, sub-projects, stages, checklists (FK → organisations) ──

@@ -49,6 +49,7 @@ from models.organisation import Organisation, OrgStatus
 from models.organisation_extended import (
     BranchStatus,
     OrgBranch,
+    OrgBranchContent,
     OrgBranchManager,
     OrgBranchService,
     OrgContent,
@@ -152,6 +153,28 @@ class OrgExtendedService:
 
     async def get_content(self, org_id: uuid.UUID) -> Optional[OrgContent]:
         return await self.repo.get_content(org_id)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # OrgBranchContent  (1-to-1 with OrgBranch)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    async def upsert_branch_content(
+        self, org_id: uuid.UUID, branch_id: uuid.UUID, **fields
+    ) -> OrgBranchContent:
+        await self._get_org_or_404(org_id)
+        await self._get_branch_or_404(branch_id, expected_org_id=org_id)
+        content = await self.repo.upsert_branch_content(
+            branch_id=branch_id, org_id=org_id, **fields
+        )
+        await self.db.commit()
+        log.info("org_branch_content.upserted", branch_id=str(branch_id))
+        return content
+
+    async def get_branch_content(
+        self, org_id: uuid.UUID, branch_id: uuid.UUID
+    ) -> Optional[OrgBranchContent]:
+        await self._get_branch_or_404(branch_id, expected_org_id=org_id)
+        return await self.repo.get_branch_content(branch_id)
 
     # ══════════════════════════════════════════════════════════════════════════
     # OrgFAQ

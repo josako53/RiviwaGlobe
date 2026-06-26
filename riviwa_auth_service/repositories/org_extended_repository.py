@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.organisation_extended import (
     BranchStatus,
     OrgBranch,
+    OrgBranchContent,
     OrgBranchManager,
     OrgBranchService,
     OrgContent,
@@ -71,6 +72,9 @@ _CONTENT_UPDATABLE = frozenset({
     "vision", "mission", "objectives", "functionalities",
     "global_policy", "terms_of_use", "privacy_policy",
 })
+_BRANCH_CONTENT_UPDATABLE = frozenset({
+    "mission", "vision", "objectives", "functionalities", "strategic_focus",
+})
 _FAQ_UPDATABLE = frozenset({
     "question", "answer", "display_order", "is_published",
 })
@@ -81,9 +85,10 @@ _BRANCH_UPDATABLE = frozenset({
 _SERVICE_UPDATABLE = frozenset({
     "title", "slug", "service_type", "status", "delivery_mode",
     "product_format", "inherits_location", "summary", "description",
-    "category", "subcategory", "tags", "base_price", "currency_code",
-    "price_is_negotiable", "delivery_time_days", "revisions_included",
-    "sku", "stock_quantity", "is_featured", "published_at", "deleted_at",
+    "objective", "category", "subcategory", "tags", "base_price",
+    "currency_code", "price_is_negotiable", "delivery_time_days",
+    "revisions_included", "sku", "stock_quantity", "is_featured",
+    "published_at", "deleted_at",
 })
 _SERVICE_LOCATION_UPDATABLE = frozenset({
     "status", "is_virtual", "virtual_platform", "virtual_url",
@@ -191,6 +196,35 @@ class OrgExtendedRepository:
         await self.db.flush()
         await self.db.refresh(content)
         log.debug("org_content.upserted", org_id=str(org_id))
+        return content
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # OrgBranchContent  (1-to-1 with OrgBranch)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    async def get_branch_content(self, branch_id: uuid.UUID) -> Optional[OrgBranchContent]:
+        result = await self.db.execute(
+            select(OrgBranchContent).where(OrgBranchContent.branch_id == branch_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def upsert_branch_content(
+        self, branch_id: uuid.UUID, org_id: uuid.UUID, **fields
+    ) -> OrgBranchContent:
+        safe    = {k: v for k, v in fields.items() if k in _BRANCH_CONTENT_UPDATABLE}
+        content = await self.get_branch_content(branch_id)
+
+        if content:
+            for k, v in safe.items():
+                setattr(content, k, v)
+            content.updated_at = datetime.now(timezone.utc)
+        else:
+            content = OrgBranchContent(branch_id=branch_id, org_id=org_id, **safe)
+            self.db.add(content)
+
+        await self.db.flush()
+        await self.db.refresh(content)
+        log.debug("org_branch_content.upserted", branch_id=str(branch_id))
         return content
 
     # ══════════════════════════════════════════════════════════════════════════
