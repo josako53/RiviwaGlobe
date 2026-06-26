@@ -2,8 +2,8 @@
 from __future__ import annotations
 import uuid
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, HTTPException, Query, status
-from core.dependencies import AuthDep, DbDep, StaffDep
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from core.dependencies import AuthDep, DbDep, StaffDep, require_feature
 from events.producer import get_producer
 from models.payment import Currency, PaymentProvider, PaymentStatus, PaymentType
 from services.payment_service import PaymentService
@@ -60,7 +60,8 @@ def _t(t) -> dict:
     }
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, summary="Create payment intent")
+@router.post("", status_code=status.HTTP_201_CREATED, summary="Create payment intent",
+             dependencies=[Depends(require_feature("payment_processing"))])
 async def create_payment(body: Dict[str, Any], db: DbDep, token: AuthDep) -> dict:
     """Create payment intent. Does not contact provider — call /initiate next."""
     payment = await _svc(db).create_payment(
@@ -127,7 +128,8 @@ async def get_payment(payment_id: uuid.UUID, db: DbDep, token: AuthDep) -> dict:
     return {**_p(payment), "transactions": [_t(t) for t in txns]}
 
 
-@router.post("/{payment_id}/initiate", summary="Initiate USSD push via provider")
+@router.post("/{payment_id}/initiate", summary="Initiate USSD push via provider",
+             dependencies=[Depends(require_feature("mobile_money"))])
 async def initiate_payment(payment_id: uuid.UUID, body: Dict[str, Any], db: DbDep, token: AuthDep) -> dict:
     """
     Send payment request to the chosen provider.

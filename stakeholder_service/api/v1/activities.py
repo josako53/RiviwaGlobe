@@ -2,8 +2,8 @@
 from __future__ import annotations
 import uuid
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, File, Form, Query, UploadFile, status
-from core.dependencies import DbDep, KafkaDep, StaffDep
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from core.dependencies import DbDep, KafkaDep, StaffDep, require_feature
 from services.activity_service import ActivityService
 
 router = APIRouter(prefix="/activities", tags=["Engagement Activities"])
@@ -43,7 +43,8 @@ def _m_out(m): return {
 }
 def _e_out(e): return {"id":str(e.id),"contact_id":str(e.contact_id),"activity_id":str(e.activity_id),"attendance_status":e.attendance_status,"proxy_name":e.proxy_name,"concerns_raised":e.concerns_raised,"response_given":e.response_given,"feedback_submitted":e.feedback_submitted,"feedback_ref_id":str(e.feedback_ref_id) if e.feedback_ref_id else None,"notes":e.notes,"created_at":e.created_at.isoformat()}
 
-@router.post("", status_code=status.HTTP_201_CREATED, summary="Create an engagement activity")
+@router.post("", status_code=status.HTTP_201_CREATED, summary="Create an engagement activity",
+             dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def create_activity(body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
     return _a_out(await _svc(db, kafka).create(body, conducted_by=token.sub))
 
@@ -64,15 +65,18 @@ async def get_activity(activity_id: uuid.UUID, db: DbDep, kafka: KafkaDep, _: St
     a = await _svc(db, kafka).get_with_attendances_or_404(activity_id)
     return {**_a_out(a), "attendances": [_e_out(e) for e in a.attendances]}
 
-@router.patch("/{activity_id}", summary="Update activity / mark as conducted")
+@router.patch("/{activity_id}", summary="Update activity / mark as conducted",
+              dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def update_activity(activity_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
     return _a_out(await _svc(db, kafka).update(activity_id, body))
 
-@router.post("/{activity_id}/attendances", status_code=status.HTTP_201_CREATED, summary="Log attendance")
+@router.post("/{activity_id}/attendances", status_code=status.HTTP_201_CREATED, summary="Log attendance",
+             dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def log_attendance(activity_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
     return _e_out(await _svc(db, kafka).log_attendance(activity_id, body, logged_by=token.sub))
 
-@router.patch("/{activity_id}/attendances/{engagement_id}", summary="Update attendance record")
+@router.patch("/{activity_id}/attendances/{engagement_id}", summary="Update attendance record",
+              dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def update_attendance(activity_id: uuid.UUID, engagement_id: uuid.UUID, body: Dict[str, Any], db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
     return _e_out(await _svc(db, kafka).update_attendance(activity_id, engagement_id, body))
 
@@ -80,7 +84,8 @@ async def update_attendance(activity_id: uuid.UUID, engagement_id: uuid.UUID, bo
 # ── Bulk attendance ────────────────────────────────────────────────────────────
 
 @router.post("/{activity_id}/attendances/bulk", status_code=status.HTTP_201_CREATED,
-             summary="Bulk log attendance — multiple contacts in one request")
+             summary="Bulk log attendance — multiple contacts in one request",
+             dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def bulk_log_attendance(
     activity_id: uuid.UUID,
     body: Dict[str, Any],   # {"records": [{contact_id, attendance_status?, concerns?, ...}]}
@@ -103,7 +108,8 @@ async def bulk_log_attendance(
 
 @router.delete("/{activity_id}/attendances/{engagement_id}",
                status_code=status.HTTP_200_OK,
-               summary="Remove an attendance record")
+               summary="Remove an attendance record",
+               dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def delete_attendance(
     activity_id: uuid.UUID,
     engagement_id: uuid.UUID,
@@ -116,7 +122,8 @@ async def delete_attendance(
 # ── Cancel activity ────────────────────────────────────────────────────────────
 
 @router.post("/{activity_id}/cancel", status_code=status.HTTP_200_OK,
-             summary="Cancel a planned or scheduled activity")
+             summary="Cancel a planned or scheduled activity",
+             dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def cancel_activity(
     activity_id: uuid.UUID,
     body: Dict[str, Any],   # {"reason": "..."}
@@ -134,7 +141,8 @@ async def cancel_activity(
 # ── Media: upload ──────────────────────────────────────────────────────────────
 
 @router.post("/{activity_id}/media", status_code=status.HTTP_201_CREATED,
-             summary="Upload a file (photo, PDF minutes, presentation) to an activity")
+             summary="Upload a file (photo, PDF minutes, presentation) to an activity",
+             dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def upload_activity_media(
     activity_id:  uuid.UUID,
     file:         UploadFile = File(...),
@@ -198,7 +206,8 @@ async def list_activity_media(
 # ── Media: delete ─────────────────────────────────────────────────────────────
 
 @router.delete("/{activity_id}/media/{media_id}", status_code=status.HTTP_200_OK,
-               summary="Remove a media file from an activity (soft delete)")
+               summary="Remove a media file from an activity (soft delete)",
+               dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def delete_activity_media(
     activity_id: uuid.UUID,
     media_id:    uuid.UUID,

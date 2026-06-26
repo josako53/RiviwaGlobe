@@ -18,9 +18,10 @@ class Settings(BaseSettings):
 
     KAFKA_BOOTSTRAP_SERVERS: str = Field(default="kafka-1:9092")
 
-    AUTH_SECRET_KEY:      str = Field(default="")
-    AUTH_ALGORITHM:       str = Field(default="HS256")
-    INTERNAL_SERVICE_KEY: str = Field(default="change-me-in-production")
+    AUTH_SECRET_KEY:          str = Field(default="")
+    AUTH_ALGORITHM:           str = Field(default="HS256")
+    INTERNAL_SERVICE_KEY:     str = Field(default="change-me-in-production")
+    SUBSCRIPTION_SERVICE_URL: str = Field(default="http://subscription_service:8140")
 
     REDIS_URL: str = Field(default="redis://redis:6379/9")
 

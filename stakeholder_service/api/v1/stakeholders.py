@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, Request, status
-from core.dependencies import DbDep, KafkaDep, StaffDep, require_platform_role
+from core.dependencies import DbDep, KafkaDep, StaffDep, require_feature, require_platform_role
 from models.stakeholder import ImportanceRating
 from schemas.stakeholder import RegisterStakeholder, UpdateStakeholder, RegisterStakeholderProject
 from services.stakeholder_service import StakeholderService
@@ -30,7 +30,8 @@ def _sp_out(sp): return {"id":str(sp.id),"stakeholder_id":str(sp.stakeholder_id)
 def _eng_out(e): return {"id":str(e.id),"contact_id":str(e.contact_id),"activity_id":str(e.activity_id),"attendance_status":e.attendance_status,"concerns_raised":e.concerns_raised,"response_given":e.response_given,"feedback_submitted":e.feedback_submitted,"feedback_ref_id":str(e.feedback_ref_id) if e.feedback_ref_id else None,"created_at":e.created_at.isoformat()}
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, summary="Register a stakeholder")
+@router.post("", status_code=status.HTTP_201_CREATED, summary="Register a stakeholder",
+             dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def register_stakeholder(body: RegisterStakeholder, request: Request, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
     return _s_out(await _svc(db, kafka).register(body.model_dump(exclude_none=True), registered_by=token.sub, jwt_token=_extract_jwt(request)))
 
@@ -112,18 +113,21 @@ async def get_stakeholder(stakeholder_id: uuid.UUID, db: DbDep, kafka: KafkaDep,
     return {**_s_out(s), "contacts": [_c_brief(c) for c in s.contacts]}
 
 
-@router.patch("/{stakeholder_id}", summary="Update stakeholder profile")
+@router.patch("/{stakeholder_id}", summary="Update stakeholder profile",
+              dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def update_stakeholder(stakeholder_id: uuid.UUID, body: UpdateStakeholder, request: Request, db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
     return _s_out(await _svc(db, kafka).update(stakeholder_id, body.model_dump(exclude_none=True), jwt_token=_extract_jwt(request)))
 
 
-@router.delete("/{stakeholder_id}", status_code=status.HTTP_200_OK, summary="Soft-delete a stakeholder [admin]", dependencies=[Depends(require_platform_role("admin"))])
+@router.delete("/{stakeholder_id}", status_code=status.HTTP_200_OK, summary="Soft-delete a stakeholder [admin]",
+               dependencies=[Depends(require_platform_role("admin")), Depends(require_feature("stakeholder_engagement"))])
 async def delete_stakeholder(stakeholder_id: uuid.UUID, db: DbDep, kafka: KafkaDep) -> dict:
     await _svc(db, kafka).delete(stakeholder_id)
     return {"message": f"Stakeholder {stakeholder_id} deactivated."}
 
 
-@router.post("/{stakeholder_id}/projects", status_code=status.HTTP_201_CREATED, summary="Register stakeholder under a project")
+@router.post("/{stakeholder_id}/projects", status_code=status.HTTP_201_CREATED, summary="Register stakeholder under a project",
+             dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def register_for_project(stakeholder_id: uuid.UUID, body: RegisterStakeholderProject, db: DbDep, kafka: KafkaDep, token: StaffDep) -> dict:
     return _sp_out(await _svc(db, kafka).register_for_project(stakeholder_id, body.model_dump(exclude_none=True), registered_by=token.sub))
 

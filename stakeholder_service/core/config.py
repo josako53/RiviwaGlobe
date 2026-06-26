@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         default="http://riviwa_auth_service:8000",
         description="Internal base URL for auth_service. Used for cross-service address creation.",
     )
+    SUBSCRIPTION_SERVICE_URL: str = Field(
+        default="http://subscription_service:8140",
+        description="Base URL of subscription_service for feature-gate checks.",
+    )
     # Shared secret for internal service-to-service calls.
     INTERNAL_SERVICE_KEY: str = Field(
         default="internal_service_key_placeholder",

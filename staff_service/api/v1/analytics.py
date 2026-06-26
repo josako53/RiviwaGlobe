@@ -4,17 +4,21 @@ from __future__ import annotations
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
-from core.dependencies import DbDep, ManagerDep
+from core.dependencies import DbDep, ManagerDep, require_feature
 from core.exceptions import ForbiddenError
 from models.staff_profile import StaffProfile
 from repositories.staff_feedback_repository import StaffFeedbackRepository
 from repositories.staff_fraud_report_repository import StaffFraudReportRepository
 from repositories.staff_verification_repository import StaffVerificationRepository
 
-router = APIRouter(prefix="/api/v1/staff/analytics", tags=["Analytics"])
+router = APIRouter(
+    prefix="/api/v1/staff/analytics",
+    tags=["Analytics"],
+    dependencies=[Depends(require_feature("staff_analytics"))],
+)
 
 
 @router.get("/overview")

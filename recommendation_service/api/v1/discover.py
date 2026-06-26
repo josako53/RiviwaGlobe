@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from core.dependencies import CurrentUser, DbDep
+from core.dependencies import CurrentUser, DbDep, require_feature
 from schemas.recommendation import NearbyResponse
 from services.recommendation_service import RecommendationOrchestrator
 
@@ -21,6 +21,7 @@ router = APIRouter(tags=["Discovery"])
         "Each result includes interaction summaries showing grievances, "
         "suggestions, and applause from other users."
     ),
+    dependencies=[Depends(require_feature("recommendations"))],
 )
 async def discover_nearby(
     db: DbDep,

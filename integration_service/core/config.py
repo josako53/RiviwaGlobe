@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     INTERNAL_SERVICE_KEY:  str = Field(default="change-me-in-production")
     AUTH_SERVICE_URL:      str = Field(default="http://riviwa_auth_service:8000")
     FEEDBACK_SERVICE_URL:  str = Field(default="http://feedback_service:8090")
+    SUBSCRIPTION_SERVICE_URL: str = Field(default="http://subscription_service:8140",
+                                           description="Base URL of subscription_service for feature-gate checks.")
 
     # ── Redis (rate limiting + token deny-list) ───────────────────────────────
     REDIS_URL: str = Field(default="redis://redis:6379/7",

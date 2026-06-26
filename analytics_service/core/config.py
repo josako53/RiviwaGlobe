@@ -49,6 +49,10 @@ class Settings(BaseSettings):
         default="http://riviwa_auth_service:8000",
         description="Base URL of auth_service for internal org context lookups.",
     )
+    SUBSCRIPTION_SERVICE_URL: str = Field(
+        default="http://subscription_service:8140",
+        description="Base URL of subscription_service for feature-gate checks.",
+    )
 
     # ── Redis ─────────────────────────────────────────────────────────────────
     REDIS_URL: str = Field(default="redis://redis:6379/4")

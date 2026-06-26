@@ -8,9 +8,9 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
-from core.dependencies import AnalyticsDbDep, FeedbackDbDep, StaffDep, assert_project_org_access, assert_org_access
+from core.dependencies import AnalyticsDbDep, FeedbackDbDep, StaffDep, assert_project_org_access, assert_org_access, require_feature
 from core.exceptions import ValidationError as AppValidationError
 from repositories.analytics_repo import AnalyticsRepository
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
@@ -33,7 +33,8 @@ from schemas.analytics import (
 )
 
 log = structlog.get_logger(__name__)
-router = APIRouter(prefix="/analytics/grievances", tags=["Analytics — Grievances"])
+router = APIRouter(prefix="/analytics/grievances", tags=["Analytics — Grievances"],
+                   dependencies=[Depends(require_feature("advanced_analytics"))])
 
 # SLA targets (hours)
 _ACK_HOURS  = {"critical": 4,   "high": 8,   "medium": 24,  "low": 48}

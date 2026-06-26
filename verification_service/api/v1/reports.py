@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.auth import JWTDep
+from core.auth import JWTDep, require_feature
 from db.session import get_async_session
 from models.verification import AgentAssignment, FakeSuspectReport, FieldAgent
 
@@ -133,7 +133,8 @@ async def update_report(
     return _report_out(r)
 
 
-@router.post("/{report_id}/assign", status_code=200)
+@router.post("/{report_id}/assign", status_code=200,
+             dependencies=[Depends(require_feature("field_agents"))])
 async def assign_agent(
     report_id: uuid.UUID,
     body: dict,
@@ -207,7 +208,8 @@ async def list_agents(
     ]}
 
 
-@router.post("/agents", status_code=status.HTTP_201_CREATED)
+@router.post("/agents", status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_feature("field_agents"))])
 async def create_agent(
     body: dict,
     db: AsyncSession = Depends(get_async_session),

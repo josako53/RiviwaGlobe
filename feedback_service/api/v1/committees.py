@@ -2,8 +2,8 @@
 from __future__ import annotations
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Query, status
-from core.dependencies import DbDep, StaffDep
+from fastapi import APIRouter, Depends, Query, status
+from core.dependencies import DbDep, StaffDep, require_feature
 from schemas.committee import AddCommitteeMember, CreateCommittee, UpdateCommittee
 from services.committee_service import CommitteeService
 from api.v1.serialisers import committee_out, member_out
@@ -21,6 +21,7 @@ def _svc(db): return CommitteeService(db=db)
         "Each committee operates within an LGA jurisdiction and is linked to a project. "
         "After creating, add members via POST /committees/{id}/members."
     ),
+    dependencies=[Depends(require_feature("committee_mgmt"))],
 )
 async def create_committee(body: CreateCommittee, db: DbDep, _: StaffDep) -> dict:
     return committee_out(await _svc(db).create(body.model_dump(exclude_none=True)))
@@ -47,6 +48,7 @@ async def list_committees(
     "/{committee_id}",
     summary="Update committee details",
     description="Update an existing GHC. Only include fields you want to change.",
+    dependencies=[Depends(require_feature("committee_mgmt"))],
 )
 async def update_committee(committee_id: uuid.UUID, body: UpdateCommittee, db: DbDep, _: StaffDep) -> dict:
     return committee_out(await _svc(db).update(committee_id, body.model_dump(exclude_none=True)))
@@ -57,6 +59,7 @@ async def update_committee(committee_id: uuid.UUID, body: UpdateCommittee, db: D
     status_code=status.HTTP_200_OK,
     summary="Add a stakeholder group to this committee's coverage",
     description="Link a stakeholder group to this GHC so grievances from that group are routed here.",
+    dependencies=[Depends(require_feature("committee_mgmt"))],
 )
 async def add_stakeholder(committee_id: uuid.UUID, stakeholder_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
     return committee_out(await _svc(db).add_stakeholder(committee_id, stakeholder_id))
@@ -65,6 +68,7 @@ async def add_stakeholder(committee_id: uuid.UUID, stakeholder_id: uuid.UUID, db
 @router.delete(
     "/{committee_id}/stakeholders/{stakeholder_id}",
     summary="Remove a stakeholder group from this committee's coverage",
+    dependencies=[Depends(require_feature("committee_mgmt"))],
 )
 async def remove_stakeholder(committee_id: uuid.UUID, stakeholder_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
     return committee_out(await _svc(db).remove_stakeholder(committee_id, stakeholder_id))
@@ -78,6 +82,7 @@ async def remove_stakeholder(committee_id: uuid.UUID, stakeholder_id: uuid.UUID,
         "Add a user to the committee with a specific role. "
         "Roles: chairperson (leads), secretary (records & coordinates), member (regular)."
     ),
+    dependencies=[Depends(require_feature("committee_mgmt"))],
 )
 async def add_member(committee_id: uuid.UUID, body: AddCommitteeMember, db: DbDep, _: StaffDep) -> dict:
     return member_out(await _svc(db).add_member(committee_id, body.model_dump()))
@@ -86,6 +91,7 @@ async def add_member(committee_id: uuid.UUID, body: AddCommitteeMember, db: DbDe
 @router.delete(
     "/{committee_id}/members/{user_id}",
     summary="Remove member from GHC",
+    dependencies=[Depends(require_feature("committee_mgmt"))],
 )
 async def remove_member(committee_id: uuid.UUID, user_id: uuid.UUID, db: DbDep, _: StaffDep) -> dict:
     await _svc(db).remove_member(committee_id, user_id)

@@ -41,10 +41,11 @@ class Settings(BaseSettings):
     KAFKA_CONSUMER_GROUP:    str = "cms_service_group"
 
     # ── Service-to-Service ────────────────────────────────────────────────────
-    INTERNAL_SERVICE_KEY:  str = "change-me-in-production"
-    AUTH_SERVICE_URL:      str = "http://riviwa_auth_service:8000"
-    FEEDBACK_SERVICE_URL:  str = "http://feedback_service:8090"
-    AI_SERVICE_URL:        str = "http://ai_service:8085"
+    INTERNAL_SERVICE_KEY:     str = "change-me-in-production"
+    AUTH_SERVICE_URL:         str = "http://riviwa_auth_service:8000"
+    FEEDBACK_SERVICE_URL:     str = "http://feedback_service:8090"
+    AI_SERVICE_URL:           str = "http://ai_service:8085"
+    SUBSCRIPTION_SERVICE_URL: str = "http://subscription_service:8140"
 
     # ── Storage (MinIO) ───────────────────────────────────────────────────────
     MINIO_ENDPOINT:   str  = "minio:9000"

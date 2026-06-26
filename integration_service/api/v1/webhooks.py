@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.auth import IntegrationAuthDep, AuthContext
+from core.auth import IntegrationAuthDep, AuthContext, require_integration_feature
 from core.config import settings
 from core.security import generate_webhook_signing_secret, sign_webhook_payload
 from db.session import get_async_session
@@ -33,7 +33,11 @@ from models.integration import (
 )
 
 log = structlog.get_logger(__name__)
-router = APIRouter(prefix="/integration/webhooks", tags=["Integration — Webhooks"])
+router = APIRouter(
+    prefix="/integration/webhooks",
+    tags=["Integration — Webhooks"],
+    dependencies=[Depends(require_integration_feature("webhooks"))],
+)
 
 
 # ── POST /integration/webhooks/test — Send test payload ──────────────────────

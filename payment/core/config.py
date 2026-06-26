@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     YAS_MERCHANT_CODE: str  = Field(default="")
     YAS_SANDBOX:       bool = Field(default=True)
 
+    # ── Cross-service ─────────────────────────────────────────────────────────
+    INTERNAL_SERVICE_KEY:     str = Field(default="change-me-in-production",
+                                          description="Service-to-service auth key for internal endpoints.")
+    SUBSCRIPTION_SERVICE_URL: str = Field(default="http://subscription_service:8140",
+                                          description="Base URL of subscription_service for feature-gate checks.")
+
     # ── Callback ──────────────────────────────────────────────────────────────
     PAYMENT_CALLBACK_BASE_URL: str = Field(
         default="https://api.riviwa.com",

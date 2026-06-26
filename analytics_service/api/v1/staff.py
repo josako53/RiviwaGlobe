@@ -9,9 +9,9 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
-from core.dependencies import AnalyticsDbDep, FeedbackDbDep, OrgAdminDep
+from core.dependencies import AnalyticsDbDep, FeedbackDbDep, OrgAdminDep, require_feature
 from repositories.analytics_repo import AnalyticsRepository
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
@@ -26,7 +26,8 @@ from schemas.analytics import (
 )
 
 log = structlog.get_logger(__name__)
-router = APIRouter(prefix="/analytics/staff", tags=["Analytics — Staff"])
+router = APIRouter(prefix="/analytics/staff", tags=["Analytics — Staff"],
+                   dependencies=[Depends(require_feature("staff_analytics"))])
 
 
 # ── GET /analytics/staff/committee-performance ───────────────────────────────

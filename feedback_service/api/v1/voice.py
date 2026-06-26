@@ -39,7 +39,7 @@ import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlmodel import select
 
-from core.dependencies import DbDep, KafkaDep, CurrentUserDep
+from core.dependencies import DbDep, KafkaDep, CurrentUserDep, require_feature
 from models.feedback import ChannelSession, Feedback, FeedbackChannel, SessionStatus
 from services.voice_service import VoiceService, AUDIO_MIME_TO_EXT
 
@@ -110,6 +110,7 @@ Upload an audio recording as the source-of-truth voice note for a feedback item.
 
 **Audio formats accepted:** OGG, WebM, MP3, WAV, AAC, AMR (max 25MB)
 """,
+    dependencies=[Depends(require_feature("voice_transcription"))],
 )
 async def attach_voice_note(
     feedback_id: uuid.UUID,
@@ -199,6 +200,7 @@ Send a voice turn (audio recording) for an active ChannelSession.
 
 Returns the LLM's text reply and optionally a TTS audio URL for playback.
 """,
+    dependencies=[Depends(require_feature("voice_transcription"))],
 )
 async def submit_audio_turn(
     session_id: uuid.UUID,
@@ -319,6 +321,7 @@ Generate Text-to-Speech audio for a message to be played back to the Consumer.
 Returns the audio URL and duration. The caller is responsible for streaming
 the audio to the Consumer via their respective gateway.
 """,
+    dependencies=[Depends(require_feature("voice_transcription"))],
 )
 async def synthesise_tts(
     session_id: uuid.UUID,

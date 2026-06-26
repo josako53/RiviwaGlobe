@@ -10,9 +10,9 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
-from core.dependencies import FeedbackDbDep, StaffDep, assert_project_org_access, assert_org_access
+from core.dependencies import FeedbackDbDep, StaffDep, assert_project_org_access, assert_org_access, require_feature
 from core.exceptions import ValidationError as AppValidationError
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import (
@@ -34,7 +34,8 @@ from schemas.analytics import (
 )
 
 log = structlog.get_logger(__name__)
-router = APIRouter(prefix="/analytics/feedback", tags=["Analytics — Feedback"])
+router = APIRouter(prefix="/analytics/feedback", tags=["Analytics — Feedback"],
+                   dependencies=[Depends(require_feature("advanced_analytics"))])
 
 
 # ── GET /analytics/feedback/time-to-open ─────────────────────────────────────

@@ -6,9 +6,9 @@ from typing import List, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Query, UploadFile, File
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 
-from core.dependencies import AdminDep, DbDep, KafkaDep, ManagerDep
+from core.dependencies import AdminDep, DbDep, KafkaDep, ManagerDep, require_feature
 from core.exceptions import BulkImportJobNotFoundError, FraudReportNotFoundError, StaffNotFoundError
 from repositories.staff_verification_repository import StaffVerificationRepository
 from repositories.staff_fraud_report_repository import StaffFraudReportRepository
@@ -35,7 +35,11 @@ from storage.minio_client import upload_staff_photo, upload_csv_file
 
 log = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/api/v1/staff/admin", tags=["Admin"])
+router = APIRouter(
+    prefix="/api/v1/staff/admin",
+    tags=["Admin"],
+    dependencies=[Depends(require_feature("staff_verification"))],
+)
 
 
 # ── Profiles ──────────────────────────────────────────────────────────────────
@@ -217,7 +221,7 @@ async def verify_profile(
 
 # ── Bulk Import ───────────────────────────────────────────────────────────────
 
-@router.post("/bulk-import")
+@router.post("/bulk-import", dependencies=[Depends(require_feature("bulk_staff_import"))])
 async def bulk_import(
     db: DbDep,
     producer: KafkaDep,

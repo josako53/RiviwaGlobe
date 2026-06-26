@@ -6,15 +6,16 @@
 from __future__ import annotations
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Query
-from core.dependencies import DbDep, StaffDep, _is_platform_admin
+from fastapi import APIRouter, Depends, Query
+from core.dependencies import DbDep, StaffDep, _is_platform_admin, require_feature
 from core.exporters import export_response
 from schemas.applause_performance import ApplausePerformanceResponse
 from schemas.grievance_performance import GrievancePerformanceResponse
 from schemas.suggestion_performance import SuggestionPerformanceResponse
 from services.report_service import ReportService
 
-router = APIRouter(prefix="/reports", tags=["Reports"])
+router = APIRouter(prefix="/reports", tags=["Reports"],
+                   dependencies=[Depends(require_feature("advanced_analytics"))])
 _FMT = Query(default="json", description="json | pdf | xlsx | csv")
 def _svc(db): return ReportService(db=db)
 

@@ -2,8 +2,8 @@
 from __future__ import annotations
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Query, Request, status
-from core.dependencies import DbDep, StaffDep, OptTokenDep, ConsumerDep
+from fastapi import APIRouter, Depends, Query, Request, status
+from core.dependencies import DbDep, StaffDep, OptTokenDep, ConsumerDep, require_feature
 from schemas.category import AbandonSession, CreateChannelSession
 from schemas.feedback import AIChannelSessionCreate, AIChannelMessage, AISessionResponse
 from services.channel_service import ChannelService
@@ -32,6 +32,7 @@ def _svc(db): return ChannelService(db=db)
         "The LLM automatically extracts feedback details and auto-submits when confident."
     ),
     tags=["AI Channels"],
+    dependencies=[Depends(require_feature("ai_conversation"))],
 )
 async def ai_start_session(body: AIChannelSessionCreate, db: DbDep, token: ConsumerDep) -> AISessionResponse:
     data = body.model_dump(exclude_none=True)

@@ -45,6 +45,10 @@ class Settings(BaseSettings):
         default="http://ai_service:8085",
         description="Base URL of ai_service — used to auto-classify Consumer feedback.",
     )
+    SUBSCRIPTION_SERVICE_URL: str = Field(
+        default="http://subscription_service:8140",
+        description="Base URL of subscription_service for feature-gate checks.",
+    )
     # Shared secret sent as X-Service-Key header on internal calls
     INTERNAL_SERVICE_KEY: str = Field(
         default="change-me-in-production",

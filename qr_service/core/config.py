@@ -18,10 +18,11 @@ class Settings(BaseSettings):
     AUTH_ALGORITHM:  str = "HS256"
 
     # Service-to-service
-    INTERNAL_SERVICE_KEY: str = "change-me-set-a-real-secret-in-production"
-    AUTH_SERVICE_URL:     str = "http://riviwa_auth_service:8000"
-    FEEDBACK_SERVICE_URL: str = "http://feedback_service:8090"
-    AI_SERVICE_URL:       str = "http://ai_service:8085"
+    INTERNAL_SERVICE_KEY:     str = "change-me-set-a-real-secret-in-production"
+    AUTH_SERVICE_URL:         str = "http://riviwa_auth_service:8000"
+    FEEDBACK_SERVICE_URL:     str = "http://feedback_service:8090"
+    AI_SERVICE_URL:           str = "http://ai_service:8085"
+    SUBSCRIPTION_SERVICE_URL: str = "http://subscription_service:8140"
 
     # MinIO
     MINIO_ENDPOINT:   str = "http://minio:9000"

@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.auth import IntegrationAuthDep, AuthContext
+from core.auth import IntegrationAuthDep, AuthContext, require_integration_feature
 from core.config import settings
 from core.security import encrypt_field, decrypt_field, generate_opaque_token, hash_code
 from db.session import get_async_session
@@ -41,7 +41,8 @@ def _check_origin(client: IntegrationClient, origin: Optional[str]) -> bool:
 
 # ── POST /integration/widget/session — Create widget session ─────────────────
 
-@router.post("/session", status_code=status.HTTP_201_CREATED)
+@router.post("/session", status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_integration_feature("widget_embed"))])
 async def create_widget_session(
     body: dict,
     db: AsyncSession = Depends(get_async_session),
@@ -179,7 +180,7 @@ async def get_widget_config(
 
 # ── GET /integration/widget/snippet — JS tag snippet ─────────────────────────
 
-@router.get("/snippet")
+@router.get("/snippet", dependencies=[Depends(require_integration_feature("widget_embed"))])
 async def get_embed_snippet(
     client_id: str,
     db: AsyncSession = Depends(get_async_session),

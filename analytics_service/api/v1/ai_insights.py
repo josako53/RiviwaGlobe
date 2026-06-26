@@ -15,10 +15,10 @@ from uuid import UUID
 
 import httpx
 import structlog
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from core.config import settings
-from core.dependencies import AnalyticsDbDep, CurrentUser, FeedbackDbDep
+from core.dependencies import AnalyticsDbDep, CurrentUser, FeedbackDbDep, require_feature
 from repositories.analytics_repo import AnalyticsRepository
 from repositories.feedback_analytics_repo import FeedbackAnalyticsRepository
 from schemas.analytics import AIInsightRequest, AIInsightResponse
@@ -289,7 +289,8 @@ async def _build_platform_context(context_type, fb_db) -> Dict[str, Any]:
 
 # ── POST /analytics/ai/ask ────────────────────────────────────────────────────
 
-@router.post("/ask", response_model=AIInsightResponse)
+@router.post("/ask", response_model=AIInsightResponse,
+             dependencies=[Depends(require_feature("ai_insights"))])
 async def ask_ai_insight(
     body:    AIInsightRequest,
     _token:  CurrentUser = None,

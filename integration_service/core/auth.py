@@ -1,5 +1,5 @@
 """
-core/auth.py — Request authentication for integration_service.
+core/auth.py — Request authentication + subscription feature-gate for integration_service.
 
 Three auth methods accepted:
   1. API Key       — rwi_live_xxx  in X-API-Key header
@@ -11,8 +11,9 @@ IP allowlist and rate limiting checks are applied after auth succeeds.
 from __future__ import annotations
 
 import hashlib
+import httpx
 import time
-from typing import Optional
+from typing import Callable, Optional
 import uuid
 
 import jwt
@@ -230,3 +231,40 @@ async def require_integration_auth(
 
 # Shorthand dependency
 IntegrationAuthDep = Depends(require_integration_auth)
+
+
+def require_integration_feature(feature: str) -> Callable:
+    """Subscription feature-gate for integration endpoints (uses AuthContext, not JWT).
+    Raises HTTP 402 if org is not on a plan with `feature`, 503 if unreachable.
+    Usage: @router.post("/path", dependencies=[Depends(require_integration_feature("flag"))])
+    """
+    async def _gate(ctx: AuthContext = IntegrationAuthDep) -> None:
+        org_id = ctx.org_id
+        if not org_id:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "NO_ACTIVE_ORG",
+                        "message": "This integration client is not bound to an organisation."},
+            )
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{settings.SUBSCRIPTION_SERVICE_URL}/api/v1/subscriptions/internal/feature-check",
+                    params={"org_id": str(org_id), "feature": feature},
+                    headers={"X-Service-Key": settings.INTERNAL_SERVICE_KEY},
+                )
+        except Exception as exc:
+            log.warning("subscription.check.unavailable", feature=feature, error=str(exc))
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "SUBSCRIPTION_CHECK_FAILED",
+                        "message": "Unable to verify subscription. Please try again."},
+            )
+        if resp.status_code != 200 or not resp.json().get("has_access"):
+            raise HTTPException(
+                status_code=402,
+                detail={"error": "FEATURE_NOT_AVAILABLE", "feature": feature,
+                        "message": f"Your current plan does not include '{feature}'. "
+                                    "Upgrade your subscription to access this feature."},
+            )
+    return _gate

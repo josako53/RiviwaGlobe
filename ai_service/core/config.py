@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     AUTH_SERVICE_URL:        str = Field(default="http://riviwa_auth_service:8000")
     STAKEHOLDER_SERVICE_URL: str = Field(default="http://stakeholder_service:8070")
     ANALYTICS_SERVICE_URL:   str = Field(default="http://analytics_service:8095")
+    SUBSCRIPTION_SERVICE_URL: str = Field(default="http://subscription_service:8140",
+                                           description="Base URL of subscription_service for feature-gate checks.")
 
     # ── Ollama LLM ────────────────────────────────────────────────────────────
     OLLAMA_BASE_URL:     str = Field(default="http://ollama:11434")

@@ -44,8 +44,9 @@ class Settings(BaseSettings):
     KAFKA_CONSUMER_GROUP: str = "staff_service_group"
 
     # ── Service-to-Service ────────────────────────────────────────────────────
-    INTERNAL_SERVICE_KEY: str = "change-me-in-production"
-    AUTH_SERVICE_URL: str = "http://riviwa_auth_service:8000"
+    INTERNAL_SERVICE_KEY:     str = "change-me-in-production"
+    AUTH_SERVICE_URL:         str = "http://riviwa_auth_service:8000"
+    SUBSCRIPTION_SERVICE_URL: str = "http://subscription_service:8140"
 
     # ── Redis (DB 10 for rate limiting) ───────────────────────────────────────
     REDIS_URL: str = "redis://redis:6379/10"

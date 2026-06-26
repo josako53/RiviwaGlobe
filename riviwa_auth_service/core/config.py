@@ -297,7 +297,9 @@ class Settings(BaseSettings):
     FRAUD_SCORE_BLOCK_THRESHOLD: int = 80
 
     # ── Cross-service URLs ────────────────────────────────────────────────────
-    PRODUCT_SERVICE_URL: str = Field(default="http://product_service:8110")
+    PRODUCT_SERVICE_URL:      str = Field(default="http://product_service:8110")
+    SUBSCRIPTION_SERVICE_URL: str = Field(default="http://subscription_service:8140",
+                                           description="Base URL of subscription_service for feature-gate checks.")
 
     # ── Object storage (MinIO / S3) ───────────────────────────────────────────
     MINIO_ENDPOINT:   str = Field(default="http://minio:9000")

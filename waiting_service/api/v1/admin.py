@@ -3,11 +3,11 @@ from __future__ import annotations
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from core.dependencies import AdminDep, DbDep, KafkaDep, RedisDep, StaffDep
+from core.dependencies import AdminDep, DbDep, KafkaDep, RedisDep, StaffDep, require_feature
 from core.exceptions import (
     OrgNotFoundError, ServicePointNotFoundError, ServiceFlowNotFoundError,
     StaffCounterNotFoundError, SessionAlreadyOpenError, ForbiddenError,
@@ -27,7 +27,11 @@ from schemas.urgency_request import UrgencyReviewIn
 from services.staff_session_service import StaffSessionService
 from services.urgency_service import UrgencyService
 
-admin_router = APIRouter(prefix="/waiting/admin", tags=["Admin"])
+admin_router = APIRouter(
+    prefix="/waiting/admin",
+    tags=["Admin"],
+    dependencies=[Depends(require_feature("waiting_queue"))],
+)
 
 
 # ── Service Points ────────────────────────────────────────────────────────────

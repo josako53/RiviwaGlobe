@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     # ── Internal service key (same secret as other services) ──────────────────
     INTERNAL_SERVICE_KEY: str = Field(default="change-me-in-env")
 
+    # ── Subscription service (feature-gate checks) ────────────────────────────
+    SUBSCRIPTION_SERVICE_URL: str = Field(
+        default="http://subscription_service:8140",
+        description="Base URL of subscription_service for feature-gate checks.",
+    )
+
     # ── Delivery retry config ─────────────────────────────────────────────────
     MAX_RETRIES:          int   = Field(default=3)
     RETRY_BASE_DELAY_SEC: float = Field(default=60.0)   # first retry after 60s

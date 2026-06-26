@@ -4,9 +4,9 @@ import math
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
-from core.dependencies import AdminDep, DbDep, KafkaDep, ManagerDep, StaffDep
+from core.dependencies import AdminDep, DbDep, KafkaDep, ManagerDep, StaffDep, require_feature
 from models.product import ListingStatus, ProductType
 from repositories.product_repo import ProductRepository
 from schemas.product import (
@@ -44,7 +44,8 @@ def _is_admin(claims: Any) -> bool:
 
 # ── Create ────────────────────────────────────────────────────────────────────
 
-@router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_feature("product_catalog"))])
 async def create_product(
     body: ProductCreate,
     db: DbDep,
@@ -129,6 +130,7 @@ async def list_org_custom_fields(
     response_model=OrgCustomFieldDefOut,
     status_code=status.HTTP_201_CREATED,
     summary="Create a custom product field definition for this org",
+    dependencies=[Depends(require_feature("product_catalog"))],
     description=(
         "Define a new custom attribute field for your organisation's products. "
         "Once created, this field appears on the product edit form for all org products "
@@ -172,6 +174,7 @@ async def create_org_custom_field(
     "/org-custom-fields/{field_id}",
     response_model=OrgCustomFieldDefOut,
     summary="Update a custom field definition",
+    dependencies=[Depends(require_feature("product_catalog"))],
 )
 async def update_org_custom_field(
     field_id: UUID,
@@ -201,6 +204,7 @@ async def update_org_custom_field(
     "/org-custom-fields/{field_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Deactivate a custom field definition",
+    dependencies=[Depends(require_feature("product_catalog"))],
 )
 async def deactivate_org_custom_field(
     field_id: UUID,
@@ -238,7 +242,8 @@ async def get_product(
 
 # ── Update ────────────────────────────────────────────────────────────────────
 
-@router.patch("/{product_id}", response_model=ProductResponse)
+@router.patch("/{product_id}", response_model=ProductResponse,
+              dependencies=[Depends(require_feature("product_catalog"))])
 async def update_product(
     product_id: UUID,
     body: ProductUpdate,
@@ -257,7 +262,8 @@ async def update_product(
 
 # ── Publish / Deactivate ──────────────────────────────────────────────────────
 
-@router.patch("/{product_id}/publish", response_model=PublishResponse)
+@router.patch("/{product_id}/publish", response_model=PublishResponse,
+              dependencies=[Depends(require_feature("product_catalog"))])
 async def publish_product(
     product_id: UUID,
     db: DbDep,
@@ -275,7 +281,8 @@ async def publish_product(
     )
 
 
-@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT,
+               dependencies=[Depends(require_feature("product_catalog"))])
 async def deactivate_product(
     product_id: UUID,
     db: DbDep,
@@ -289,7 +296,8 @@ async def deactivate_product(
 
 # ── Bullet Points ─────────────────────────────────────────────────────────────
 
-@router.put("/{product_id}/bullet-points", response_model=List[BulletPointOut])
+@router.put("/{product_id}/bullet-points", response_model=List[BulletPointOut],
+            dependencies=[Depends(require_feature("product_catalog"))])
 async def replace_bullet_points(
     product_id: UUID,
     body: List[BulletPointIn],
@@ -313,7 +321,8 @@ async def get_bullet_points(product_id: UUID, db: DbDep, kafka: KafkaDep, claims
 
 # ── Images ────────────────────────────────────────────────────────────────────
 
-@router.post("/{product_id}/images", response_model=ProductImageOut, status_code=status.HTTP_201_CREATED)
+@router.post("/{product_id}/images", response_model=ProductImageOut, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_feature("product_catalog"))])
 async def add_image(
     product_id: UUID,
     body: ProductImageIn,
@@ -330,7 +339,8 @@ async def get_images(product_id: UUID, db: DbDep, kafka: KafkaDep, claims: Staff
     return await ProductRepository(db).get_images(product_id)
 
 
-@router.delete("/{product_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{product_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT,
+               dependencies=[Depends(require_feature("product_catalog"))])
 async def delete_image(
     product_id: UUID,
     image_id: UUID,
@@ -344,7 +354,8 @@ async def delete_image(
 
 # ── Flexible Attributes ───────────────────────────────────────────────────────
 
-@router.put("/{product_id}/attributes", response_model=List[ProductAttributeOut])
+@router.put("/{product_id}/attributes", response_model=List[ProductAttributeOut],
+            dependencies=[Depends(require_feature("product_catalog"))])
 async def replace_attributes(
     product_id: UUID,
     body: List[ProductAttributeIn],
@@ -376,7 +387,8 @@ async def get_category_attrs(product_id: UUID, db: DbDep, kafka: KafkaDep, claim
     return attrs.model_dump(exclude={"product_id"})
 
 
-@router.put("/{product_id}/category-attrs")
+@router.put("/{product_id}/category-attrs",
+            dependencies=[Depends(require_feature("product_catalog"))])
 async def upsert_category_attrs(
     product_id: UUID,
     body: Dict[str, Any],
@@ -446,6 +458,7 @@ async def list_documents(
     response_model=ProductDocumentOut,
     status_code=status.HTTP_201_CREATED,
     summary="Attach a document to a product",
+    dependencies=[Depends(require_feature("product_catalog"))],
     description=(
         "Attach a manual, installation guide, datasheet, safety sheet, or any other document "
         "to a product or service listing.\n\n"
@@ -480,6 +493,7 @@ async def add_document(
     "/{product_id}/documents/{doc_id}",
     response_model=ProductDocumentOut,
     summary="Update document metadata or replace file URL",
+    dependencies=[Depends(require_feature("product_catalog"))],
 )
 async def update_document(
     product_id: UUID,
@@ -507,6 +521,7 @@ async def update_document(
     "/{product_id}/documents/{doc_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove a document from a product",
+    dependencies=[Depends(require_feature("product_catalog"))],
 )
 async def delete_document(
     product_id: UUID,

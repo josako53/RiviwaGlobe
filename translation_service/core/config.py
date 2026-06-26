@@ -41,6 +41,16 @@ class Settings(BaseSettings):
     # ── Internal service key (shared secret across all services) ──────────────
     INTERNAL_SERVICE_KEY: str = Field(default="change-me-in-env")
 
+    # ── JWT (for user-facing endpoints that check subscription) ───────────────
+    AUTH_SECRET_KEY: str = Field(default="change-me-in-env")
+    AUTH_ALGORITHM:  str = Field(default="HS256")
+
+    # ── Subscription service (feature-gate checks) ────────────────────────────
+    SUBSCRIPTION_SERVICE_URL: str = Field(
+        default="http://subscription_service:8140",
+        description="Base URL of subscription_service for feature-gate checks.",
+    )
+
     # ── Redis — translation + detection cache ─────────────────────────────────
     REDIS_URL:              str = Field(default="redis://redis:6379/4")
     TRANSLATION_CACHE_TTL:  int = Field(default=86400)   # 24 h

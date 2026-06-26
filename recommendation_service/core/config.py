@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     # ── Service-to-service ───────────────────────────────────────────────────
     INTERNAL_SERVICE_KEY: str = "change-me"
     AUTH_SERVICE_URL: str = "http://riviwa_auth_service:8000"
+    SUBSCRIPTION_SERVICE_URL: str = "http://subscription_service:8140"
 
 
 settings = Settings()

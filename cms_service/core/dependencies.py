@@ -3,6 +3,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Annotated, Optional
 
+import httpx
+import structlog
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,3 +110,38 @@ AuthDep     = Annotated[TokenClaims, Depends(require_authenticated)]
 StaffDep    = Annotated[TokenClaims, Depends(require_staff)]
 InternalDep = Annotated[None, Depends(require_service_key)]
 OptTokenDep = Annotated[Optional[TokenClaims], Depends(optional_token)]
+
+log = structlog.get_logger(__name__)
+
+
+def require_feature(feature: str):
+    """Subscription feature-gate. Raises HTTP 402 if not on plan, 503 if unreachable."""
+    async def _gate(token: Annotated[TokenClaims, Depends(require_authenticated)]) -> None:
+        if not token.org_id:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "NO_ACTIVE_ORG",
+                        "message": "Switch to an active organisation to use this feature."},
+            )
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{settings.SUBSCRIPTION_SERVICE_URL}/api/v1/subscriptions/internal/feature-check",
+                    params={"org_id": str(token.org_id), "feature": feature},
+                    headers={"X-Service-Key": settings.INTERNAL_SERVICE_KEY},
+                )
+        except Exception as exc:
+            log.warning("subscription.check.unavailable", feature=feature, error=str(exc))
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "SUBSCRIPTION_CHECK_FAILED",
+                        "message": "Unable to verify subscription. Please try again."},
+            )
+        if resp.status_code != 200 or not resp.json().get("has_access"):
+            raise HTTPException(
+                status_code=402,
+                detail={"error": "FEATURE_NOT_AVAILABLE", "feature": feature,
+                        "message": f"Your current plan does not include '{feature}'. "
+                                    "Upgrade your subscription to access this feature."},
+            )
+    return _gate

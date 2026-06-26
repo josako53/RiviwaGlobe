@@ -9,7 +9,7 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.auth import JWTDep
+from core.auth import JWTDep, require_feature
 from core.security import generate_short_code
 from db.session import get_async_session
 from models.qr import QRBatch, QRCode
@@ -92,7 +92,8 @@ def _batch_out(b: QRBatch) -> dict:
 # ── Generate single QR ────────────────────────────────────────────────────────
 
 @router.post("/generate", status_code=status.HTTP_201_CREATED,
-             summary="Generate a single QR code")
+             summary="Generate a single QR code",
+             dependencies=[Depends(require_feature("qr_generation"))])
 async def generate_qr(
     body: dict,
     bg:   BackgroundTasks,
@@ -256,7 +257,8 @@ async def get_batch_status(
 # ── Queue bulk generation ─────────────────────────────────────────────────────
 
 @router.post("/bulk", status_code=status.HTTP_202_ACCEPTED,
-             summary="Queue a bulk QR generation job (1–10,000 codes)")
+             summary="Queue a bulk QR generation job (1–10,000 codes)",
+             dependencies=[Depends(require_feature("qr_generation"))])
 async def create_bulk_batch(
     body: dict,
     bg:   BackgroundTasks,

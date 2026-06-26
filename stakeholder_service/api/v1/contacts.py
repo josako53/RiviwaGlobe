@@ -1,8 +1,8 @@
 """api/v1/contacts.py — HTTP orchestration only"""
 from __future__ import annotations
 import uuid
-from fastapi import APIRouter, Query, status
-from core.dependencies import DbDep, KafkaDep, StaffDep
+from fastapi import APIRouter, Depends, Query, status
+from core.dependencies import DbDep, KafkaDep, StaffDep, require_feature
 from schemas.stakeholder import AddContact, UpdateContact, DeactivateContact
 from services.stakeholder_service import StakeholderService
 
@@ -11,7 +11,8 @@ router = APIRouter(prefix="/stakeholders", tags=["Contacts"])
 def _svc(db, kafka): return StakeholderService(db=db, producer=kafka)
 def _c_out(c): return {"id":str(c.id),"stakeholder_id":str(c.stakeholder_id),"user_id":str(c.user_id) if c.user_id else None,"full_name":c.full_name,"title":c.title,"role_in_org":c.role_in_org,"email":c.email,"phone":c.phone,"preferred_channel":c.preferred_channel,"is_primary":c.is_primary,"can_submit_feedback":c.can_submit_feedback,"can_receive_communications":c.can_receive_communications,"can_distribute_communications":c.can_distribute_communications,"is_active":c.is_active,"notes":c.notes,"created_at":c.created_at.isoformat()}
 
-@router.post("/{stakeholder_id}/contacts", status_code=status.HTTP_201_CREATED, summary="Add a contact to a stakeholder")
+@router.post("/{stakeholder_id}/contacts", status_code=status.HTTP_201_CREATED, summary="Add a contact to a stakeholder",
+             dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def add_contact(stakeholder_id: uuid.UUID, body: AddContact, db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
     return _c_out(await _svc(db, kafka).add_contact(stakeholder_id, body.model_dump(exclude_none=True)))
 
@@ -19,11 +20,13 @@ async def add_contact(stakeholder_id: uuid.UUID, body: AddContact, db: DbDep, ka
 async def list_contacts(stakeholder_id: uuid.UUID, db: DbDep, kafka: KafkaDep, _: StaffDep, active_only: bool = Query(default=True)) -> dict:
     return {"items": [_c_out(c) for c in await _svc(db, kafka).list_contacts(stakeholder_id, active_only)]}
 
-@router.patch("/{stakeholder_id}/contacts/{contact_id}", summary="Update a contact")
+@router.patch("/{stakeholder_id}/contacts/{contact_id}", summary="Update a contact",
+              dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def update_contact(stakeholder_id: uuid.UUID, contact_id: uuid.UUID, body: UpdateContact, db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
     return _c_out(await _svc(db, kafka).update_contact(stakeholder_id, contact_id, body.model_dump(exclude_none=True)))
 
-@router.delete("/{stakeholder_id}/contacts/{contact_id}", summary="Deactivate a contact")
+@router.delete("/{stakeholder_id}/contacts/{contact_id}", summary="Deactivate a contact",
+               dependencies=[Depends(require_feature("stakeholder_engagement"))])
 async def deactivate_contact(stakeholder_id: uuid.UUID, contact_id: uuid.UUID, body: DeactivateContact, db: DbDep, kafka: KafkaDep, _: StaffDep) -> dict:
     await _svc(db, kafka).deactivate_contact(stakeholder_id, contact_id, body.reason)
     return {"message": f"Contact {contact_id} deactivated."}

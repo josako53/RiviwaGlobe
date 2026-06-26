@@ -51,6 +51,7 @@ from core.dependencies import (
     DbDep,
     get_org_context,
     require_active_user,
+    require_feature,
     require_org_role,
     require_platform_role,
     require_verified_user,
@@ -394,7 +395,9 @@ async def list_members(
     response_model=MemberResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add a member directly (no invite)",
+    dependencies=[Depends(require_feature("multi_org"))],
     responses={
+        402: {"description": "Plan does not include multi-org member management"},
         403: {"description": "ADMIN role required"},
         404: {"description": "User not found"},
         409: {"description": "User is already a member"},
@@ -532,8 +535,10 @@ async def transfer_ownership(
     response_model=InviteResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Send an organisation invite",
+    dependencies=[Depends(require_feature("multi_org"))],
     responses={
         400: {"description": "Missing invited_email or invited_user_id"},
+        402: {"description": "Plan does not include organisation invites"},
         403: {"description": "MANAGER role required"},
         409: {"description": "A pending invite already exists for this target"},
     },

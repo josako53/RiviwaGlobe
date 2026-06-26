@@ -20,9 +20,10 @@ class Settings(BaseSettings):
     INTERNAL_SERVICE_KEY: str = "change-me-set-a-real-secret-in-production"
 
     # Service URLs
-    QR_SERVICE_URL:      str = "http://qr_service:8120"
-    PRODUCT_SERVICE_URL: str = "http://product_service:8110"
-    AI_SERVICE_URL:      str = "http://ai_service:8085"
+    QR_SERVICE_URL:           str = "http://qr_service:8120"
+    PRODUCT_SERVICE_URL:      str = "http://product_service:8110"
+    AI_SERVICE_URL:           str = "http://ai_service:8085"
+    SUBSCRIPTION_SERVICE_URL: str = "http://subscription_service:8140"
 
     # MinIO / S3
     MINIO_ENDPOINT:      str = "http://minio:9000"
