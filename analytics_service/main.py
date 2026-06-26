@@ -19,6 +19,8 @@ from api.v1.router import api_v1_router
 from core.config import settings
 from core.exceptions import AppError
 from db.session import analytics_engine
+from events.consumer import start_consumer as start_verification_consumer
+from events.consumer import stop_consumer as stop_verification_consumer
 
 log = structlog.get_logger(__name__)
 
@@ -37,12 +39,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             HotspotAlert,
             StaffLogin,
         )
+        from models.verification import (  # noqa: F401
+            VerificationFakeReportLog,
+            VerificationScanLog,
+        )
         async with analytics_engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
         log.info("analytics.startup.db_tables_ready")
     except Exception as exc:
         log.error("analytics.startup.db_init_failed", error=str(exc), exc_info=exc)
         raise
+
+    # Start verification events consumer
+    await start_verification_consumer()
 
     log.info(
         "analytics.startup.complete",
@@ -54,6 +63,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
+    await stop_verification_consumer()
     await analytics_engine.dispose()
     log.info("analytics.shutdown.complete")
 

@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     GROQ_MODEL:     str = Field(default="llama-3.3-70b-versatile")
     GROQ_BASE_URL:  str = Field(default="https://api.groq.com/openai/v1")
 
+    # ── Kafka (verification events consumer) ──────────────────────────────────
+    KAFKA_BOOTSTRAP_SERVERS: str = Field(
+        default="kafka-1:9092",
+        description="Comma-separated Kafka broker list.",
+    )
+    KAFKA_VERIFICATION_CONSUMER_GROUP: str = Field(
+        default="analytics_service_verification_events",
+    )
+
     # ── Runtime ───────────────────────────────────────────────────────────────
     ENVIRONMENT: str  = Field(default="production")
     DEBUG:       bool = Field(default=False)
