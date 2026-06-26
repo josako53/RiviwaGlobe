@@ -31,10 +31,16 @@ async def lifespan(app: FastAPI):
     app.state.producer = producer
     log.info("cms_service.startup.kafka_producer_ready")
 
+    from events.consumer import start_consumer
+    await start_consumer()
+    log.info("cms_service.startup.kafka_consumer_ready")
+
     log.info("cms_service.startup.complete", port=8150)
     yield
 
     log.info("cms_service.shutdown.begin")
+    from events.consumer import stop_consumer
+    await stop_consumer()
     await app.state.producer.stop()
     await engine.dispose()
     log.info("cms_service.shutdown.complete")
