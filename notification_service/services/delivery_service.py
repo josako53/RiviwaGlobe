@@ -42,6 +42,7 @@ from typing import Any, Optional
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from channels.base import BaseChannel, ChannelPayload
@@ -155,7 +156,20 @@ class DeliveryService:
             extra_data        = request.get("metadata"),
         )
         self.db.add(notification)
-        await self.db.flush()
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            # Concurrent request already inserted the same idempotency_key — treat as a hit.
+            await self.db.rollback()
+            if idempotency_key:
+                existing = await self._find_by_idempotency(idempotency_key)
+                if existing:
+                    log.debug("notification.idempotent_skip",
+                              idempotency_key=idempotency_key,
+                              existing_id=str(existing.id),
+                              race="true")
+                    return existing.id
+            return None
 
         # ── If scheduled for future, save and return — scheduler will dispatch ─
         if scheduled_at and scheduled_at > datetime.now(timezone.utc):
