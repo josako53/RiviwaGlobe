@@ -269,13 +269,14 @@ class IndustryFieldTemplate(SQLModel, table=True):
 # ── IndustryPolicyDocument ────────────────────────────────────────────────────
 
 class PolicyDocumentType(str, Enum):
-    LAW        = "LAW"         # Acts of Parliament, statutes
-    REGULATION = "REGULATION"  # Statutory instruments, rules
-    POLICY     = "POLICY"      # Government policy papers
-    STANDARD   = "STANDARD"    # Industry standards (ISO, IEC, etc.)
-    GUIDELINE  = "GUIDELINE"   # Best practice guidelines
-    DIRECTIVE  = "DIRECTIVE"   # Directives / circulars
-    FRAMEWORK  = "FRAMEWORK"   # Operational frameworks
+    CONSTITUTION = "CONSTITUTION"  # National/state constitutions
+    LAW          = "LAW"           # Acts of Parliament, statutes
+    REGULATION   = "REGULATION"    # Statutory instruments, rules
+    POLICY       = "POLICY"        # Government policy papers
+    STANDARD     = "STANDARD"      # Industry standards (ISO, IEC, etc.)
+    GUIDELINE    = "GUIDELINE"     # Best practice guidelines
+    DIRECTIVE    = "DIRECTIVE"     # Directives / circulars
+    FRAMEWORK    = "FRAMEWORK"     # Operational frameworks
 
 
 class IndustryPolicyDocument(SQLModel, table=True):

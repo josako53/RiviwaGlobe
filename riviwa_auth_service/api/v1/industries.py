@@ -282,7 +282,7 @@ def _policy_out(p) -> dict:
 async def list_policy_documents(
     db:           DbDep,
     country_code: Optional[str]  = Query(default=None, description="Filter by country code e.g. 'TZ'"),
-    policy_type:  Optional[str]  = Query(default=None, description="Filter by type: LAW|REGULATION|POLICY|STANDARD|GUIDELINE|DIRECTIVE|FRAMEWORK"),
+    policy_type:  Optional[str]  = Query(default=None, description="Filter by type: CONSTITUTION|LAW|REGULATION|POLICY|STANDARD|GUIDELINE|DIRECTIVE|FRAMEWORK"),
     industry_id:  Optional[uuid.UUID] = Query(default=None, description="Filter by industry"),
     active_only:  bool           = Query(default=True),
 ) -> dict:
