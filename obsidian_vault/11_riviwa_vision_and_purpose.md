@@ -1,10 +1,18 @@
 # Riviwa — Vision, Purpose & Core Identity
 
+## What Is Riviwa
+
+**Riviwa is an online platform that ensures the provision of excellent services (as the owner would intend them to be) and high-quality products in REAL TIME for Governments, Heads of State, Private Sectors, NGOs, Embassies, Hospitals, Agriculture, Social Welfare, and many more — all through feedback.**
+
+It is not just a complaints system. It is a comprehensive feedback intelligence and action platform that connects people who receive services with the organisations that provide them — creating a real-time loop of accountability, improvement, and trust.
+
+## Primary Objective
+
+Riviwa AI aims to solve or reduce the degree of problems and implement suggestions/advice in real-time to command excellence in service provision and high-quality products. It multiplies all key positive performing factors — from applause — to all staff and departments to achieve excellence in service provision and high-quality products. Moreover, it clarifies and answers all questions from all inquiries in real-time. All of this is done through feedback, and Riviwa AI intelligently customises responses as per each individual case and scenario.
+
 ## Mission Statement
 
 **"Improve the quality of service provision and products in REAL-TIME for anyone, anywhere in the world."**
-
-Riviwa is a global real-time quality service improvement platform. It is not just a complaints system. It is a comprehensive feedback intelligence and action platform that connects people who receive services with the organisations that provide them — creating a real-time loop of accountability, improvement, and trust.
 
 ## Biblical Foundation
 
@@ -67,10 +75,18 @@ Every organisation that wants to improve its service quality subscribes to Riviw
 8. Resolution is recorded, analytics updated
 
 ### Four Types of Feedback
-- **Grievance** — A problem, harm, complaint, or injustice that needs to be addressed
-- **Suggestion** — An idea for improvement
-- **Applause** — Recognition of excellent service or work
-- **Inquiry** — A question or request for information
+- **Grievance (Complaint)** — The consumer expresses dissatisfaction or annoyance about something — a real or imagined cause for complaint — usually arising from a feeling of being treated unfairly. It may also refer to the distress caused by an issue and the formal complaint filed to seek a resolution.
+- **Suggestion** — Recommendations or advice on how things/matters should be done, handled, or attended to for the sake of improvement — or what should be considered at the moment or next time.
+- **Applause** — A compliment of the service, product, staff, entity, feature, organisation, or business.
+- **Inquiry** — Asking a question or requesting details (e.g. a customer making an inquiry about pricing or availability). A request for information designed to resolve doubts, discover facts, or uncover the truth — including how things work or how things are done from the service or product manual.
+
+### What Is "Excellent Service" and "High-Quality Product"?
+
+Excellent service and a high-quality product is what the organisation intended to offer through their mission, vision, objectives, functionalities, service details, terms and conditions, and everything about the service or product as outlined. If not outlined, then as per the general operations of the given industry and service — for example, a hospital is for treating sick people, a school is for educating children, a bank is for managing money safely.
+
+### What Is an "Organisation"?
+
+The term "Organisation" on Riviwa means any Organisation, Business, Company, NGO, or Service Provider — and anything of the like.
 
 ## Key Features & Differentiators
 
