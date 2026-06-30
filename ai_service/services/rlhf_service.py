@@ -311,7 +311,7 @@ class RLHFService:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 r = await client.get(
-                    f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/{org_id}",
+                    f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/{org_id}/ai-context",
                     headers=_INTERNAL_HEADERS,
                 )
                 if r.status_code != 200:
