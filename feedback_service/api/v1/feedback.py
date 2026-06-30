@@ -279,16 +279,22 @@ async def get_feedback_for_ai(feedback_id: uuid.UUID, request: Request, db: DbDe
     if service_key != settings.INTERNAL_SERVICE_KEY:
         return JSONResponse(status_code=403, content={"error": "FORBIDDEN", "message": "Invalid service key."})
 
+    from models.feedback import FeedbackResolution
     result = await db.execute(select(Feedback).where(Feedback.id == feedback_id))
     f = result.scalar_one_or_none()
     if not f:
         return JSONResponse(status_code=404, content={"error": "NOT_FOUND", "message": "Feedback not found."})
 
+    res_result = await db.execute(select(FeedbackResolution).where(FeedbackResolution.feedback_id == feedback_id))
+    res = res_result.scalar_one_or_none()
+
     return {
         "id":                          str(f.id),
+        "org_id":                      str(f.org_id) if f.org_id else None,
         "project_id":                  str(f.project_id) if f.project_id else None,
         "category_def_id":             str(f.category_def_id) if f.category_def_id else None,
         "feedback_type":               f.feedback_type.value if f.feedback_type else None,
+        "status":                      f.status.value if f.status else None,
         "category":                    f.category.value if f.category else None,
         "subject":                     f.subject,
         "description":                 f.description,
@@ -299,6 +305,11 @@ async def get_feedback_for_ai(feedback_id: uuid.UUID, request: Request, db: DbDe
         "issue_ward":                  f.issue_ward,
         "issue_mtaa":                  f.issue_mtaa,
         "submitted_at":                f.submitted_at.isoformat() if f.submitted_at else None,
+        "resolution": {
+            "resolution_summary":  res.resolution_summary if res else None,
+            "grievant_satisfied":  res.grievant_satisfied if res else None,
+            "resolved_at":         res.resolved_at.isoformat() if res and res.resolved_at else None,
+        } if res else None,
     }
 
 
