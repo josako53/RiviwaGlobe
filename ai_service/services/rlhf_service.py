@@ -357,7 +357,7 @@ class RLHFService:
             or ""
         ).strip()
 
-        if len(description.split()) < 20:
+        if len(description.split()) < 12:
             return None
 
         prompt = f"""You are extracting a real-world Owner Standard service scenario from a resolved {fb_type} in the {industry_slug} industry.
