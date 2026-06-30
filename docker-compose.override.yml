@@ -154,7 +154,7 @@ services:
     volumes:
       - ./ai_service:/app/ai_service
       - /opt/venv
-      - ./obsidian_vault:/opt/riviwa/obsidian_vault:ro
+      - ./obsidian_vault:/opt/riviwa/obsidian_vault:rw
 
   # ── analytics_service dev override ──────────────────────────────────────
   # Hot-reload enabled. No Kafka dependency. Reads feedback_db read-only.
