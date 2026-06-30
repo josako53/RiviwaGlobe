@@ -737,7 +737,7 @@ services:
     ports: ["8085:8085"]
     volumes:
       - ./models/sentence-transformers:/models/sentence-transformers
-      - ./obsidian_vault:/opt/riviwa/obsidian_vault:ro
+      - ./obsidian_vault:/opt/riviwa/obsidian_vault:rw
     environment:
       # Database
       AI_DB_HOST:     ai_db
