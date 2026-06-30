@@ -726,6 +726,15 @@ services:
       timeout: 5s
       retries: 10
 
+  vault-init:
+    image: alpine:3.19
+    container_name: vault_init
+    restart: "no"
+    networks: [riviwa-net]
+    volumes:
+      - ./obsidian_vault:/vault
+    command: sh -c "chown -R 999:999 /vault && chmod -R ug+w /vault"
+
   ai_service:
     build:
       context: ./ai_service
@@ -785,6 +794,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
 
   # ── KAFKA UI ──────────────────────────────────────────────────────────────
   kafka-ui:
