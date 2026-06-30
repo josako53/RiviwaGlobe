@@ -320,6 +320,24 @@ async def _classify_submitted_feedback(payload: dict) -> None:
     log.info("ai.consumer.classification_done", feedback_id=feedback_id, enriched=enriched)
 
 
+# ── RLHF scenario extraction ─────────────────────────────────────────────────
+
+async def _rlhf_process_resolved(payload: dict) -> None:
+    """
+    Triggered by feedback.resolved event.
+    Checks eligibility and extracts a new Owner Standard scenario if the feedback
+    meets RLHF criteria (grievant accepted resolution, suggestion actioned, etc.).
+    """
+    feedback_id = payload.get("feedback_id")
+    if not feedback_id:
+        return
+    try:
+        from services.rlhf_service import get_rlhf_service
+        await get_rlhf_service().process_resolved_feedback(str(feedback_id))
+    except Exception as exc:
+        log.error("ai.consumer.rlhf_error", feedback_id=feedback_id, error=str(exc))
+
+
 # ── Consumer loop ─────────────────────────────────────────────────────────────
 
 async def _consume_loop() -> None:
@@ -399,6 +417,9 @@ async def _consume_loop() -> None:
                     # Run classification in a background task so it doesn't
                     # block the consumer loop (Ollama can be slow)
                     asyncio.create_task(_classify_submitted_feedback(payload))
+
+                elif event_type == FeedbackEvents.RESOLVED:
+                    asyncio.create_task(_rlhf_process_resolved(payload))
 
             except Exception as exc:
                 log.error("ai.consumer.message_error", error=str(exc), exc_info=exc)
