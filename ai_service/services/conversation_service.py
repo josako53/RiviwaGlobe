@@ -33,6 +33,19 @@ from services.rag_service import get_rag
 from services.feedback_client import FeedbackClient, submit_multiple_feedback
 from services.auth_client import AuthClient
 from services.stt_service import STTService
+from services.realtime_actions import (
+    extract_location_from_text,
+    classify_urgency,
+    get_nearest_office,
+    get_staff_contact_for_issue,
+    notify_staff_of_grievance,
+    build_closing_prompts,
+    format_ref_message,
+    schedule_followup,
+    get_org_content,
+    check_systemic_pattern,
+    notify_praised_staff,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -281,6 +294,12 @@ class ConversationService:
         # Add Consumer's turn (with optional audio URL for voice messages)
         conv.add_turn("user", message, audio_url=audio_url)
 
+        # AI-1: Pre-extract location hint from raw message so it's in extracted data
+        # before the LLM builds org context and before entity resolution runs.
+        _loc_hint = extract_location_from_text(message)
+        if _loc_hint:
+            conv.merge_extracted(_loc_hint)
+
         # Check follow-up pattern (reference number like GRV-2025-0042)
         if self._is_followup_query(message):
             reply = await self._handle_followup(conv, message)
@@ -302,15 +321,7 @@ class ConversationService:
                 if _has_min:
                     submitted, submitted_feedback = await self._submit_feedback(conv)
                     if submitted:
-                        ref_list = ", ".join(f["unique_ref"] for f in submitted_feedback)
-                        thanks = (
-                            f"Asante! Malalamiko yako yamesajiliwa. Nambari yako ya kufuatilia: {ref_list}. "
-                            f"Unaweza kufuatilia hali yako kwa kutumia nambari hii."
-                            if conv.language == "sw"
-                            else
-                            f"Thank you! Your feedback has been submitted. Reference number(s): {ref_list}. "
-                            f"Use this number to follow up on your submission."
-                        )
+                        thanks = await self._on_feedback_submitted(conv, submitted_feedback)
                         conv.add_turn("assistant", thanks)
                         conv.status = ConversationStatus.SUBMITTED
                         conv.stage  = ConversationStage.DONE
@@ -392,6 +403,71 @@ class ConversationService:
                 urgency_note = self._urgency_message(conv.language, incharge.name, incharge.phone)
                 reply = f"{reply}\n\n{urgency_note}"
 
+        # AI-10: Keyword urgency fallback if LLM did not flag is_urgent
+        if not conv.is_urgent and classify_urgency(message):
+            conv.is_urgent = True
+
+        # ── Real-time enrichment (best-effort, never crashes conversation) ─────
+        _rta_ext = conv.get_extracted()
+        _fb_type = (_rta_ext.get("feedback_type") or "").lower()
+
+        # AI-2/3: Nearest office directions for grievances that share GPS coords
+        if _fb_type == "grievance" and conv.org_id:
+            _lat = _rta_ext.get("gps_lat")
+            _lng = _rta_ext.get("gps_lng")
+            if _lat and _lng:
+                _directions = await get_nearest_office(
+                    str(conv.org_id), float(_lat), float(_lng), conv.language
+                )
+                if _directions:
+                    reply = f"{reply}\n\n{_directions}"
+
+        # AI-4: Relevant staff contact for urgent grievances
+        if conv.is_urgent and _fb_type == "grievance" and conv.org_id:
+            _contact = await get_staff_contact_for_issue(
+                str(conv.org_id), _rta_ext.get("description", "")
+            )
+            if _contact and (_contact.get("phone") or _contact.get("email")):
+                if conv.language == "sw":
+                    _ctxt = f"Mtaalamu anayehusika: {_contact['name']} ({_contact.get('title', '')})"
+                    if _contact.get("phone"):
+                        _ctxt += f", simu: {_contact['phone']}"
+                else:
+                    _ctxt = f"Relevant contact: {_contact['name']} ({_contact.get('title', '')})"
+                    if _contact.get("phone"):
+                        _ctxt += f", phone: {_contact['phone']}"
+                reply = f"{reply}\n\n{_ctxt}"
+
+        # AI-16: Flag systemic pattern for grievances
+        if _fb_type == "grievance" and conv.org_id and _rta_ext.get("description"):
+            _systemic = await check_systemic_pattern(
+                str(conv.org_id),
+                _rta_ext.get("category_def_id") or "",
+                _rta_ext.get("description", ""),
+            )
+            if _systemic and _systemic.get("is_systemic"):
+                _cnt = _systemic.get("affected_count") or "multiple"
+                if conv.language == "sw":
+                    reply = (
+                        f"{reply}\n\nℹ️ Tatizo hili linafanana na malalamiko mengine "
+                        f"{_cnt} — tumeyarekodi kwa ajili ya uchambuzi wa jumla."
+                    )
+                else:
+                    reply = (
+                        f"{reply}\n\nℹ️ This appears to be a recurring issue affecting "
+                        f"{_cnt} others — we have flagged it for systemic review."
+                    )
+
+        # AI-17: Relevant CMS content for inquiry feedback
+        if _fb_type == "inquiry" and conv.org_id:
+            _topic = _rta_ext.get("description") or message
+            _cms_excerpt = await get_org_content(str(conv.org_id), _topic)
+            if _cms_excerpt:
+                if conv.language == "sw":
+                    reply = f"{reply}\n\n📄 Habari zaidi: {_cms_excerpt}"
+                else:
+                    reply = f"{reply}\n\n📄 Additional info: {_cms_excerpt}"
+
         # If the LLM itself signalled submit action, honour it directly.
         # (The pre-LLM confirm-word check above handles the normal user-says-yes path.)
 
@@ -408,16 +484,7 @@ class ConversationService:
         if action == "submit":
             submitted, submitted_feedback = await self._submit_feedback(conv)
             if submitted:
-                ref_list = ", ".join(f["unique_ref"] for f in submitted_feedback)
-                thanks = (
-                    f"Asante! Malalamiko yako yamesajiliwa. Nambari yako ya kufuatilia: {ref_list}. "
-                    f"Unaweza kufuatilia hali yako kwa kutumia nambari hii."
-                    if conv.language == "sw"
-                    else
-                    f"Thank you! Your feedback has been submitted. Reference number(s): {ref_list}. "
-                    f"Use this number to follow up on your submission."
-                )
-                reply = thanks
+                reply = await self._on_feedback_submitted(conv, submitted_feedback)
                 conv.status = ConversationStatus.SUBMITTED
                 conv.stage  = ConversationStage.DONE
                 conv.completed_at = datetime.utcnow()
@@ -984,6 +1051,93 @@ class ConversationService:
             return True, results
 
         return False, []
+
+    async def _on_feedback_submitted(
+        self,
+        conv: AIConversation,
+        submitted_feedback: List[dict],
+    ) -> str:
+        """
+        Build the post-submission reply and fire side-effect notifications.
+        Called from both the pre-LLM confirm-word path and the action==submit path.
+
+        AI-11: format tracking ref message
+        AI-9:  append cross-type closing prompts
+        AI-7:  notify relevant staff for grievances
+        AI-21: notify praised staff for applause
+        AI-12: schedule follow-up SMS
+        """
+        lang = conv.language
+        ext  = conv.get_extracted()
+        fb_type = (
+            ext.get("feedback_type")
+            or (submitted_feedback[0].get("feedback_type") if submitted_feedback else "")
+            or "grievance"
+        ).lower()
+        refs      = [f["unique_ref"] for f in submitted_feedback if f.get("unique_ref")]
+        is_urgent = conv.is_urgent or classify_urgency(ext.get("description", ""))
+
+        # AI-11: Reference number delivery
+        ref_msg = format_ref_message(refs, lang)
+        if ref_msg:
+            prefix = "Asante! Maoni yako yamesajiliwa." if lang == "sw" else "Thank you! Your feedback has been submitted."
+            thanks = f"{prefix} {ref_msg}"
+        else:
+            thanks = (
+                "Asante! Maoni yako yamesajiliwa."
+                if lang == "sw"
+                else "Thank you! Your feedback has been submitted."
+            )
+
+        # AI-9: Cross-type closing prompts
+        closing = build_closing_prompts(fb_type, lang)
+        if closing:
+            thanks = f"{thanks}\n\n{closing}"
+
+        # AI-7: Notify relevant staff member about the grievance
+        if fb_type == "grievance" and conv.org_id:
+            try:
+                _contact = await get_staff_contact_for_issue(
+                    str(conv.org_id), ext.get("description", "")
+                )
+                if _contact and _contact.get("phone"):
+                    await notify_staff_of_grievance(
+                        staff_phone=_contact["phone"],
+                        staff_name=_contact.get("name", ""),
+                        feedback_ref=refs[0] if refs else "",
+                        subject=(ext.get("description") or "")[:120],
+                        priority=ext.get("priority") or "normal",
+                        sla_hours=4 if is_urgent else 48,
+                        org_name=ext.get("org_name") or "",
+                    )
+            except Exception as exc:
+                log.warning("conversation.notify_staff_error", error=str(exc))
+
+        # AI-21: Notify praised staff member and record performance flag
+        if fb_type == "applause" and ext.get("staff_id"):
+            try:
+                await notify_praised_staff(
+                    staff_id=str(ext["staff_id"]),
+                    staff_name=ext.get("staff_mentioned") or ext.get("staff_name") or "Staff",
+                    praise_note=ext.get("description", ""),
+                    feedback_ref=refs[0] if refs else "",
+                    org_name=ext.get("org_name") or "",
+                )
+            except Exception as exc:
+                log.warning("conversation.praise_notify_error", error=str(exc))
+
+        # AI-12: Schedule follow-up notification (fire-and-forget)
+        phone = conv.phone_number or conv.whatsapp_id
+        if phone and refs:
+            await schedule_followup(
+                phone_number=phone,
+                feedback_ref=refs[0],
+                is_urgent=is_urgent,
+                org_id=str(conv.org_id) if conv.org_id else None,
+                org_name=ext.get("org_name") or "",
+            )
+
+        return thanks
 
     async def _handle_followup(self, conv: AIConversation, message: str) -> str:
         """Look up feedback status when Consumer provides a reference number."""

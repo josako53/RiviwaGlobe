@@ -50,6 +50,7 @@ class FeedbackEvents:
     SUBMITTED    = "feedback.submitted"
     ACKNOWLEDGED = "feedback.acknowledged"
     RESOLVED     = "feedback.resolved"
+    ACTIONED     = "feedback.actioned"   # AI-20: suggestion marked implemented by staff
 
 
 class OrgEntityEvents:

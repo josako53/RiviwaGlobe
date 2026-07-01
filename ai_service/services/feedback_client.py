@@ -1,5 +1,6 @@
 """services/feedback_client.py — Internal HTTP client to feedback_service."""
 from __future__ import annotations
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 import httpx
@@ -25,7 +26,29 @@ class FeedbackClient:
         """
         Submit feedback via internal AI endpoint (POST /api/v1/feedback/ai/submit).
         Accepts X-Service-Key — no JWT required.
+
+        AI-18: If category_def_id is absent and a suggested category name is present,
+               attempt to create the category first and backfill category_def_id.
         """
+        # AI-18: auto-create category when none is resolved
+        if not data.get("category_def_id") and data.get("org_id"):
+            suggested_names = data.get("suggested_category_names") or []
+            category_text   = (
+                (suggested_names[0] if suggested_names else "")
+                or data.get("category_slug")
+                or data.get("category")
+                or ""
+            )
+            if category_text and category_text not in ("other", "unknown"):
+                new_cat_id = await self._ensure_category(
+                    org_id=str(data["org_id"]),
+                    name=category_text.replace("_", " ").replace("-", " ").title(),
+                    slug=re.sub(r"[^a-z0-9]+", "_", category_text.lower()).strip("_"),
+                    feedback_type=data.get("feedback_type", "grievance"),
+                )
+                if new_cat_id:
+                    data = {**data, "category_def_id": new_cat_id}
+
         payload = self._build_staff_payload(data)
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -49,6 +72,42 @@ class FeedbackClient:
         except Exception as exc:
             log.error("feedback_client.submit_error", error=str(exc))
             raise FeedbackSubmissionError(str(exc))
+
+    async def _ensure_category(
+        self,
+        org_id: str,
+        name: str,
+        slug: str,
+        feedback_type: str = "grievance",
+    ) -> Optional[str]:
+        """
+        AI-18: Create a feedback category in feedback_service if one does not exist.
+        Returns the new (or existing) category_def_id string, or None on failure.
+        Best-effort — never raises.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.post(
+                    f"{settings.FEEDBACK_SERVICE_URL}/api/v1/categories/ai-ensure",
+                    json={
+                        "org_id":         org_id,
+                        "name":           name,
+                        "slug":           slug,
+                        "feedback_types": [feedback_type],
+                        "source":         "ai_auto",
+                    },
+                    headers=_INTERNAL_HEADERS,
+                )
+            if r.status_code in (200, 201):
+                body = r.json()
+                cat_id = body.get("id") or body.get("category_def_id")
+                if cat_id:
+                    log.info("feedback_client.category_ensured",
+                             org_id=org_id, name=name, cat_id=cat_id)
+                    return str(cat_id)
+        except Exception as exc:
+            log.warning("feedback_client.ensure_category_error", error=str(exc))
+        return None
 
     async def get_feedback_by_ref(self, unique_ref: str) -> Optional[dict]:
         """

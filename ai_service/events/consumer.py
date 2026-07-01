@@ -421,6 +421,12 @@ async def _consume_loop() -> None:
                 elif event_type == FeedbackEvents.RESOLVED:
                     asyncio.create_task(_rlhf_process_resolved(payload))
 
+                # AI-20: feedback.actioned (suggestion implemented by staff) → RLHF pipeline
+                # The same process_resolved_feedback handler is reused — it checks
+                # _is_eligible() internally, which accepts SUGGESTION + actioned status.
+                elif event_type == FeedbackEvents.ACTIONED:
+                    asyncio.create_task(_rlhf_process_resolved(payload))
+
             except Exception as exc:
                 log.error("ai.consumer.message_error", error=str(exc), exc_info=exc)
 

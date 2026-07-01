@@ -119,6 +119,36 @@ class Settings(BaseSettings):
     # ── Staff service ─────────────────────────────────────────────────────────
     STAFF_SERVICE_URL: str = Field(default="http://staff_service:8135")
 
+    # ── Waiting / queue service ───────────────────────────────────────────────
+    WAITING_SERVICE_URL: str = Field(
+        default="http://waiting_service:8130",
+        description="Base URL of the waiting/queue service for ETA and join-queue calls.",
+    )
+
+    # ── Notification service ──────────────────────────────────────────────────
+    NOTIFICATION_SERVICE_URL: str = Field(
+        default="http://notification_service:8060",
+        description="Base URL of the notification service for direct internal notify calls.",
+    )
+
+    # ── Payment service ───────────────────────────────────────────────────────
+    PAYMENT_SERVICE_URL: str = Field(
+        default="http://payment_service:8040",
+        description="Base URL of the payment service for transaction lookups.",
+    )
+
+    # ── Verification service ──────────────────────────────────────────────────
+    VERIFICATION_SERVICE_URL: str = Field(
+        default="http://verification_service:8125",
+        description="Base URL of the verification service for product authenticity checks.",
+    )
+
+    # ── CMS service ───────────────────────────────────────────────────────────
+    CMS_SERVICE_URL: str = Field(
+        default="http://cms_service:8150",
+        description="Base URL of the CMS service for org content knowledge pull.",
+    )
+
     # ── STT (Speech-to-Text for voice notes) ─────────────────────────────────
     OPENAI_API_KEY: str = Field(default="", description="OpenAI Whisper API key")
     GOOGLE_STT_API_KEY: str = Field(default="")
