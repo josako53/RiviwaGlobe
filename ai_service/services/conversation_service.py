@@ -45,6 +45,10 @@ from services.realtime_actions import (
     get_org_content,
     check_systemic_pattern,
     notify_praised_staff,
+    get_queue_eta,
+    add_to_queue,
+    detect_queue_keywords,
+    synthesize_response,
 )
 
 log = structlog.get_logger(__name__)
@@ -468,6 +472,36 @@ class ConversationService:
                 else:
                     reply = f"{reply}\n\n📄 Additional info: {_cms_excerpt}"
 
+        # AI-5/6: Queue availability + join when user mentions queue keywords
+        if conv.org_id and detect_queue_keywords(message):
+            _phone_for_queue = conv.phone_number or conv.whatsapp_id
+            if _phone_for_queue:
+                _flow = await get_queue_eta(str(conv.org_id))
+                if _flow and _flow.get("flow_id"):
+                    _queue_result = await add_to_queue(
+                        _phone_for_queue, str(conv.org_id), _flow["flow_id"]
+                    )
+                    if _queue_result:
+                        _pos = _queue_result.get("position_in_queue") or _queue_result.get("position") or "?"
+                        _eta = _queue_result.get("eta_minutes")
+                        _tkt = _queue_result.get("ticket_number") or ""
+                        if conv.language == "sw":
+                            _q_msg = f"✅ Umeingia foleni. Nambari yako: {_tkt}. Nafasi: {_pos}"
+                            if _eta is not None:
+                                _q_msg += f", muda wa kusubiri: dakika {int(_eta)}"
+                            _q_msg += "."
+                        else:
+                            _q_msg = f"✅ You have been added to the queue. Ticket: {_tkt}. Position: {_pos}"
+                            if _eta is not None:
+                                _q_msg += f", estimated wait: {int(_eta)} minutes"
+                            _q_msg += "."
+                        reply = f"{reply}\n\n{_q_msg}"
+                    elif _flow:
+                        if conv.language == "sw":
+                            reply = f"{reply}\n\nℹ️ Kuna mfumo wa foleni unapatikana. Tembelea ofisi yetu ili kupata nambari yako."
+                        else:
+                            reply = f"{reply}\n\nℹ️ A queue system is available at this organisation. Visit the branch to get your queue number."
+
         # If the LLM itself signalled submit action, honour it directly.
         # (The pre-LLM confirm-word check above handles the normal user-says-yes path.)
 
@@ -488,6 +522,10 @@ class ConversationService:
                 conv.status = ConversationStatus.SUBMITTED
                 conv.stage  = ConversationStage.DONE
                 conv.completed_at = datetime.utcnow()
+
+        # AI-22: Strip markdown, emoji and spell numbers for IVR/voice channel
+        if conv.channel == ConversationChannel.PHONE_CALL:
+            reply = synthesize_response(reply, conv.language)
 
         conv.add_turn("assistant", reply)
         await self.conv_repo.save(conv)

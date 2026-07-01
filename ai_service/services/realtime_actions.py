@@ -233,29 +233,27 @@ async def get_staff_contact_for_issue(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AI-5: Queue ETA
+# AI-5: Queue availability check (get default flow for org)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def get_queue_eta(
-    org_id: str,
-    service_name: str,
-) -> Optional[Dict[str, Any]]:
+async def get_queue_eta(org_id: str) -> Optional[Dict[str, Any]]:
     """
-    Fetch estimated wait time for a service queue from the waiting service.
-    Returns {eta_minutes, queue_length, counter_name} or None on failure.
+    Check whether the org has an active queue flow via the waiting service
+    internal endpoint.  Returns {flow_id, flow_name} when available, or None.
+    ETA is returned from add_to_queue() after joining.
     """
-    if not org_id or not service_name:
+    if not org_id:
         return None
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
+        async with httpx.AsyncClient(timeout=5) as client:
             r = await client.get(
-                f"{settings.WAITING_SERVICE_URL}/api/v1/waiting/eta",
-                params={"org_id": org_id, "service_name": service_name},
+                f"{settings.WAITING_SERVICE_URL}/api/v1/waiting/internal/{org_id}/default-flow",
                 headers=_INTERNAL_HEADERS,
             )
         if r.status_code == 200:
-            return r.json()
-        log.debug("realtime.queue_eta_not_found", status=r.status_code)
+            data = r.json()
+            if data.get("flow_id"):
+                return data  # {flow_id, flow_name}
         return None
     except Exception as exc:
         log.warning("realtime.queue_eta_error", error=str(exc))
@@ -263,29 +261,30 @@ async def get_queue_eta(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AI-6: Add to queue
+# AI-6: Join queue
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def add_to_queue(
     user_phone: str,
     org_id: str,
-    service_name: str,
+    flow_id: str,
 ) -> Optional[Dict[str, Any]]:
     """
-    Join a queue for the user in the waiting service.
-    Returns {ticket_number, eta_minutes, position} or None on failure.
+    Join the queue for the user using the waiting service.
+    Requires flow_id (get from get_queue_eta first).
+    Returns {ticket_number, position_in_queue, eta_minutes} or None on failure.
     """
-    if not user_phone or not org_id:
+    if not user_phone or not org_id or not flow_id:
         return None
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
                 f"{settings.WAITING_SERVICE_URL}/api/v1/waiting/join",
                 json={
-                    "phone":        user_phone,
                     "org_id":       org_id,
-                    "service_name": service_name,
-                    "channel":      "ai_conversation",
+                    "flow_id":      flow_id,
+                    "phone_number": user_phone,
+                    "channel":      "SMS",
                 },
                 headers=_INTERNAL_HEADERS,
             )
@@ -296,6 +295,25 @@ async def add_to_queue(
     except Exception as exc:
         log.warning("realtime.add_to_queue_error", error=str(exc))
         return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Queue keyword detection (triggers AI-5/6 in conversation)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_QUEUE_KEYWORDS = frozenset({
+    "queue", "join", "waiting", "wait", "ticket", "line", "number",
+    # Swahili
+    "foleni", "ingia", "nambari", "ngoja", "subiri", "nambari ya kusubiri",
+})
+
+
+def detect_queue_keywords(text: str) -> bool:
+    """Return True if text contains queue/waiting intent keywords (en + sw)."""
+    if not text:
+        return False
+    words = set(re.findall(r'\b\w+\b', text.lower()))
+    return bool(words & _QUEUE_KEYWORDS)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
