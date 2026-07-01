@@ -665,7 +665,7 @@ class Feedback(SQLModel, table=True):
 
     # ── AI conversation urgency & SLA ────────────────────────────────────────
     is_urgent: bool = Field(
-        default=False, nullable=False,
+        default=False,
         sa_column=Column(
             __import__("sqlalchemy").Boolean,
             nullable=False, server_default="false", index=True,
