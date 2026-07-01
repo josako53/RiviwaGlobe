@@ -180,38 +180,45 @@ async def get_staff_contact_for_issue(
     issue_description: str,
 ) -> Optional[Dict[str, Any]]:
     """
-    Fetch org ai-context from auth service, pick the most relevant leadership
-    contact based on the issue description.
-    Returns {name, title, phone, email} or None on failure.
+    Find the most relevant staff contact for an issue using the staff_service
+    internal bulk endpoint, scoring by department/position keyword match.
+    Returns {name, title, phone, email} or None on failure / no staff found.
     """
-    if not org_id or not issue_description:
+    if not org_id:
         return None
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             r = await client.get(
-                f"{settings.AUTH_SERVICE_URL}/api/v1/internal/orgs/{org_id}/ai-context",
+                f"{settings.STAFF_SERVICE_URL}/api/v1/staff/internal/staff",
+                params={"limit": 100},
                 headers=_INTERNAL_HEADERS,
             )
         if r.status_code != 200:
             return None
         data = r.json()
     except Exception as exc:
-        log.warning("realtime.org_context_error", error=str(exc), org_id=org_id)
+        log.warning("realtime.staff_contact_error", error=str(exc), org_id=org_id)
         return None
 
-    leadership = data.get("leadership") or []
-    if not leadership:
+    # Filter to this org and staff with contact info
+    staff = [
+        s for s in (data.get("items") or [])
+        if str(s.get("org_id") or "") == org_id
+        and (s.get("phone") or s.get("email"))
+    ]
+    if not staff:
         return None
 
-    issue_lower = issue_description.lower()
+    issue_lower = (issue_description or "").lower()
     best_contact = None
     best_score   = -1
 
-    for contact in leadership:
-        title = (contact.get("title") or contact.get("position") or "").lower()
+    for member in staff:
+        title = (member.get("position") or "").lower()
+        dept  = (member.get("department") or "").lower()
         score = 0
         for keywords in _ISSUE_CONTACT_KEYWORDS.values():
-            title_hit = any(kw in title for kw in keywords)
+            title_hit = any(kw in title or kw in dept for kw in keywords)
             issue_hit = any(kw in issue_lower for kw in keywords)
             if title_hit and issue_hit:
                 score += 3
@@ -219,14 +226,14 @@ async def get_staff_contact_for_issue(
                 score += 1
         if score > best_score:
             best_score   = score
-            best_contact = contact
+            best_contact = member
 
     if best_contact is None:
-        best_contact = leadership[0]  # fallback to first listed contact
+        best_contact = staff[0]  # fallback to first staff with contact info
 
     return {
-        "name":  best_contact.get("name") or best_contact.get("full_name") or "Manager",
-        "title": best_contact.get("title") or best_contact.get("position") or "",
+        "name":  best_contact.get("display_name") or best_contact.get("first_name") or "Manager",
+        "title": best_contact.get("position") or "",
         "phone": best_contact.get("phone") or "",
         "email": best_contact.get("email") or "",
     }
