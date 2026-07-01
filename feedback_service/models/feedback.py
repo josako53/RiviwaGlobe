@@ -663,6 +663,29 @@ class Feedback(SQLModel, table=True):
         description="Set by GRM Unit on acknowledgement. Drives response timeframe.",
     )
 
+    # ── AI conversation urgency & SLA ────────────────────────────────────────
+    is_urgent: bool = Field(
+        default=False, nullable=False,
+        sa_column=Column(
+            __import__("sqlalchemy").Boolean,
+            nullable=False, server_default="false", index=True,
+        ),
+        description=(
+            "Set by AI conversation at submission. True = urgent (30-min follow-up). "
+            "Distinct from priority — urgency is the customer's reported severity, "
+            "priority is the GRM Unit's operational triage."
+        ),
+    )
+    sla_deadline: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True, index=True),
+        description=(
+            "Resolution deadline computed from priority at submission time. "
+            "critical=72h, high=168h, medium=336h, low=720h from submitted_at. "
+            "Set by AI service at feedback creation."
+        ),
+    )
+
     # ── GRM context ────────────────────────────────────────────────────────────
     current_level: GRMLevel = Field(
         default=GRMLevel.WARD,

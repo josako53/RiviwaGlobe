@@ -5,3 +5,4 @@ from models.staff_verification import StaffVerificationEvent  # noqa: F401
 from models.staff_fraud_report import StaffFraudReport  # noqa: F401
 from models.staff_feedback import StaffFeedback  # noqa: F401
 from models.bulk_import import BulkImportJob  # noqa: F401
+from models.performance import StaffPerformanceFlag  # noqa: F401

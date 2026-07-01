@@ -149,3 +149,64 @@ async def list_staff_internal(
         ],
         "count": len(rows),
     }
+
+
+# ── Performance flag (applause recognition) ───────────────────────────────────
+
+class PerformanceFlagBody(BaseModel):
+    feedback_ref: str
+    feedback_type: str = "applause"
+    note: str
+    flagged_by: str = "ai_conversation"
+
+
+@router.post(
+    "/internal/staff/{staff_id}/performance/flag",
+    summary="[Internal] Flag a staff member's performance from AI conversation (applause)",
+    status_code=200,
+    dependencies=[Depends(_require_service_key)],
+)
+async def flag_staff_performance(
+    staff_id: UUID,
+    body: PerformanceFlagBody,
+    db: DbDep,
+) -> dict:
+    """
+    Called by AI service when a user applauds a specific staff member.
+    Records the recognition event in the staff profile's performance log.
+    """
+    from sqlalchemy import text
+    from datetime import datetime, timezone
+
+    row = (await db.execute(
+        text("SELECT id, display_name, org_id FROM staff_profiles WHERE id = :sid"),
+        {"sid": str(staff_id)},
+    )).mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Staff member not found.")
+
+    await db.execute(
+        text("""
+            INSERT INTO staff_performance_flags
+              (id, staff_id, org_id, feedback_ref, feedback_type, note, flagged_by, flagged_at)
+            VALUES
+              (gen_random_uuid(), :staff_id, :org_id, :ref, :ftype, :note, :by, NOW())
+        """),
+        {
+            "staff_id": str(staff_id),
+            "org_id":   str(row["org_id"]),
+            "ref":      body.feedback_ref,
+            "ftype":    body.feedback_type,
+            "note":     body.note,
+            "by":       body.flagged_by,
+        },
+    )
+    await db.commit()
+
+    return {
+        "staff_id":     str(staff_id),
+        "display_name": row["display_name"],
+        "flagged":      True,
+        "feedback_ref": body.feedback_ref,
+    }

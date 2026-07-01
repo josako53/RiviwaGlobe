@@ -1255,3 +1255,84 @@ async def create_partial_org(
     await db.commit()
     log.info("partial_org.created", org_id=new_id, name=suggested_name)
     return {"org_id": new_id, "display_name": suggested_name, "is_new": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET /internal/orgs/{org_id}/operating-hours
+# GET /internal/branches/{branch_id}/operating-hours
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/orgs/{org_id}/operating-hours",
+    summary="[Internal] Org-wide operating hours for AI context",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_org_hours_internal(
+    org_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT day_of_week, is_open, open_time, close_time,
+                   break_start, break_end, timezone, notes
+            FROM org_operating_hours
+            WHERE org_id = :org_id AND branch_id IS NULL
+            ORDER BY day_of_week
+        """),
+        {"org_id": str(org_id)},
+    )).mappings().all()
+    return {
+        "schedule": [
+            {
+                "day_of_week": r["day_of_week"],
+                "is_open":     r["is_open"],
+                "open_time":   str(r["open_time"]) if r["open_time"] else None,
+                "close_time":  str(r["close_time"]) if r["close_time"] else None,
+                "break_start": str(r["break_start"]) if r["break_start"] else None,
+                "break_end":   str(r["break_end"]) if r["break_end"] else None,
+                "timezone":    r["timezone"],
+                "notes":       r["notes"],
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@router.get(
+    "/branches/{branch_id}/operating-hours",
+    summary="[Internal] Branch-specific operating hours for AI context",
+    dependencies=[Depends(_require_service_key)],
+)
+async def get_branch_hours_internal(
+    branch_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    from sqlalchemy import text
+    rows = (await db.execute(
+        text("""
+            SELECT day_of_week, is_open, open_time, close_time,
+                   break_start, break_end, timezone, notes
+            FROM org_operating_hours
+            WHERE branch_id = :branch_id
+            ORDER BY day_of_week
+        """),
+        {"branch_id": str(branch_id)},
+    )).mappings().all()
+    return {
+        "schedule": [
+            {
+                "day_of_week": r["day_of_week"],
+                "is_open":     r["is_open"],
+                "open_time":   str(r["open_time"]) if r["open_time"] else None,
+                "close_time":  str(r["close_time"]) if r["close_time"] else None,
+                "break_start": str(r["break_start"]) if r["break_start"] else None,
+                "break_end":   str(r["break_end"]) if r["break_end"] else None,
+                "timezone":    r["timezone"],
+                "notes":       r["notes"],
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }

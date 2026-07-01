@@ -515,6 +515,120 @@ _DEFAULT_TEMPLATES = [
         "title_template": "Subscription past due — urgent",
         "body_template": "{{ plan_name }} is past due. Update your payment method to avoid service interruption.",
     },
+    # ── AI Real-Time GRM Notifications ───────────────────────────────────────
+    # C-8: Staff praised — fired when AI conversation captures applause naming a staff member
+    {
+        "notification_type": "grm.staff.praised",
+        "channel": "sms", "language": "en",
+        "body_template": "Hi {{ staff_name }}, a customer just praised you! \"{{ praise_note }}\" — {{ org_name }} (Ref: {{ feedback_ref }}). Keep up the excellent work.",
+    },
+    {
+        "notification_type": "grm.staff.praised",
+        "channel": "sms", "language": "sw",
+        "body_template": "Habari {{ staff_name }}, mteja amekusifu! \"{{ praise_note }}\" — {{ org_name }} (Kumb: {{ feedback_ref }}). Endelea kufanya kazi nzuri.",
+    },
+    {
+        "notification_type": "grm.staff.praised",
+        "channel": "in_app", "language": "en",
+        "title_template": "Customer Praise — {{ feedback_ref }}",
+        "body_template": "A customer praised you: \"{{ praise_note }}\". Organisation: {{ org_name }}.",
+    },
+    {
+        "notification_type": "grm.staff.praised",
+        "channel": "push", "language": "en",
+        "title_template": "You've been praised!",
+        "body_template": "{{ praise_note }} — {{ org_name }} ({{ feedback_ref }})",
+    },
+    # C-9: Grievance escalated to staff — fired when AI assigns a grievance to an in-charge
+    {
+        "notification_type": "grm.grievance.escalated_to_staff",
+        "channel": "sms", "language": "en",
+        "body_template": "ACTION REQUIRED: A grievance ({{ feedback_ref }}) has been assigned to you at {{ org_name }}. Issue: {{ subject }}. Priority: {{ priority }}. Please respond within {{ sla_hours }} hours.",
+    },
+    {
+        "notification_type": "grm.grievance.escalated_to_staff",
+        "channel": "sms", "language": "sw",
+        "body_template": "HATUA INAHITAJIKA: Malalamiko ({{ feedback_ref }}) yamepelekwa kwako katika {{ org_name }}. Suala: {{ subject }}. Kipaumbele: {{ priority }}. Tafadhali jibu ndani ya masaa {{ sla_hours }}.",
+    },
+    {
+        "notification_type": "grm.grievance.escalated_to_staff",
+        "channel": "in_app", "language": "en",
+        "title_template": "Grievance Assigned — {{ priority }} Priority",
+        "body_template": "{{ feedback_ref }}: {{ subject }}. Assigned to you at {{ org_name }}. Respond within {{ sla_hours }} hours.",
+    },
+    {
+        "notification_type": "grm.grievance.escalated_to_staff",
+        "channel": "push", "language": "en",
+        "title_template": "Grievance Assigned to You",
+        "body_template": "{{ feedback_ref }} ({{ priority }}): {{ subject }} — respond within {{ sla_hours }}h.",
+    },
+    # C-10: Suggestion received by department — fired when AI forwards a suggestion to a dept
+    {
+        "notification_type": "grm.suggestion.received_by_dept",
+        "channel": "sms", "language": "en",
+        "body_template": "New suggestion for {{ dept_name }} at {{ org_name }} ({{ feedback_ref }}): \"{{ subject }}\". Please review and action within {{ sla_hours }} hours.",
+    },
+    {
+        "notification_type": "grm.suggestion.received_by_dept",
+        "channel": "in_app", "language": "en",
+        "title_template": "New Suggestion — {{ dept_name }}",
+        "body_template": "{{ feedback_ref }}: \"{{ subject }}\". Customer suggestion forwarded to {{ dept_name }} for action.",
+    },
+    {
+        "notification_type": "grm.suggestion.received_by_dept",
+        "channel": "push", "language": "en",
+        "title_template": "Suggestion Forwarded to Your Dept",
+        "body_template": "{{ feedback_ref }}: {{ subject }}",
+    },
+    # C-11: Urgent follow-up — fired 30 minutes after an urgent session closes
+    {
+        "notification_type": "grm.followup.urgent",
+        "channel": "sms", "language": "en",
+        "body_template": "Hi {{ submitter_name }}, this is Riviwa checking in. Has your issue been resolved? (Ref: {{ feedback_ref }}: {{ subject }}). Reply YES if resolved, or tell us what is still happening so we can help right away.",
+    },
+    {
+        "notification_type": "grm.followup.urgent",
+        "channel": "sms", "language": "sw",
+        "body_template": "Habari {{ submitter_name }}, hii ni Riviwa kukuuliza. Je, tatizo lako limetatuliwa? (Kumb: {{ feedback_ref }}: {{ subject }}). Jibu NDIYO kama imetatuliwa, au tuambie kinachoendelea ili tukusaidie sasa hivi.",
+    },
+    {
+        "notification_type": "grm.followup.urgent",
+        "channel": "whatsapp", "language": "en",
+        "body_template": "Hi {{ submitter_name }} 👋 This is Riviwa following up on your urgent issue ({{ feedback_ref }}): *{{ subject }}*.\n\nHas it been resolved? Reply *YES* if sorted, or describe what's still happening and we'll get help to you immediately.",
+    },
+    # C-12: Normal follow-up — fired after normal session closes (timing varies by type)
+    {
+        "notification_type": "grm.followup.normal",
+        "channel": "sms", "language": "en",
+        "body_template": "Hi {{ submitter_name }}, Riviwa here. We're following up on your {{ feedback_type }} ({{ feedback_ref }}). {% if feedback_type == 'grievance' %}Has your issue been resolved to your satisfaction?{% elif feedback_type == 'suggestion' %}Your suggestion is under review. We'll update you when it's actioned.{% elif feedback_type == 'applause' %}Thank you for your kind words! Your feedback has been shared with the team.{% elif feedback_type == 'inquiry' %}Were your questions answered satisfactorily?{% endif %} Reply or contact {{ org_name }} for further assistance.",
+    },
+    {
+        "notification_type": "grm.followup.normal",
+        "channel": "sms", "language": "sw",
+        "body_template": "Habari {{ submitter_name }}, hii ni Riviwa. Tunakufuatilia kuhusu maoni yako ({{ feedback_ref }}). Tunafurahi kujua kama unafurahia huduma yetu. Wasiliana na {{ org_name }} kwa msaada zaidi.",
+    },
+    {
+        "notification_type": "grm.followup.normal",
+        "channel": "whatsapp", "language": "en",
+        "body_template": "Hi {{ submitter_name }} 👋 This is Riviwa following up on your {{ feedback_type }} ({{ feedback_ref }}): *{{ subject }}*.\n\n{% if feedback_type == 'grievance' %}Has your issue been resolved? Reply *YES* if satisfied, or let us know what still needs attention.{% elif feedback_type == 'suggestion' %}Your suggestion is being reviewed by {{ org_name }}. We'll keep you posted.{% elif feedback_type == 'inquiry' %}Were your questions answered? Feel free to ask anything else.{% endif %}",
+    },
+    # C-13: Inquiry contact provided — sent to user after AI shares staff contact details
+    {
+        "notification_type": "grm.inquiry.contact_provided",
+        "channel": "sms", "language": "en",
+        "body_template": "{{ org_name }} contact for your inquiry ({{ feedback_ref }}): {{ staff_name }}, {{ staff_title }} — {{ staff_phone }}{% if staff_email %} / {{ staff_email }}{% endif %}. {% if office_directions %}Office: {{ office_directions }}.{% endif %} Reference this number when you call: {{ feedback_ref }}.",
+    },
+    {
+        "notification_type": "grm.inquiry.contact_provided",
+        "channel": "sms", "language": "sw",
+        "body_template": "Mawasiliano ya {{ org_name }} kwa swali lako ({{ feedback_ref }}): {{ staff_name }}, {{ staff_title }} — {{ staff_phone }}{% if staff_email %} / {{ staff_email }}{% endif %}. Taja nambari hii unapowasiliana: {{ feedback_ref }}.",
+    },
+    {
+        "notification_type": "grm.inquiry.contact_provided",
+        "channel": "whatsapp", "language": "en",
+        "body_template": "Here are the contact details for your inquiry ({{ feedback_ref }}):\n\n👤 *{{ staff_name }}*\n🏷️ {{ staff_title }}\n📞 {{ staff_phone }}{% if staff_email %}\n📧 {{ staff_email }}{% endif %}{% if office_directions %}\n📍 {{ office_directions }}{% endif %}\n\nPlease mention reference *{{ feedback_ref }}* when you get in touch.",
+    },
+
     # ── Organisations ─────────────────────────────────────────────────────────
     {
         "notification_type": "org.invite.received",

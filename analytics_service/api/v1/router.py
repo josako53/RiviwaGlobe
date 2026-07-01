@@ -13,6 +13,7 @@ from api.v1 import (
     feedback,
     grievances,
     inquiries,
+    internal,
     org_analytics,
     platform_analytics,
     staff,
@@ -22,6 +23,7 @@ from api.v1 import (
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
+api_v1_router.include_router(internal.router)
 api_v1_router.include_router(feedback.router)
 api_v1_router.include_router(grievances.router)
 api_v1_router.include_router(suggestions.router)
